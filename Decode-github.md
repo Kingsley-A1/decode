@@ -48,8 +48,8 @@ git add .
 # Create initial commit
 git commit -m "Initial commit: DECODE PWA - QR Generator & Cipher Tools"
 
-# Add your GitHub repository as remote (replace Kingely-A1)
-git remote add origin https://github.com/Kingely-A1/decode.git
+# Add your GitHub repository as remote (replace with  Kingsley-A1)
+git remote add origin https://github.com/Kingsley-A1/decode.git
 
 # Push to main branch
 git branch -M main
@@ -86,7 +86,7 @@ The deployment will start automatically when you push to `main`. You can also:
 Once deployment completes:
 
 1. Go to **Settings** → **Pages**
-2. You'll see: "Your site is live at `https://Kingely-A1.github.io/decode/`"
+2. You'll see: "Your site is live at `https://Kingsley-A1.github.io/decode/`"
 3. Click the link to visit your deployed DECODE app! 🎉
 
 ---
@@ -157,7 +157,7 @@ GitHub Actions will automatically rebuild and deploy.
 
 ### On Mobile (Android/iOS):
 
-1. Visit `https://Kingely-A1.github.io/decode/`
+1. Visit `https://Kingsley-A1.github.io/decode/`
 2. **Android**: Tap the install prompt or menu → "Add to Home Screen"
 3. **iOS**: Safari menu → "Add to Home Screen"
 
@@ -227,7 +227,7 @@ Add analytics by integrating:
 
 If you encounter issues:
 
-1. Check the [GitHub Issues](https://github.com/Kingely-A1/decode/issues)
+1. Check the [GitHub Issues](https://github.com/Kingsley-A1/decode/issues)
 2. Review the [README.md](./README.md) (Platform Management Handbook)
 3. Open a new issue with:
    - Browser/Device info
