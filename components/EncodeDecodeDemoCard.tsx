@@ -12,8 +12,14 @@ interface DemoCardProps {
   shift: number;
 }
 
-export default function EncodeDecodeDemoCard({ open, onClose, cipher, shift }: DemoCardProps) {
-  const demoText = "DECODE helps you create stylish QR codes and learn classic ciphers with ease."; // 12+ words
+export default function EncodeDecodeDemoCard({
+  open,
+  onClose,
+  cipher,
+  shift,
+}: DemoCardProps) {
+  const demoText =
+    "DECODE helps you create stylish QR codes and learn classic ciphers with ease."; // 12+ words
 
   const encoded = useMemo(() => {
     try {
@@ -44,7 +50,10 @@ export default function EncodeDecodeDemoCard({ open, onClose, cipher, shift }: D
       role="dialog"
       aria-modal="true"
     >
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
       <motion.div
         initial={{ y: 20, opacity: 0 }}
@@ -54,8 +63,12 @@ export default function EncodeDecodeDemoCard({ open, onClose, cipher, shift }: D
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-white">Encode / Decode Demo</h3>
-            <p className="text-sm text-neutral-400 mt-1">A quick demo using the selected cipher to show how encoding works.</p>
+            <h3 className="text-lg font-semibold text-white">
+              Encode / Decode Demo
+            </h3>
+            <p className="text-sm text-neutral-400 mt-1">
+              A quick demo using the selected cipher to show how encoding works.
+            </p>
           </div>
 
           <button
@@ -78,7 +91,10 @@ export default function EncodeDecodeDemoCard({ open, onClose, cipher, shift }: D
           <div>
             <div className="flex items-center justify-between">
               <div className="text-xs text-neutral-400">Encoded Result</div>
-              <div className="text-xs text-neutral-400">{cipher}{needsShift ? ` • Shift: ${shift}` : ""}</div>
+              <div className="text-xs text-neutral-400">
+                {cipher}
+                {needsShift ? ` • Shift: ${shift}` : ""}
+              </div>
             </div>
             <div className="mt-2 glass rounded-lg p-3 font-mono text-sm wrap-break-word text-white">
               {encoded}
