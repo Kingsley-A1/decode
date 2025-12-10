@@ -1,10 +1,43 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Dark Theme (Default) */
+:root,
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card-bg: rgba(23, 23, 23, 0.8);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --input-bg: #171717;
+  --input-border: #262626;
+  --accent: #f97316;
+  --accent-hover: #ea580c;
+  --accent-light: #fb923c;
 }
 
+/* Light Theme (Warm Orange) */
+/* Light Theme (Warm Stone & Orange) */
+.light {
+  /* Foundation: Subtle warm gradient adds depth while maintaining readability */
+  --background: linear-gradient(145deg, #fffaf5 0%, #fff1e6 100%);
+  --foreground: #1c1917;       /* Stone 900 */
+  --foreground-muted: #78716c; /* Stone 500 */
+
+  /* Surfaces: Modern glass-like feel with subtle gradient & shadow */
+  --card-bg: linear-gradient(to bottom, rgba(255, 255, 255, 0.95), rgba(255, 247, 237, 0.85));
+  --card-border: rgba(251, 146, 60, 0.2);
+  --card-shadow: 0 8px 30px rgba(234, 88, 12, 0.08);
+
+  /* Inputs */
+  --input-bg: #ffffff;
+  --input-border: #fed7aa;     /* Orange 200 */
+  --ring: rgba(234, 88, 12, 0.25);
+
+  /* Accents */
+  --accent: #ea580c;           /* Orange 600 */
+  --accent-gradient: linear-gradient(135deg, #ea580c 0%, #fb923c 100%); /* Vibrant orange gradient */
+  --accent-hover: #c2410c;
+  --accent-subtle: #fff7ed;
+}
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,15 +45,211 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dark ::-webkit-scrollbar-track,
+:root ::-webkit-scrollbar-track {
+  background: #171717;
+}
+
+.light ::-webkit-scrollbar-track {
+  background: #fef3e2;
+}
+
+.dark ::-webkit-scrollbar-thumb,
+:root ::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: #fdba74;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: #fb923c;
+}
+
+/* Glass Effect */
+.glass {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--card-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Gradient Text - Dark Theme (Orange-based) */
+.dark .gradient-text,
+:root .gradient-text {
+  background: linear-gradient(135deg, #fb923c, #f97316, #ea580c);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient Text - Light Theme (Deeper Orange) */
+.light .gradient-text {
+  background: linear-gradient(135deg, #ea580c, #c2410c, #9a3412);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Pulse Animation */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(249, 115, 22, 0.45);
+  }
+}
+
+.light .pulse-glow {
+  animation: pulse-glow-light 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow-light {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(234, 88, 12, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(234, 88, 12, 0.5);
+  }
+}
+
+.dark .pulse-glow,
+:root .pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Theme-aware inputs */
+input,
+textarea,
+select {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Light theme specific overrides */
+.light .bg-neutral-900 {
+  background-color: #ffffff !important;
+}
+
+.light .bg-neutral-950 {
+  background-color: #fffbf5 !important;
+}
+
+.light .border-neutral-800 {
+  border-color: #fed7aa !important;
+}
+
+.light .border-neutral-700 {
+  border-color: #fdba74 !important;
+}
+
+.light .text-neutral-400 {
+  color: #78716c !important;
+}
+
+.light .text-neutral-500 {
+  color: #a8a29e !important;
+}
+
+.light .text-white {
+  color: #1a1a1a !important;
+}
+
+.light .from-violet-600 {
+  --tw-gradient-from: #ea580c !important;
+}
+
+.light .to-purple-600 {
+  --tw-gradient-to: #c2410c !important;
+}
+
+.light .text-violet-400 {
+  color: #f97316 !important;
+}
+
+.light .text-violet-300 {
+  color: #fb923c !important;
+}
+
+.light .bg-violet-500\/20 {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+.light .bg-violet-500\/10 {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+}
+
+.light .border-violet-500 {
+  border-color: #ea580c !important;
+}
+
+.light .hover\:border-violet-500:hover {
+  border-color: #ea580c !important;
+}
+
+.light .focus\:border-violet-500:focus {
+  border-color: #ea580c !important;
+}
+
+/* Additional Light Theme Polish */
+.light .from-orange-500 {
+  --tw-gradient-from: #ea580c !important;
+}
+
+.light .to-amber-500 {
+  --tw-gradient-to: #d97706 !important;
+}
+
+.light .shadow-orange-500\/25 {
+  --tw-shadow-color: rgba(234, 88, 12, 0.12) !important;
+}
+
+.light .bg-orange-500\/20 {
+  background-color: rgba(234, 88, 12, 0.08) !important;
+}
+
+.light .text-orange-400 {
+  color: #c2410c !important;
+}
+
+.light .text-orange-300 {
+  color: #ea580c !important;
+}
+
+/* Focus ring colors */
+.light .focus\:border-orange-500:focus {
+  border-color: #c2410c !important;
+}
+
+/* Smooth transitions for all interactive elements */
+button,
+a,
+input,
+textarea,
+select {
+  transition: all 0.2s ease;
 }
