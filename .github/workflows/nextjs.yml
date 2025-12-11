@@ -30,7 +30,6 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
-          # Auto-enable Pages if not already enabled and set up Pages for GitHub Actions usage
           enablement: auto
 
       - name: Install dependencies
@@ -40,9 +39,10 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
-      # Note: `next export` CLI has been removed in Next.js v16.
-      # The static export is produced by `next build` when `output: "export"` is set
-      # in `next.config.ts`, so a separate export step is not necessary.
+
+      # REMOVED: "npm run export" step. 
+      # Next.js now handles exporting automatically during 'npm run build' 
+      # when "output: 'export'" is set in next.config.mjs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
