@@ -40,8 +40,9 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
-      - name: Export static HTML
-        run: npm run export
+      # Note: `next export` CLI has been removed in Next.js v16.
+      # The static export is produced by `next build` when `output: "export"` is set
+      # in `next.config.ts`, so a separate export step is not necessary.
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
