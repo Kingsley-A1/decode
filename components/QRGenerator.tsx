@@ -100,16 +100,25 @@ export function QRGenerator() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="relative"
+            className="relative group"
           >
-            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
+            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500 transition-colors group-focus-within:text-orange-500" />
             <input
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Enter URL or text..."
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 px-10 text-white placeholder:text-neutral-500 focus:outline-none focus:border-orange-500 transition-colors"
+              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 px-10 text-white placeholder:text-neutral-500 focus:outline-none focus:border-orange-500 transition-all caret-orange-500 selection:bg-orange-500/30 shadow-sm focus:shadow-orange-500/10 focus:ring-1 focus:ring-orange-500/20"
             />
+            {/* Blinking Cursor Hint (Only visible when empty to guide user) */}
+            {url === "" && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 1, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className="absolute left-10 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-orange-500 pointer-events-none"
+              />
+            )}
             <button
               onClick={copyUrl}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white transition-colors"
