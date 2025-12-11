@@ -36,13 +36,16 @@ const colorPresets = [
   { name: "Red", value: "#ef4444" },
 ];
 
+const DEFAULT_URL = "https://kingsley-a1.github.io/decode/";
+
 export function QRGenerator() {
-  const [url, setUrl] = useState("https://kingsley-a1.github.io/decode/");
+  const [url, setUrl] = useState(DEFAULT_URL);
   const [color, setColor] = useState("#ffffff");
   const [dotStyle, setDotStyle] = useState<QROptions["dotsType"]>("rounded");
   const [logoUrl, setLogoUrl] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -50,7 +53,7 @@ export function QRGenerator() {
     download,
     isReady,
   } = useQRCode({
-    data: url || "https://kingsley-a1.github.io/decode/",
+    data: url || DEFAULT_URL,
     dotsColor: color,
     backgroundColor: "#0a0a0a",
     dotsType: dotStyle,
@@ -107,16 +110,18 @@ export function QRGenerator() {
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
               placeholder="Enter URL or text..."
               className="w-full bg-neutral-900 border border-neutral-800 rounded-xl py-3.5 px-10 text-white placeholder:text-neutral-500 focus:outline-none focus:border-orange-500 transition-all caret-orange-500 selection:bg-orange-500/30 shadow-sm focus:shadow-orange-500/10 focus:ring-1 focus:ring-orange-500/20"
             />
-            {/* Blinking Cursor Hint (Only visible when empty to guide user) */}
-            {url === "" && (
+            {/* Blinking Red Cursor Hint (Visible only when default URL is present and not focused) */}
+            {!isFocused && url === DEFAULT_URL && (
               <motion.span
                 initial={{ opacity: 0 }}
                 animate={{ opacity: [0, 1, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="absolute left-10 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-orange-500 pointer-events-none"
+                transition={{ duration: 1, repeat: Infinity }}
+                className="absolute left-10 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-red-500 pointer-events-none shadow-[0_0_8px_rgba(239,68,68,0.5)]"
               />
             )}
             <button
