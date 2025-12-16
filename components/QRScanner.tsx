@@ -155,7 +155,15 @@ export function QRScanner() {
       const result = await instance.scanFile(file, true);
       handleScanSuccess(result);
     } catch (err: unknown) {
-      setError(parseError(err, "Unable to read this file."));
+      const message = parseError(err, "Unable to read this file.");
+      // Friendly fallback for the most common html5-qrcode failure message
+      if (/no multiformat readers/i.test(message)) {
+        setError(
+          "No QR code detected in the image — try a clearer image, a larger QR area, or better lighting."
+        );
+      } else {
+        setError(message);
+      }
     } finally {
       e.target.value = "";
     }
@@ -292,7 +300,7 @@ export function QRScanner() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm text-neutral-400">Scan result</p>
-                  <p className="mt-2 text-lg font-semibold text-white break-words leading-relaxed">
+                  <p className="mt-2 text-lg font-semibold text-white wrap-break-word leading-relaxed">
                     {scannedResult}
                   </p>
                 </div>

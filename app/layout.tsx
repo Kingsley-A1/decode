@@ -59,6 +59,8 @@ export const metadata: Metadata = {
       "Create and scan QR codes, encrypt/decrypt text, and install DECODE as a fast PWA.",
     images: ["/logo.png"],
   },
+  // Provide a base URL for resolving relative social images
+  metadataBase: new URL("https://kingsley-a1.github.io/decode/"),
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -68,6 +70,10 @@ export const metadata: Metadata = {
     telephone: false,
   },
 };
+
+// Base URL for resolving Open Graph and twitter images in static metadata
+// Explicit metadataBase used to resolve Open Graph and twitter images during build
+export const metadataBase = new URL("https://kingsley-a1.github.io/decode/");
 
 export const viewport: Viewport = {
   width: "device-width",

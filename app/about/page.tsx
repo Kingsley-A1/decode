@@ -69,6 +69,10 @@ const itemVariants = {
 };
 
 export default function AboutPage() {
+  // THE FIX: Manually define base path for GitHub Pages
+  // This ensures the hero logo loads from /decode/logo.png
+  const basePath = process.env.NODE_ENV === "production" ? "/decode" : "";
+
   return (
     <div className="p-4 space-y-8">
       {/* Header with Logo and Theme Toggle */}
@@ -82,11 +86,12 @@ export default function AboutPage() {
       >
         <div className="w-24 h-24 md:w-32 md:h-32 mx-auto rounded-full bg-white flex items-center justify-center overflow-hidden shadow-xl">
           <Image
-            src="/logo.png"
+            src={`${basePath}/logo.png`}
             alt="DECODE Logo"
             width={128}
             height={128}
             className="w-full h-full object-contain"
+            priority
           />
         </div>
         <h1 className="text-3xl font-bold gradient-text">DECODE</h1>
