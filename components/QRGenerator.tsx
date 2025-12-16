@@ -36,7 +36,11 @@ const colorPresets = [
   { name: "Red", value: "#ef4444" },
 ];
 
-export function QRGenerator() {
+type QRGeneratorProps = {
+  showHeader?: boolean;
+};
+
+export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
   const [url, setUrl] = useState("https://kingsley-a1.github.io/decode/");
   const [color, setColor] = useState("#ffffff");
   const [dotStyle, setDotStyle] = useState<QROptions["dotsType"]>("rounded");
@@ -85,11 +89,12 @@ export function QRGenerator() {
 
   return (
     <div className="p-4 space-y-6">
-      {/* Header with Logo and Theme Toggle */}
-      <PageHeader
-        title="QR Generator"
-        subtitle="Create beautiful, customized QR codes of anything from links to text, phone numbers and all!"
-      />
+      {showHeader && (
+        <PageHeader
+          title="QR Generator"
+          subtitle="Create beautiful, customized QR codes of anything from links to text, phone numbers and all!"
+        />
+      )}
 
       {/* Desktop Layout: Two Columns */}
       <div className="md:grid md:grid-cols-2 md:gap-8 space-y-6 md:space-y-0">

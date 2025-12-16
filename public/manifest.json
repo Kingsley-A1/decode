@@ -1,9 +1,10 @@
 {
   "name": "DECODE",
   "short_name": "DECODE",
-  "description": "QR Code Generator & Cipher Tools - A powerful PWA for generating stylish QR codes and encrypting/decrypting messages",
-  "start_url": "./",
-  "scope": "./",
+  "id": "/decode-v2",
+  "description": "QR Code Generator, Scanner & Cipher Tools - A powerful PWA for generating stylish QR codes, Scanning and encrypting/decrypting messages",
+  "start_url": "/decode/",
+  "scope": "/decode/",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",

@@ -35,6 +35,30 @@ export const metadata: Metadata = {
     icon: "./logo.png",
     apple: "./logo.png",
   },
+  openGraph: {
+    title: "DECODE | QR Generator & Cipher Tools",
+    description:
+      "Create and scan QR codes, encrypt/decrypt text, and install DECODE as a fast PWA.",
+    url: "https://kingsley-a1.github.io/decode/",
+    siteName: "DECODE",
+    images: [
+      {
+        url: "/logo.png",
+        width: 512,
+        height: 512,
+        alt: "DECODE logo",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DECODE | QR Generator & Cipher Tools",
+    description:
+      "Create and scan QR codes, encrypt/decrypt text, and install DECODE as a fast PWA.",
+    images: ["/logo.png"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
