@@ -124,20 +124,20 @@ export default function DocumentationPage() {
                     <div className="text-xs text-neutral-400">Account</div>
                     <div className="mt-2 flex items-center gap-2">
                       <span className="font-mono text-sm text-white select-all">
-                        8088072657
+                        8088071657
                       </span>
                       <button
                         title="Copy account number"
                         aria-label="Copy account number"
                         onClick={async () => {
                           try {
-                            await navigator.clipboard.writeText("8088072657");
+                            await navigator.clipboard.writeText("8088071657");
                             setCopied(true);
                             setTimeout(() => setCopied(false), 2000);
                           } catch {
                             // Fallback for older browsers
                             const el = document.createElement("textarea");
-                            el.value = "8088072657";
+                            el.value = "8088071657";
                             document.body.appendChild(el);
                             el.select();
                             document.execCommand("copy");

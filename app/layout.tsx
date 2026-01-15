@@ -43,10 +43,10 @@ export const metadata: Metadata = {
     siteName: "DECODE",
     images: [
       {
-        url: "/logo.png",
-        width: 512,
-        height: 512,
-        alt: "DECODE logo",
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "DECODE - QR Code Generator & Cipher Tools",
       },
     ],
     locale: "en_US",
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
     title: "DECODE | QR Generator & Cipher Tools",
     description:
       "Create and scan QR codes, encrypt/decrypt text, and install DECODE as a fast PWA.",
-    images: ["/logo.png"],
+    images: ["/og-image.png"],
   },
   // Provide a base URL for resolving relative social images
   metadataBase: new URL("https://kingsley-a1.github.io/decode/"),

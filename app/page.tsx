@@ -4,9 +4,12 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { QRGenerator } from "@/components/QRGenerator";
 import { QRScanner } from "@/components/QRScanner";
+import { SuspiciousLinkChecker } from "@/components/SuspiciousLinkChecker";
+import { URLShortener } from "@/components/URLShortener";
 import { PageHeader } from "@/components/PageHeader";
+import { SeasonalConfetti } from "@/components/SeasonalConfetti";
 
-type TabKey = "generate" | "scan";
+type TabKey = "generate" | "scan" | "check" | "shorten";
 
 const tabs: { id: TabKey; label: string; description: string; badge?: string }[] = [
   {
@@ -21,6 +24,18 @@ const tabs: { id: TabKey; label: string; description: string; badge?: string }[]
     description: "Use your camera or images to decode instantly with smart actions.",
     badge: "New",
   },
+  {
+    id: "check",
+    label: "Check Link",
+    description: "Detect suspicious links with local heuristics before opening.",
+    badge: "Safe",
+  },
+  {
+    id: "shorten",
+    label: "Shorten URL",
+    description: "Shrink long links with copy/open actions and fallbacks.",
+    badge: "Beta",
+  },
 ];
 
 export default function Home() {
@@ -28,6 +43,7 @@ export default function Home() {
 
   return (
     <div className="p-4 space-y-6">
+      <SeasonalConfetti />
       <PageHeader
         title="Generate or Scan"
         subtitle="Switch between creating high-fidelity QR codes and scanning them with smart actions."
@@ -35,7 +51,7 @@ export default function Home() {
 
       {/* Tab switcher */}
       <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/70 p-2 shadow-lg">
-        <div className="grid grid-cols-2 gap-2 text-sm font-semibold text-neutral-200">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm font-semibold text-neutral-200">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -70,7 +86,7 @@ export default function Home() {
 
       {/* Active pane */}
       <AnimatePresence mode="wait">
-        {activeTab === "generate" ? (
+        {activeTab === "generate" && (
           <motion.div
             key="generate"
             initial={{ opacity: 0, y: 12 }}
@@ -83,7 +99,9 @@ export default function Home() {
               <QRGenerator showHeader={false} />
             </div>
           </motion.div>
-        ) : (
+        )}
+
+        {activeTab === "scan" && (
           <motion.div
             key="scan"
             initial={{ opacity: 0, y: 12 }}
@@ -94,6 +112,36 @@ export default function Home() {
           >
             <div className="p-4 md:p-6">
               <QRScanner />
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === "check" && (
+          <motion.div
+            key="check"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.18 }}
+            className="bg-neutral-950/60 rounded-2xl border border-neutral-800 shadow-xl"
+          >
+            <div className="p-4 md:p-6">
+              <SuspiciousLinkChecker />
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === "shorten" && (
+          <motion.div
+            key="shorten"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.18 }}
+            className="bg-neutral-950/60 rounded-2xl border border-neutral-800 shadow-xl"
+          >
+            <div className="p-4 md:p-6">
+              <URLShortener />
             </div>
           </motion.div>
         )}

@@ -1,6 +1,6 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -26,20 +26,24 @@ export function Logo({
 }: LogoProps) {
   const { image: imageSize, text: textSize } = sizeMap[size];
 
+  // THE FIX: Manually define base path for GitHub Pages
+  // This ensures we look in /decode/logo.png instead of root /logo.png
+  const basePath = process.env.NODE_ENV === "production" ? "/decode" : "";
+
   const content = (
     <div className={cn("flex items-center gap-2", className)}>
       {/* Logo first, then DECODE text */}
       <div
-        className="rounded-full overflow-hidden shrink-0 bg-white shadow-sm"
+        className="rounded-full overflow-hidden shrink-0 bg-white shadow-sm flex items-center justify-center"
         style={{ width: imageSize, height: imageSize }}
       >
-        <Image
-          src="/logo.png"
+        {/* Switched to standard <img> for 100% reliability on Static Export */}
+        <img
+          src={`${basePath}/logo.png`}
           alt="DECODE Logo"
           width={imageSize}
           height={imageSize}
           className="w-full h-full object-contain"
-          priority
         />
       </div>
       {showText && (

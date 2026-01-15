@@ -1,57 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  Code2,
-  Palette,
-  Zap,
-  Globe,
-  Shield,
-  Smartphone,
-  ArrowRight,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { PageHeader } from "@/components/PageHeader";
-
-const skills = [
-  {
-    icon: Code2,
-    title: "Full-Stack Development",
-    description: "NestJS, Next.js, React, Node.js, TypeScript",
-    color: "from-violet-500 to-purple-500",
-  },
-  {
-    icon: Palette,
-    title: "UI/UX Design",
-    description: "Modern, responsive, and accessible interfaces",
-    color: "from-pink-500 to-rose-500",
-  },
-  {
-    icon: Zap,
-    title: "Performance",
-    description: "Optimized, fast-loading applications",
-    color: "from-yellow-500 to-orange-500",
-  },
-  {
-    icon: Globe,
-    title: "Web Applications",
-    description: "PWAs, SPAs, and enterprise solutions",
-    color: "from-cyan-500 to-blue-500",
-  },
-  {
-    icon: Shield,
-    title: "Security",
-    description: "Secure coding practices and encryption",
-    color: "from-green-500 to-emerald-500",
-  },
-  {
-    icon: Smartphone,
-    title: "Mobile-First",
-    description: "Responsive design for all devices",
-    color: "from-indigo-500 to-violet-500",
-  },
-];
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -76,7 +29,7 @@ export default function AboutPage() {
   return (
     <div className="p-4 space-y-8">
       {/* Header with Logo and Theme Toggle */}
-      <PageHeader title="About Us" subtitle="Meet the DECODE team" />
+      <PageHeader title="About DECODE v2" subtitle="How we rebuilt DECODE for reliability, safety, and speed" />
 
       {/* Hero Section */}
       <motion.div
@@ -94,10 +47,9 @@ export default function AboutPage() {
             priority
           />
         </div>
-        <h1 className="text-3xl font-bold gradient-text">DECODE</h1>
+        <h1 className="text-3xl font-bold gradient-text">DECODE v2</h1>
         <p className="text-neutral-400 text-sm max-w-xs md:max-w-md mx-auto">
-          Professional Web Development Studio crafting industry-standard digital
-          solutions
+          Privacy-first QR creation, scanning, and link safety—rebuilt for smoother installs, safer opens, and lightning-fast sharing.
         </p>
       </motion.div>
 
@@ -110,23 +62,17 @@ export default function AboutPage() {
       >
         <h2 className="text-lg md:text-xl font-semibold text-white flex items-center gap-2">
           <span className="w-1.5 h-5 bg-orange-500 rounded-full" />
-          Who We Are
+          Why we built v2
         </h2>
         <p className="text-neutral-400 text-sm md:text-base leading-relaxed">
-          We are a team of passionate{" "}
-          <span className="text-white font-medium">
-            Professional Web Developers
-          </span>{" "}
-          dedicated to building innovative digital solutions. Our expertise
-          spans across modern web technologies, enabling us to deliver scalable,
-          secure, and user-centric applications for individuals and corporations
-          alike. Our work is driven by a commitment to quality, creativity, and
-          client satisfaction. We deliver on the promise of excellence in every
-          project we undertake.
+          We set out to make QR workflows safer and faster without sacrificing usability. DECODE v2 focuses on:
+          <span className="text-white font-medium"> clearer navigation</span>,
+          <span className="text-white font-medium"> resilient offline behaviors</span>, and
+          <span className="text-white font-medium"> transparent safety cues</span> so users can trust every open or share action.
         </p>
       </motion.div>
 
-      {/* Our Craft */}
+      {/* What's new in v2 */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -135,38 +81,52 @@ export default function AboutPage() {
       >
         <h2 className="text-lg md:text-xl font-semibold text-white flex items-center gap-2">
           <span className="w-1.5 h-5 bg-amber-500 rounded-full" />
-          Our Craft
+          What changed in DECODE v2
         </h2>
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-2 gap-3"
+          className="grid grid-cols-1 md:grid-cols-2 gap-3"
         >
-          {skills.map((skill) => {
-            const Icon = skill.icon;
-            return (
-              <motion.div
-                key={skill.title}
-                variants={itemVariants}
-                className="glass rounded-xl p-4 space-y-2 hover:border-orange-500/50 transition-colors"
-              >
-                <div
-                  className={`w-10 h-10 rounded-lg bg-linear-to-br ${skill.color} flex items-center justify-center`}
-                >
-                  <Icon className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="text-sm font-medium text-white">
-                  {skill.title}
-                </h3>
-                <p className="text-xs text-neutral-500">{skill.description}</p>
-              </motion.div>
-            );
-          })}
+          {[
+            {
+              title: "Split home experience",
+              description: "Generate, Scan, Check links, and Shorten URLs live in one surface with animated tabs for clarity.",
+              color: "from-orange-500 to-amber-500",
+            },
+            {
+              title: "Safer opens",
+              description: "Local suspicious-link heuristics (punycode, risky TLDs, private IPs, brand lookalikes) with confirm-before-open.",
+              color: "from-emerald-500 to-teal-500",
+            },
+            {
+              title: "Instant QR + short links",
+              description: "Fast QR crafting paired with an auth-less is.gd shortener and a hashed fallback when APIs fail.",
+              color: "from-sky-500 to-blue-500",
+            },
+            {
+              title: "PWA-first polish",
+              description: "Updated manifest ID, metadata base, and offline-friendly behaviors to keep installs conflict-free.",
+              color: "from-violet-500 to-fuchsia-500",
+            },
+          ].map((item) => (
+            <motion.div
+              key={item.title}
+              variants={itemVariants}
+              className="glass rounded-xl p-4 space-y-2 hover:border-orange-500/50 transition-colors"
+            >
+              <div className={`w-10 h-10 rounded-lg bg-linear-to-br ${item.color} flex items-center justify-center text-white text-sm font-semibold`}>
+                v2
+              </div>
+              <h3 className="text-sm font-medium text-white">{item.title}</h3>
+              <p className="text-xs text-neutral-500">{item.description}</p>
+            </motion.div>
+          ))}
         </motion.div>
       </motion.div>
 
-      {/* Mission Statement */}
+      {/* Principles */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -175,17 +135,16 @@ export default function AboutPage() {
       >
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
           <span className="w-1.5 h-5 bg-orange-400 rounded-full" />
-          Our Mission
+          Principles guiding v2
         </h2>
         <p className="text-neutral-400 text-sm leading-relaxed">
-          To democratize technology by creating{" "}
-          <span className="text-white font-medium">
-            powerful, accessible tools
-          </span>{" "}
-          that empower users. DECODE represents one of our commitments to
-          building solutions that are not just functional, but delightful to
-          use.
+          We prioritize clear intent, predictable safety cues, and low-friction sharing. Every feature in v2 is measured against three pillars:
         </p>
+        <ul className="list-disc list-inside text-neutral-300 text-sm space-y-1">
+          <li>Speed: immediate feedback, offline-friendly fallbacks, and minimal blocking states.</li>
+          <li>Safety: local heuristics first, explicit confirmation before risky opens, and privacy-respecting defaults.</li>
+          <li>Delight: subtle motion, seasonal touches, and thoughtful empty states so the app feels alive.</li>
+        </ul>
       </motion.div>
 
       {/* CTA */}
