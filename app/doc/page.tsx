@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function DocumentationAliasPage() {
+export default function DocAliasPage() {
   redirect("/docs");
 }
