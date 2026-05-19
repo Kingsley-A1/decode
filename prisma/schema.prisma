@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String            @id @default(cuid())
+  name               String?
+  email              String?           @unique
+  emailVerified      DateTime?
+  image              String?
+  defaultWorkspaceId String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
+  accounts           Account[]
+  sessions           Session[]
+  defaultWorkspace   Workspace?        @relation("DefaultWorkspace", fields: [defaultWorkspaceId], references: [id], onDelete: SetNull)
+  ownedWorkspaces    Workspace[]       @relation("WorkspaceOwner")
+  memberships        WorkspaceMember[]
+  ownedQRCodes       QRCode[]          @relation("QRCodeOwner")
+  uploadedAssets     QRCodeAsset[]     @relation("AssetUploader")
+  auditLogs          AuditLog[]        @relation("AuditActor")
+  reviews            Review[]          @relation("ReviewAuthor")
+
+  @@index([defaultWorkspaceId])
+  @@index([deletedAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Workspace {
+  id              String            @id @default(cuid())
+  name            String
+  slug            String            @unique
+  ownerId         String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+  owner           User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  defaultForUsers User[]            @relation("DefaultWorkspace")
+  members         WorkspaceMember[]
+  qrCodes         QRCode[]
+  assets          QRCodeAsset[]
+  landingPages    LandingPage[]
+  scanEvents      ScanEvent[]
+  auditLogs       AuditLog[]
+
+  @@index([ownerId, deletedAt])
+  @@index([deletedAt, updatedAt])
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId, deletedAt])
+  @@index([workspaceId, role, deletedAt])
+}
+
+model QRCode {
+  id             String        @id @default(cuid())
+  workspaceId    String
+  ownerId        String
+  title          String
+  type           String
+  mode           String
+  status         String
+  slug           String?       @unique
+  payload        Json
+  destinationUrl String?
+  designConfig   Json
+  scanCount      Int           @default(0)
+  publishedAt    DateTime?
+  archivedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+  workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner          User          @relation("QRCodeOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  assets         QRCodeAsset[]
+  landingPage    LandingPage?
+  scanEvents     ScanEvent[]
+
+  @@index([workspaceId, deletedAt, updatedAt])
+  @@index([workspaceId, status, updatedAt])
+  @@index([workspaceId, mode, updatedAt])
+  @@index([ownerId, updatedAt])
+}
+
+model QRCodeAsset {
+  id            String       @id @default(cuid())
+  workspaceId   String
+  qrCodeId      String?
+  landingPageId String?
+  uploaderId    String?
+  purpose       String
+  status        String
+  bucket        String
+  key           String       @unique
+  publicUrl     String?
+  contentType   String
+  fileSizeBytes Int
+  checksum      String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+  workspace     Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  qrCode        QRCode?      @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+  landingPage   LandingPage? @relation(fields: [landingPageId], references: [id], onDelete: SetNull)
+  uploader      User?        @relation("AssetUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, deletedAt, updatedAt])
+  @@index([qrCodeId, purpose])
+  @@index([landingPageId, purpose])
+  @@index([uploaderId, createdAt])
+}
+
+model LandingPage {
+  id          String        @id @default(cuid())
+  workspaceId String
+  qrCodeId    String?       @unique
+  type        String
+  title       String
+  status      String
+  content     Json
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  qrCode      QRCode?       @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+  assets      QRCodeAsset[]
+
+  @@index([workspaceId, deletedAt, updatedAt])
+  @@index([workspaceId, status, updatedAt])
+}
+
+model ScanEvent {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  qrCodeId        String
+  scannedAt       DateTime  @default(now())
+  deviceClass     String?
+  browser         String?
+  operatingSystem String?
+  referrer        String?
+  country         String?
+  region          String?
+  ipHash          String?
+  userAgentHash   String?
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  qrCode          QRCode    @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scannedAt])
+  @@index([qrCodeId, scannedAt])
+  @@index([workspaceId, deviceClass, scannedAt])
+}
+
+model LinkCheck {
+  id            String   @id @default(cuid())
+  normalizedUrl String   @unique
+  verdict       String
+  confidence    Int
+  reasons       Json
+  checkedAt     DateTime @default(now())
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([verdict, checkedAt])
+}
+
+model Review {
+  id           String    @id @default(cuid())
+  userId       String?
+  name         String
+  email        String?
+  rating       Int
+  title        String
+  body         String
+  status       String    @default("published")
+  helpfulCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  author       User?     @relation("ReviewAuthor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, deletedAt, createdAt])
+  @@index([userId, createdAt])
+  @@index([deletedAt])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor       User?     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+}
