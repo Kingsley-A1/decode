@@ -52,7 +52,11 @@ async function fallbackHash(url: string) {
   const digest = await crypto.subtle.digest("SHA-1", data);
   const bytes = Array.from(new Uint8Array(digest)).slice(0, 4);
   const slug = bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
-  return `https://kingsley-a1.github.io/decode/s/${slug}`;
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    "https://decode.local";
+
+  return `${appUrl}/s/${slug}`;
 }
 
 export function URLShortener() {

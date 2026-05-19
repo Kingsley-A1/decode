@@ -1,5 +1,5 @@
-import { CipherTool } from "@/components/CipherTool";
+import { redirect } from "next/navigation";
 
 export default function CipherPage() {
-  return <CipherTool />;
+  redirect("/decode");
 }

@@ -1,76 +1,62 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Html5Qrcode, Html5QrcodeCameraScanConfig } from "html5-qrcode";
-import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
+import type { Html5Qrcode, Html5QrcodeCameraScanConfig } from "html5-qrcode";
 import {
   AlertTriangle,
   Camera,
   Check,
   Copy,
+  ExternalLink,
   Image as ImageIcon,
   Link as LinkIcon,
   Play,
+  ScanLine,
   Share2,
+  ShieldCheck,
   StopCircle,
+  Trash2,
+  UploadCloud,
   Volume2,
   VolumeX,
-  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Alert, Badge, Button, Dialog, FileUpload } from "@/components/ui";
 
-const isUrl = (value: string) => {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-};
+type ScannerState = "idle" | "requesting" | "scanning" | "blocked" | "error";
 
-const parseError = (err: unknown, fallback = "Something went wrong") => {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
-  return fallback;
-};
+interface ScanResult {
+  readonly value: string;
+  readonly source: "Camera" | "Image upload";
+  readonly scannedAt: string;
+}
 
-const vibrate = (duration = 200) => {
-  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-    try {
-      navigator.vibrate(duration);
-    } catch {}
-  }
-};
+const imageContentTypes = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+]);
 
-const playBeep = (enabled: boolean) => {
-  if (!enabled || typeof window === "undefined") return;
-  try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = 880;
-    gain.gain.value = 0.05;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.15);
-  } catch {}
-};
+const maxUploadBytes = 10 * 1024 * 1024;
 
 export function QRScanner() {
-  const [isScanning, setIsScanning] = useState(false);
-  const [scannedResult, setScannedResult] = useState<string | null>(null);
+  const [scannerState, setScannerState] = useState<ScannerState>("idle");
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playSound, setPlaySound] = useState(true);
+  const [permissionLabel, setPermissionLabel] = useState("Not requested");
+  const [copied, setCopied] = useState(false);
+  const [isOpenDialogVisible, setIsOpenDialogVisible] = useState(false);
   const containerId = useRef(`qr-reader-${Math.random().toString(36).slice(2)}`);
-  const fileContainerId = useRef(
-    `qr-reader-file-${Math.random().toString(36).slice(2)}`
-  );
   const qrRef = useRef<Html5Qrcode | null>(null);
 
   const scanConfig: Html5QrcodeCameraScanConfig = useMemo(
@@ -82,9 +68,34 @@ export function QRScanner() {
     }),
     []
   );
+  const resultUrl = scanResult?.value && isHttpUrl(scanResult.value)
+    ? normalizeUrl(scanResult.value)
+    : null;
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function readCameraPermission() {
+      try {
+        const permissions = navigator.permissions;
+        if (!permissions?.query) return;
+
+        const status = await permissions.query({
+          name: "camera" as PermissionName,
+        });
+        if (!isMounted) return;
+
+        setPermissionLabel(getPermissionLabel(status.state));
+        status.onchange = () => setPermissionLabel(getPermissionLabel(status.state));
+      } catch {
+        setPermissionLabel("Browser controlled");
+      }
+    }
+
+    void readCameraPermission();
+
     return () => {
+      isMounted = false;
       if (qrRef.current) {
         qrRef.current.stop().catch(() => undefined);
         try {
@@ -94,271 +105,550 @@ export function QRScanner() {
     };
   }, []);
 
-  const handleScanSuccess = (decodedText: string) => {
-    setScannedResult(decodedText);
-    vibrate();
-    playBeep(playSound);
-    stopScanning();
-  };
-
-  const startScanning = async () => {
+  async function handleStartScanning() {
     setError(null);
-    if (isScanning) return;
+    setCopied(false);
+    if (scannerState === "scanning" || scannerState === "requesting") return;
     if (typeof window === "undefined") return;
 
+    setScannerState("requesting");
+    setPermissionLabel("Requesting camera");
+
     try {
+      const { Html5Qrcode: Html5QRCodeScanner } = await import("html5-qrcode");
       const html5Qr =
-        qrRef.current ?? new Html5Qrcode(containerId.current, { verbose: false });
+        qrRef.current ??
+        new Html5QRCodeScanner(containerId.current, { verbose: false });
       qrRef.current = html5Qr;
 
       await html5Qr.start(
         { facingMode: "environment" },
         scanConfig,
-        (text) => {
-          handleScanSuccess(text);
-        },
+        (text) => handleScanSuccess(text, "Camera"),
         () => undefined
       );
-      setIsScanning(true);
-    } catch (err: unknown) {
-      setError(
-        parseError(err, "Unable to start scanner. Check camera permission.")
+      setScannerState("scanning");
+      setPermissionLabel("Camera active");
+    } catch (scanError) {
+      const message = parseError(
+        scanError,
+        "Unable to start scanner. Check camera permission."
       );
-      setIsScanning(false);
+      setScannerState(isPermissionError(message) ? "blocked" : "error");
+      setPermissionLabel(isPermissionError(message) ? "Permission blocked" : "Camera unavailable");
+      setError(message);
     }
-  };
+  }
 
-  const stopScanning = async () => {
+  async function handleStopScanning() {
     if (!qrRef.current) {
-      setIsScanning(false);
+      setScannerState("idle");
       return;
     }
+
     try {
       await qrRef.current.stop();
       await qrRef.current.clear();
     } catch {}
-    setIsScanning(false);
-  };
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    setScannerState("idle");
+    setPermissionLabel("Camera stopped");
+  }
+
+  function handleScanSuccess(decodedText: string, source: ScanResult["source"]) {
+    setScanResult({
+      value: decodedText,
+      source,
+      scannedAt: new Date().toISOString(),
+    });
+    setCopied(false);
     setError(null);
-    setScannedResult(null);
+    vibrate();
+    playBeep(playSound);
+    void handleStopScanning();
+  }
+
+  async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setError(null);
+    setCopied(false);
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     try {
-      if (isScanning) {
-        await stopScanning();
+      if (scannerState === "scanning") {
+        await handleStopScanning();
       }
-      const instance =
-        qrRef.current ?? new Html5Qrcode(fileContainerId.current, { verbose: false });
-      qrRef.current = instance;
-      const result = await instance.scanFile(file, true);
-      handleScanSuccess(result);
-    } catch (err: unknown) {
-      const message = parseError(err, "Unable to read this file.");
-      // Friendly fallback for the most common html5-qrcode failure message
-      if (/no multiformat readers/i.test(message)) {
-        setError(
-          "No QR code detected in the image — try a clearer image, a larger QR area, or better lighting."
-        );
-      } else {
-        setError(message);
-      }
-    } finally {
-      e.target.value = "";
+
+      const formData = new FormData();
+      formData.set("file", file);
+      const response = await fetch("/api/scans/image", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json()) as
+        | { ok: true; data: { text: string } }
+        | { ok: false; error: { message: string } };
+
+      if (!payload.ok) throw new Error(payload.error.message);
+
+      handleScanSuccess(payload.data.text, "Image upload");
+    } catch (uploadError) {
+      setError(parseError(uploadError, "Unable to read this QR image."));
     }
-  };
+  }
 
-  const copyResult = async () => {
-    if (!scannedResult) return;
-    await navigator.clipboard.writeText(scannedResult);
-  };
+  async function handleCopyResult() {
+    if (!scanResult) return;
 
-  const openLink = () => {
-    if (scannedResult && isUrl(scannedResult)) {
-      window.open(scannedResult, "_blank", "noopener,noreferrer");
-    }
-  };
+    await navigator.clipboard.writeText(scanResult.value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  }
 
-  const shareResult = async () => {
-    if (!scannedResult) return;
+  async function handleShareResult() {
+    if (!scanResult) return;
+
     if (navigator.share) {
       try {
-        await navigator.share({ text: scannedResult });
+        await navigator.share({ text: scanResult.value });
+        return;
       } catch {}
-    } else {
-      await copyResult();
     }
-  };
+
+    await handleCopyResult();
+  }
+
+  function handleClearResult() {
+    setScanResult(null);
+    setCopied(false);
+    setIsOpenDialogVisible(false);
+  }
+
+  function handleOpenResult() {
+    if (!resultUrl) return;
+    window.open(resultUrl, "_blank", "noopener,noreferrer");
+    setIsOpenDialogVisible(false);
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-lg font-semibold text-white">Scan a QR Code</p>
-          <p className="text-sm text-neutral-400">
-            Use your camera or upload an image to decode the QR content.
-          </p>
-        </div>
-        <button
-          onClick={() => setPlaySound((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-full border border-neutral-800 px-3 py-1 text-sm text-neutral-200 hover:border-orange-500 hover:text-white transition"
-        >
-          {playSound ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-          {playSound ? "Sound on" : "Sound off"}
-        </button>
-      </div>
-
-      <div
-        className={cn(
-          "relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 backdrop-blur",
-          isScanning ? "ring-2 ring-orange-500/50" : ""
-        )}
-      >
-        <div className="absolute inset-0 pointer-events-none bg-linear-to-b from-orange-500/5 via-transparent to-orange-500/5" />
-        <div className="relative p-4 flex flex-col gap-4">
-          <div className="relative flex items-center justify-center">
-            <div
-              className="relative h-[300px] w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-950/80 shadow-lg overflow-hidden"
-            >
-              <div id={containerId.current} className="w-full h-full" />
-              <div className="pointer-events-none absolute inset-0 rounded-xl border border-orange-500/30" />
-              <div className="pointer-events-none absolute inset-x-6 top-1/2 h-px bg-orange-400/50 animate-pulse" />
-            </div>
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">
+              Camera scanner
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Start the camera only when needed. Decoded links are never opened
+              automatically.
+            </p>
           </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={isScanning ? stopScanning : startScanning}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all",
-                isScanning
-                  ? "bg-red-500/15 text-red-200 border border-red-500/40 hover:bg-red-500/25"
-                  : "bg-orange-500/20 text-orange-200 border border-orange-500/40 hover:bg-orange-500/30"
-              )}
-            >
-              {isScanning ? (
-                <StopCircle className="w-4 h-4" />
+          <Button
+            variant="secondary"
+            onClick={() => setPlaySound((value) => !value)}
+            leftIcon={
+              playSound ? (
+                <Volume2 className="h-4 w-4" aria-hidden="true" />
               ) : (
-                <Play className="w-4 h-4" />
-              )}
-              {isScanning ? "Stop scanning" : "Start scanning"}
-            </button>
+                <VolumeX className="h-4 w-4" aria-hidden="true" />
+              )
+            }
+          >
+            {playSound ? "Sound on" : "Sound off"}
+          </Button>
+        </div>
 
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/80 px-4 py-3 text-sm font-semibold text-neutral-100 hover:border-orange-500/40 hover:text-white transition-all">
-              <ImageIcon className="w-4 h-4" />
-              Upload image
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFile}
-                className="hidden"
+        <div
+          className={cn(
+            "rounded-xl border border-slate-200 bg-white p-4 shadow-sm",
+            scannerState === "scanning" && "ring-2 ring-sky-300"
+          )}
+        >
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+            <div className="relative flex items-center justify-center">
+              <div className="relative h-[340px] w-full max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-slate-950 shadow-sm">
+                <div
+                  id={containerId.current}
+                  className="h-full w-full bg-slate-950 [&_button]:rounded-lg [&_button]:border [&_button]:border-slate-200 [&_button]:bg-white [&_button]:px-3 [&_button]:py-2 [&_button]:text-sm [&_button]:font-semibold [&_button]:text-slate-800 [&_img]:mx-auto [&_img]:max-h-full [&_img]:object-contain [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+                />
+                {scannerState !== "scanning" && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950 text-center text-white">
+                    <Camera
+                      className="h-10 w-10 text-sky-300"
+                      aria-hidden="true"
+                    />
+                    <p className="max-w-xs px-6 text-sm leading-6 text-slate-200">
+                      Camera feed appears here after permission is granted.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <ScannerStatusCard
+                state={scannerState}
+                permissionLabel={permissionLabel}
               />
-            </label>
-
-            <div className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/80 px-4 py-3 text-sm text-neutral-300">
-              <Camera className="w-4 h-4" />
-              Camera: {isScanning ? "On" : "Off"}
+              <Button
+                onClick={
+                  scannerState === "scanning"
+                    ? handleStopScanning
+                    : handleStartScanning
+                }
+                variant={scannerState === "scanning" ? "danger" : "primary"}
+                isLoading={scannerState === "requesting"}
+                className="w-full"
+                leftIcon={
+                  scannerState === "scanning" ? (
+                    <StopCircle className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                  )
+                }
+              >
+                {scannerState === "scanning" ? "Stop camera" : "Start camera"}
+              </Button>
+              <FileUpload
+                label="Upload QR image"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+                onChange={handleFileUpload}
+                hint="PNG, JPG, WebP, GIF, or BMP up to 10 MB."
+              />
             </div>
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-              <AlertTriangle className="w-4 h-4" />
-              <span>{error}</span>
-            </div>
+            <Alert
+              className="mt-4"
+              variant="danger"
+              icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
+            >
+              {error}
+            </Alert>
           )}
         </div>
-      </div>
 
-      {/* Hidden container used when scanning files */}
-      <div id={fileContainerId.current} className="hidden" />
+        <div className="grid gap-3 md:grid-cols-3">
+          <FeatureNote
+            icon={<Camera className="h-4 w-4" aria-hidden="true" />}
+            title="Permission-aware"
+            text="Camera state and denial states are visible."
+          />
+          <FeatureNote
+            icon={<UploadCloud className="h-4 w-4" aria-hidden="true" />}
+            title="Upload fallback"
+            text="Decode a QR from an image when camera access is unavailable."
+          />
+          <FeatureNote
+            icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}
+            title="Safe by default"
+            text="URL results can be verified before opening."
+          />
+        </div>
+      </section>
 
-      <AnimatePresence>
-        {scannedResult && (
-          <motion.div
-            className="fixed inset-0 z-40 flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-              onClick={() => setScannedResult(null)}
-              aria-hidden
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="relative z-10 w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-950 p-6 shadow-2xl"
-              role="dialog"
-              aria-modal="true"
-              aria-label="QR scan result"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm text-neutral-400">Scan result</p>
-                  <p className="mt-2 text-lg font-semibold text-white wrap-break-word leading-relaxed">
-                    {scannedResult}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-semibold text-green-300">
-                    <Check className="w-3 h-3" />
-                    Found
-                  </span>
-                  <button
-                    onClick={() => setScannedResult(null)}
-                    className="rounded-full p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
-                    aria-label="Close"
+      <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">
+                Result panel
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Copy, share, verify, clear, or cautiously open decoded content.
+              </p>
+            </div>
+            <ScanLine className="h-5 w-5 text-sky-700" aria-hidden="true" />
+          </div>
+
+          {scanResult ? (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant={resultUrl ? "info" : "neutral"}
+                    icon={
+                      resultUrl ? (
+                        <LinkIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                      ) : (
+                        <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                      )
+                    }
                   >
-                    <X className="w-4 h-4" />
-                  </button>
+                    {resultUrl ? "URL" : "Text"}
+                  </Badge>
+                  <Badge variant="success">{scanResult.source}</Badge>
                 </div>
+                <p className="mt-3 break-all text-sm leading-6 text-slate-700">
+                  {scanResult.value}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Decoded {formatScanTime(scanResult.scannedAt)}
+                </p>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                <button
-                  onClick={copyResult}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 hover:border-orange-500/50 hover:text-white transition"
+              <div className="grid gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={handleCopyResult}
+                  leftIcon={
+                    copied ? (
+                      <Check className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                    )
+                  }
                 >
-                  <Copy className="w-4 h-4" />
-                  Copy
-                </button>
-                <button
-                  onClick={openLink}
-                  disabled={!isUrl(scannedResult)}
-                  className={cn(
-                    "inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm transition",
-                    isUrl(scannedResult)
-                      ? "border-blue-500/40 bg-blue-500/10 text-blue-100 hover:border-blue-400"
-                      : "border-neutral-800 bg-neutral-900/60 text-neutral-500 cursor-not-allowed"
-                  )}
+                  {copied ? "Copied" : "Copy result"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleShareResult}
+                  leftIcon={<Share2 className="h-4 w-4" aria-hidden="true" />}
                 >
-                  <LinkIcon className="w-4 h-4" />
-                  Open link
-                </button>
-                <button
-                  onClick={shareResult}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 hover:border-orange-500/50 hover:text-white transition"
+                  Share result
+                </Button>
+                {resultUrl && (
+                  <Link
+                    href={`/verify?url=${encodeURIComponent(resultUrl)}`}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900"
+                  >
+                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                    Verify link
+                  </Link>
+                )}
+                <Button
+                  variant="secondary"
+                  onClick={() => setIsOpenDialogVisible(true)}
+                  disabled={!resultUrl}
+                  leftIcon={<ExternalLink className="h-4 w-4" aria-hidden="true" />}
                 >
-                  <Share2 className="w-4 h-4" />
-                  Share
-                </button>
-                <button
-                  onClick={() => setScannedResult(null)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 hover:border-red-500/40 hover:text-white transition"
+                  Open cautiously
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleClearResult}
+                  leftIcon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
                 >
-                  <StopCircle className="w-4 h-4" />
-                  Clear
-                </button>
+                  Clear result
+                </Button>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+              <ScanLine
+                className="mx-auto h-8 w-8 text-sky-700"
+                aria-hidden="true"
+              />
+              <p className="mt-3 text-sm font-semibold text-slate-950">
+                No scan yet
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Start the camera or upload an image. Results stay here until
+                you clear them.
+              </p>
+            </div>
+          )}
+        </section>
+      </aside>
+
+      <Dialog
+        open={isOpenDialogVisible}
+        title="Open scanned link?"
+        description="Decode has not verified this URL in the scanner. Verify it first if you do not fully trust the source."
+        onClose={() => setIsOpenDialogVisible(false)}
+      >
+        <div className="space-y-4">
+          <p className="break-all rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+            {resultUrl}
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="secondary"
+              onClick={() => setIsOpenDialogVisible(false)}
+            >
+              Cancel
+            </Button>
+            {resultUrl && (
+              <Link
+                href={`/verify?url=${encodeURIComponent(resultUrl)}`}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900"
+              >
+                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                Verify first
+              </Link>
+            )}
+            <Button
+              variant="danger"
+              onClick={handleOpenResult}
+              leftIcon={<ExternalLink className="h-4 w-4" aria-hidden="true" />}
+            >
+              Open anyway
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
+
+function ScannerStatusCard({
+  state,
+  permissionLabel,
+}: {
+  readonly state: ScannerState;
+  readonly permissionLabel: string;
+}) {
+  const variant = state === "blocked" || state === "error"
+    ? "danger"
+    : state === "scanning"
+      ? "success"
+      : state === "requesting"
+        ? "warning"
+        : "neutral";
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-950">Camera status</p>
+        <Badge variant={variant}>{getScannerStateLabel(state)}</Badge>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-600">
+        Permission: {permissionLabel}
+      </p>
+    </div>
+  );
+}
+
+function FeatureNote({
+  icon,
+  title,
+  text,
+}: {
+  readonly icon: React.ReactNode;
+  readonly title: string;
+  readonly text: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+        <span className="text-sky-700">{icon}</span>
+        {title}
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
+    </div>
+  );
+}
+
+function getScannerStateLabel(state: ScannerState): string {
+  if (state === "requesting") return "Requesting";
+  if (state === "scanning") return "Active";
+  if (state === "blocked") return "Blocked";
+  if (state === "error") return "Unavailable";
+
+  return "Idle";
+}
+
+function validateImageFile(file: File): string | null {
+  if (!imageContentTypes.has(file.type)) {
+    return "Upload a PNG, JPG, WebP, GIF, or BMP image.";
+  }
+
+  if (file.size > maxUploadBytes) {
+    return "Upload image must be 10 MB or smaller.";
+  }
+
+  return null;
+}
+
+function isHttpUrl(value: string): boolean {
+  return Boolean(normalizeUrl(value));
+}
+
+function normalizeUrl(value: string): string | null {
+  try {
+    const trimmedValue = value.trim();
+    const candidate = /^[a-z][a-z0-9+.-]*:/i.test(trimmedValue)
+      ? trimmedValue
+      : `https://${trimmedValue}`;
+    const url = new URL(candidate);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function parseError(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+
+  return fallback;
+}
+
+function isPermissionError(message: string): boolean {
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes("permission") ||
+    normalized.includes("notallowed") ||
+    normalized.includes("denied")
+  );
+}
+
+function getPermissionLabel(state: PermissionState): string {
+  if (state === "granted") return "Granted";
+  if (state === "denied") return "Blocked";
+
+  return "Prompt required";
+}
+
+function formatScanTime(value: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(value));
+}
+
+function vibrate(duration = 200) {
+  if (typeof navigator === "undefined" || !("vibrate" in navigator)) return;
+
+  try {
+    navigator.vibrate(duration);
+  } catch {}
+}
+
+function playBeep(enabled: boolean) {
+  if (!enabled || typeof window === "undefined") return;
+
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+
+    const context = new AudioCtx();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 880;
+    gain.gain.value = 0.05;
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.15);
+  } catch {}
+}
+

@@ -1,277 +1,490 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { encrypt, decrypt, cipherOptions, CipherType } from "@/lib/crypto";
+import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import {
-  Lock,
-  Unlock,
-  Copy,
-  Check,
   ArrowRightLeft,
+  Check,
+  Copy,
+  FileInput,
+  FileOutput,
+  Play,
+  Server,
+  ShieldCheck,
   Trash2,
-  Sparkles,
-  Eye,
 } from "lucide-react";
+import { cipherOptions, type CipherType } from "@/lib/crypto";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "./PageHeader";
-import EncodeDecodeDemoCard from "./EncodeDecodeDemoCard";
+import {
+  Alert,
+  Badge,
+  Button,
+  IconButton,
+  SegmentedControl,
+  Slider,
+  Textarea,
+} from "@/components/ui";
 
-export function CipherTool() {
+interface CipherToolProps {
+  showHeader?: boolean;
+}
+
+type DecodeDirection = "encode" | "decode";
+
+interface DecodeTransformResult {
+  algorithm: CipherType;
+  direction: DecodeDirection;
+  output: string;
+  inputLength: number;
+  outputLength: number;
+}
+
+type DecodeApiResponse =
+  | {
+      ok: true;
+      data: DecodeTransformResult;
+      requestId: string;
+    }
+  | {
+      ok: false;
+      error: {
+        code: string;
+        message: string;
+        fields?: Record<string, string[]>;
+      };
+      requestId: string;
+    };
+
+const directionOptions = [
+  {
+    value: "encode",
+    label: "Encode",
+    description: "Convert plain text into the selected format.",
+  },
+  {
+    value: "decode",
+    label: "Decode",
+    description: "Validate encoded input before converting it back.",
+  },
+] as const;
+
+const algorithmPlaceholders: Record<
+  CipherType,
+  { encode: string; decode: string; format: string }
+> = {
+  caesar: {
+    encode: "Plain text to shift, for example: meet at sunrise",
+    decode: "Caesar-shifted text, for example: phhw dw vxqulvh",
+    format: "Letters are shifted by the selected amount. Numbers and symbols stay unchanged.",
+  },
+  base64: {
+    encode: "Plain text to encode, for example: Decode Platform",
+    decode: "Base64 text, for example: RGVjb2RlIFBsYXRmb3Jt",
+    format: "Base64 input may contain A-Z, a-z, 0-9, plus, slash, and padding.",
+  },
+  rot13: {
+    encode: "Plain text to rotate by 13 letters, for example: hello",
+    decode: "ROT13 text, for example: uryyb",
+    format: "ROT13 is symmetric, so encode and decode produce the opposite rotation.",
+  },
+  reverse: {
+    encode: "Plain text to reverse, for example: decode",
+    decode: "Reversed text, for example: edoced",
+    format: "Characters are reversed exactly as entered.",
+  },
+  morse: {
+    encode: "Plain text to encode, for example: SOS 2026",
+    decode: "... --- ... / ..--- ----- ..--- -....",
+    format: "Use spaces between Morse tokens and / between words.",
+  },
+  binary: {
+    encode: "Plain text to encode, for example: Hi",
+    decode: "01001000 01101001",
+    format: "Decode input must be 8-bit binary groups separated by spaces.",
+  },
+  hex: {
+    encode: "Plain text to encode, for example: Hi",
+    decode: "48 69",
+    format: "Decode input must contain an even number of hexadecimal characters.",
+  },
+  url: {
+    encode: "Text or URL component, for example: Decode Platform",
+    decode: "Decode%20Platform",
+    format: "Decode input must be valid percent-encoded URL text.",
+  },
+};
+
+const transformLabels: Record<DecodeDirection, { input: string; output: string }> = {
+  encode: {
+    input: "Source text",
+    output: "Encoded output",
+  },
+  decode: {
+    input: "Encoded input",
+    output: "Decoded output",
+  },
+};
+
+function getApiErrorMessage(payload: Extract<DecodeApiResponse, { ok: false }>) {
+  const fieldMessages = payload.error.fields
+    ? Object.values(payload.error.fields).flat()
+    : [];
+
+  return fieldMessages[0] ?? payload.error.message;
+}
+
+function getOppositeDirection(direction: DecodeDirection): DecodeDirection {
+  return direction === "encode" ? "decode" : "encode";
+}
+
+export function CipherTool({ showHeader = true }: CipherToolProps) {
   const [inputText, setInputText] = useState("");
-  const [selectedCipher, setSelectedCipher] = useState<CipherType>("caesar");
+  const [outputText, setOutputText] = useState("");
+  const [selectedCipher, setSelectedCipher] = useState<CipherType>("base64");
+  const [direction, setDirection] = useState<DecodeDirection>("encode");
   const [shift, setShift] = useState(3);
-  const [isEncrypt, setIsEncrypt] = useState(true);
+  const [isTransforming, setIsTransforming] = useState(false);
+  const [transformError, setTransformError] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<DecodeTransformResult | null>(
+    null
+  );
   const [copied, setCopied] = useState(false);
-  const [demoOpen, setDemoOpen] = useState(false);
 
-  const outputText = useMemo(() => {
-    if (!inputText) return "";
-    return isEncrypt
-      ? encrypt(inputText, selectedCipher, shift)
-      : decrypt(inputText, selectedCipher, shift);
-  }, [inputText, selectedCipher, shift, isEncrypt]);
+  const selectedOption = cipherOptions.find(
+    (option) => option.id === selectedCipher
+  );
+  const selectedPlaceholder = algorithmPlaceholders[selectedCipher];
+  const selectedLabels = transformLabels[direction];
+  const hasOutput = outputText.length > 0;
+
+  const algorithmSelectionOptions = useMemo(
+    () =>
+      cipherOptions.map((cipher) => ({
+        value: cipher.id,
+        label: cipher.name,
+        description: cipher.description,
+      })),
+    []
+  );
+
+  const resetResultState = () => {
+    setOutputText("");
+    setTransformError(null);
+    setLastResult(null);
+    setCopied(false);
+  };
+
+  const handleAlgorithmChange = (nextCipher: CipherType) => {
+    setSelectedCipher(nextCipher);
+    resetResultState();
+  };
+
+  const handleDirectionChange = (nextDirection: DecodeDirection) => {
+    setDirection(nextDirection);
+    resetResultState();
+  };
+
+  const handleInputChange = (value: string) => {
+    setInputText(value);
+    resetResultState();
+  };
+
+  const handleShiftChange = (value: number) => {
+    setShift(value);
+    resetResultState();
+  };
+
+  const handleTransform = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    setIsTransforming(true);
+    setTransformError(null);
+    setCopied(false);
+
+    try {
+      const response = await fetch("/api/decode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          algorithm: selectedCipher,
+          direction,
+          input: inputText,
+          shift,
+        }),
+      });
+      const payload = (await response.json()) as DecodeApiResponse;
+
+      if (!payload.ok) {
+        throw new Error(getApiErrorMessage(payload));
+      }
+
+      setOutputText(payload.data.output);
+      setLastResult(payload.data);
+    } catch (error) {
+      setOutputText("");
+      setLastResult(null);
+      setTransformError(
+        error instanceof Error
+          ? error.message
+          : "The transform could not be completed."
+      );
+    } finally {
+      setIsTransforming(false);
+    }
+  };
 
   const copyOutput = async () => {
     if (!outputText) return;
-    await navigator.clipboard.writeText(outputText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+
+    try {
+      await navigator.clipboard.writeText(outputText);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setTransformError("Output could not be copied to the clipboard.");
+    }
   };
 
   const swapTexts = () => {
+    if (!outputText) return;
+
     setInputText(outputText);
-    setIsEncrypt(!isEncrypt);
+    setOutputText(inputText);
+    setDirection((currentDirection) => getOppositeDirection(currentDirection));
+    setTransformError(null);
+    setLastResult(null);
+    setCopied(false);
   };
 
   const clearAll = () => {
     setInputText("");
-    // outputText is computed via useMemo - clearing the input clears the output
+    resetResultState();
   };
 
-  const selectedOption = cipherOptions.find((opt) => opt.id === selectedCipher);
-
   return (
-    <>
-      <div className="p-4 space-y-6">
-        {/* Header with Logo and Theme Toggle */}
+    <div className="space-y-5 p-4 sm:p-5 lg:p-6">
+      {showHeader && (
         <PageHeader
-          title="Cipher Tools"
-          subtitle="Encrypt & decrypt your messages"
+          title="Decode utility"
+          subtitle="Validate and transform encoded text through the server-backed decode API."
         />
+      )}
 
-        {/* Mode Toggle */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="flex items-center justify-center gap-3"
-        >
-          <button
-            onClick={() => setIsEncrypt(true)}
-            className={cn(
-              "flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all font-medium",
-              isEncrypt
-                ? "bg-orange-500/20 text-orange-300 border border-orange-500 shadow-lg shadow-orange-500/10"
-                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:border-neutral-700"
-            )}
-          >
-            <Lock className="w-4 h-4" />
-            Encrypt
-          </button>
-          <button
-            onClick={() => setIsEncrypt(false)}
-            className={cn(
-              "flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all font-medium",
-              !isEncrypt
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500 shadow-lg shadow-amber-500/10"
-                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:border-neutral-700"
-            )}
-          >
-            <Unlock className="w-4 h-4" />
-            Decrypt
-          </button>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          className="flex items-center justify-center mt-2"
-        >
-          <button
-            onClick={() => setDemoOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-900 text-neutral-300 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/95 transition-all"
-          >
-            <Eye className="w-4 h-4" />
-            See Demo
-          </button>
-        </motion.div>
-        {/* Cipher Selection */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="space-y-2"
-        >
-          <label className="text-sm font-medium text-neutral-300 flex items-center gap-2">
-            <Sparkles className="w-4 h-4" />
-            Cipher Algorithm
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {cipherOptions.map((cipher) => (
-              <button
-                key={cipher.id}
-                onClick={() => setSelectedCipher(cipher.id)}
-                className={cn(
-                  "px-3 py-3 text-left rounded-xl border transition-all",
-                  selectedCipher === cipher.id
-                    ? "bg-orange-500/15 border-orange-500"
-                    : "bg-neutral-900 border-neutral-800 hover:border-neutral-700"
-                )}
-              >
-                <div
-                  className={cn(
-                    "text-sm font-medium",
-                    selectedCipher === cipher.id
-                      ? "text-orange-300"
-                      : "text-neutral-300"
-                  )}
-                >
-                  {cipher.name}
-                </div>
-                <div className="text-xs text-neutral-500 mt-0.5">
-                  {cipher.description}
-                </div>
-              </button>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Shift Input for Caesar */}
-        <AnimatePresence>
-          {selectedOption?.hasShift && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="space-y-2"
-            >
-              <label className="text-sm font-medium text-neutral-300">
-                Shift Amount: {shift}
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="25"
-                value={shift}
-                onChange={(e) => setShift(Number(e.target.value))}
-                className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-orange-500"
-              />
-              <div className="flex justify-between text-xs text-neutral-500">
-                <span>1</span>
-                <span>25</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Input Text */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="space-y-2"
-        >
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-neutral-300">
-              {isEncrypt ? "Plain Text" : "Encrypted Text"}
-            </label>
-            <button
-              onClick={clearAll}
-              className="text-xs text-neutral-500 hover:text-red-400 flex items-center gap-1 transition-colors"
-            >
-              <Trash2 className="w-3 h-3" />
-              Clear
-            </button>
-          </div>
-          <textarea
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder={
-              isEncrypt
-                ? "Enter text to encrypt..."
-                : "Enter text to decrypt..."
-            }
-            className="w-full h-28 bg-neutral-900 border border-neutral-800 rounded-xl p-3 text-white placeholder:text-neutral-500 focus:outline-none focus:border-orange-500 transition-colors resize-none"
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="min-w-0 space-y-4">
+          <SegmentedControl
+            value={selectedCipher}
+            options={algorithmSelectionOptions}
+            onChange={handleAlgorithmChange}
+            label="Algorithm"
+            columns={4}
           />
-        </motion.div>
 
-        {/* Swap Button */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.35 }}
-          className="flex justify-center"
-        >
-          <button
-            onClick={swapTexts}
-            disabled={!outputText}
-            className="p-3 bg-neutral-900 border border-neutral-800 rounded-full hover:border-orange-500 hover:bg-orange-500/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ArrowRightLeft className="w-5 h-5 text-orange-400" />
-          </button>
-        </motion.div>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+            <SegmentedControl
+              value={direction}
+              options={directionOptions}
+              onChange={handleDirectionChange}
+              label="Direction"
+              columns={2}
+            />
 
-        {/* Output Text */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="space-y-2"
-        >
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-neutral-300">
-              {isEncrypt ? "Encrypted Result" : "Decrypted Result"}
-            </label>
-            <button
-              onClick={copyOutput}
-              disabled={!outputText}
-              className="text-xs text-neutral-500 hover:text-green-400 flex items-center gap-1 transition-colors disabled:opacity-50"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3 h-3" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3 h-3" />
-                  Copy
-                </>
-              )}
-            </button>
-          </div>
-          <div
-            className={cn(
-              "w-full min-h-28 bg-neutral-900 border rounded-xl p-3 font-mono text-sm break-all",
-              outputText
-                ? isEncrypt
-                  ? "border-orange-500/50 text-orange-300"
-                  : "border-amber-500/50 text-amber-300"
-                : "border-neutral-800 text-neutral-500"
+            {selectedOption?.hasShift ? (
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <Slider
+                  label="Shift amount"
+                  valueLabel={String(shift)}
+                  min="1"
+                  max="25"
+                  value={shift}
+                  onChange={(event) =>
+                    handleShiftChange(Number(event.target.value))
+                  }
+                  minLabel="1"
+                  maxLabel="25"
+                />
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">
+                  Format guardrail
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {selectedPlaceholder.format}
+                </p>
+              </div>
             )}
-          >
-            {outputText || "Output will appear here..."}
           </div>
-        </motion.div>
+        </div>
+
+        <aside className="rounded-lg border border-sky-100 bg-sky-50/80 p-4 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="rounded-lg bg-white p-2 text-sky-700 shadow-sm">
+              <Server className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">
+                API validation
+              </p>
+              <p className="text-xs leading-5 text-slate-600">
+                Every transform is checked by `/api/decode`.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <StatPill label="Input" value={inputText.length.toLocaleString()} />
+            <StatPill
+              label="Output"
+              value={(lastResult?.outputLength ?? outputText.length).toLocaleString()}
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge
+              variant={lastResult ? "success" : transformError ? "danger" : "info"}
+              icon={<ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />}
+            >
+              {lastResult ? "Validated" : transformError ? "Needs review" : "Ready"}
+            </Badge>
+            <Badge variant="neutral">{selectedOption?.name}</Badge>
+          </div>
+        </aside>
       </div>
-      <EncodeDecodeDemoCard
-        open={demoOpen}
-        onClose={() => setDemoOpen(false)}
-        cipher={selectedCipher}
-        shift={shift}
-      />
-    </>
+
+      {transformError && (
+        <Alert variant="danger" title="Transform failed">
+          {transformError}
+        </Alert>
+      )}
+
+      <form className="space-y-4" onSubmit={handleTransform}>
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_3.25rem_minmax(0,1fr)] lg:items-stretch">
+          <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <PaneHeader
+              icon={<FileInput className="h-4 w-4" aria-hidden="true" />}
+              title={selectedLabels.input}
+              meta={`${inputText.length.toLocaleString()} chars`}
+            />
+            <Textarea
+              label="Input text"
+              value={inputText}
+              onChange={(event) => handleInputChange(event.target.value)}
+              placeholder={selectedPlaceholder[direction]}
+              containerClassName="mt-4"
+              className="min-h-72 resize-y font-mono text-sm leading-6 wrap-break-word"
+            />
+          </section>
+
+          <div className="flex items-center justify-center">
+            <IconButton
+              aria-label="Swap input and output"
+              onClick={swapTexts}
+              disabled={!hasOutput}
+              variant="secondary"
+              className="rounded-full"
+            >
+              <ArrowRightLeft className="h-5 w-5" aria-hidden="true" />
+            </IconButton>
+          </div>
+
+          <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <PaneHeader
+              icon={<FileOutput className="h-4 w-4" aria-hidden="true" />}
+              title={selectedLabels.output}
+              meta={`${outputText.length.toLocaleString()} chars`}
+              actions={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={copyOutput}
+                  disabled={!hasOutput}
+                  leftIcon={
+                    copied ? (
+                      <Check className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                    )
+                  }
+                >
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              }
+            />
+            <Textarea
+              label="Output text"
+              value={isTransforming ? "" : outputText}
+              readOnly
+              placeholder={
+                isTransforming
+                  ? "Validating with the decode API..."
+                  : "Output will appear here after validation."
+              }
+              containerClassName="mt-4"
+              className={cn(
+                "min-h-72 resize-y font-mono text-sm leading-6 wrap-break-word",
+                "read-only:bg-slate-50"
+              )}
+            />
+          </section>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm leading-6 text-slate-600">
+            {selectedPlaceholder.format}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="ghost"
+              onClick={clearAll}
+              leftIcon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
+              className="w-full sm:w-auto"
+            >
+              Clear
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={isTransforming}
+              leftIcon={<Play className="h-4 w-4" aria-hidden="true" />}
+              className="w-full sm:w-auto"
+            >
+              Run transform
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/80 bg-white/80 px-3 py-2">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className="mt-0.5 text-sm font-semibold text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function PaneHeader({
+  icon,
+  title,
+  meta,
+  actions,
+}: {
+  icon: ReactNode;
+  title: string;
+  meta: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="rounded-lg bg-sky-50 p-2 text-sky-700">{icon}</span>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+          <p className="text-sm text-slate-600">{meta}</p>
+        </div>
+      </div>
+      {actions && <div className="flex shrink-0 justify-start sm:justify-end">{actions}</div>}
+    </div>
   );
 }
