@@ -4,15 +4,15 @@
 
 ![DECODE Logo](public/icon-192.svg)
 
-**A Powerful PWA for QR Code Generation & Cipher Tools**
+**A Full-Stack QR Platform Foundation**
 
-[![Deploy to GitHub Pages](https://github.com/YOUR_USERNAME/decode/actions/workflows/nextjs.yml/badge.svg)](https://github.com/YOUR_USERNAME/decode/actions/workflows/nextjs.yml)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
+[![Decode CI](https://github.com/YOUR_USERNAME/decode/actions/workflows/nextjs.yml/badge.svg)](https://github.com/YOUR_USERNAME/decode/actions/workflows/nextjs.yml)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwindcss)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[Live Demo](https://YOUR_USERNAME.github.io/decode) · [Report Bug](https://github.com/YOUR_USERNAME/decode/issues) · [Request Feature](https://github.com/YOUR_USERNAME/decode/issues)
+[Vercel App](https://your-decode-domain.vercel.app) · [Report Bug](https://github.com/YOUR_USERNAME/decode/issues) · [Request Feature](https://github.com/YOUR_USERNAME/decode/issues)
 
 </div>
 
@@ -39,7 +39,7 @@
 
 ## 🎯 Overview
 
-**DECODE** is a modern, serverless Progressive Web Application (PWA) designed for generating stylish QR codes and encrypting/decrypting text using various cipher algorithms. Built with a mobile-first approach, it provides a seamless experience across all devices.
+**DECODE** is being professionalized into a full-stack QR platform for QR generation, scanning, link verification, decoding, dynamic QR management, and analytics. Phase 1 moves the app away from static export and establishes a Vercel-ready foundation with Prisma, CockroachDB, Auth.js, and Cloudflare R2 environment configuration.
 
 ### Mission Statement
 
@@ -90,14 +90,18 @@
 
 | Technology          | Purpose         | Version |
 | ------------------- | --------------- | ------- |
-| **Next.js**         | React Framework | 15.x    |
+| **Next.js**         | Full-stack React framework | 16.x    |
 | **TypeScript**      | Type Safety     | 5.x     |
 | **Tailwind CSS**    | Styling         | 4.x     |
 | **Framer Motion**   | Animations      | Latest  |
 | **Lucide React**    | Icons           | Latest  |
 | **qr-code-styling** | QR Generation   | Latest  |
-| **GitHub Pages**    | Hosting         | -       |
-| **GitHub Actions**  | CI/CD           | -       |
+| **Auth.js / NextAuth** | Google and GitHub OAuth | 4.x |
+| **Prisma**          | Type-safe database access | 6.x |
+| **CockroachDB**     | Production database | - |
+| **Cloudflare R2**   | Object storage target | - |
+| **Vercel**          | Hosting and preview deployments | - |
+| **GitHub Actions**  | Quality gates | - |
 
 ---
 
@@ -107,8 +111,12 @@
 decode/
 ├── .github/
 │   └── workflows/
-│       └── nextjs.yml        # GitHub Actions deployment
+│       └── nextjs.yml        # CI quality gates
 ├── app/
+│   ├── api/
+│   │   └── auth/
+│   │       └── [...nextauth]/
+│   │           └── route.ts  # Auth.js route handler
 │   ├── about/
 │   │   └── page.tsx          # About Us page
 │   ├── cipher/
@@ -129,11 +137,21 @@ decode/
 ├── lib/
 │   ├── crypto.ts             # Cipher algorithms
 │   └── utils.ts              # Utility functions
+├── prisma/
+│   └── schema.prisma         # CockroachDB + Auth.js schema
+├── server/
+│   ├── api/
+│   │   └── response.ts       # Shared API response helpers
+│   ├── auth/
+│   │   └── options.ts        # Auth.js provider configuration
+│   └── db/
+│       └── prisma.ts         # Server-only Prisma client
 ├── public/
 │   ├── icon-192.svg          # PWA icon (small)
 │   ├── icon-512.svg          # PWA icon (large)
 │   └── manifest.json         # PWA manifest
 ├── next.config.ts            # Next.js configuration
+├── vercel.json               # Vercel build configuration
 ├── package.json              # Dependencies
 ├── tailwind.config.ts        # Tailwind configuration
 └── tsconfig.json             # TypeScript configuration
@@ -177,13 +195,17 @@ decode/
 
 ### Available Scripts
 
-| Command          | Description              |
-| ---------------- | ------------------------ |
-| `npm run dev`    | Start development server |
-| `npm run build`  | Build for production     |
-| `npm run start`  | Start production server  |
-| `npm run lint`   | Run ESLint               |
-| `npm run export` | Generate static files    |
+| Command                   | Description                    |
+| ------------------------- | ------------------------------ |
+| `npm run dev`             | Start development server       |
+| `npm run build`           | Build for production           |
+| `npm run start`           | Start production server        |
+| `npm run lint`            | Run ESLint                     |
+| `npm run test`            | Run Vitest tests               |
+| `npm run typecheck`       | Run TypeScript without emit    |
+| `npm run prisma:validate` | Validate Prisma schema         |
+| `npm run prisma:generate` | Generate Prisma Client         |
+| `npm run ci`              | Run lint, typecheck, tests, Prisma validation, and build |
 
 ---
 
@@ -193,22 +215,31 @@ decode/
 
 ```typescript
 const nextConfig: NextConfig = {
-  output: "export", // Static HTML export
+  reactStrictMode: true,
+  poweredByHeader: false,
   images: {
-    unoptimized: true, // Required for GitHub Pages
+    remotePatterns: [
+      { protocol: "https", hostname: "avatars.githubusercontent.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "**.r2.dev" },
+    ],
   },
-  basePath: "/decode", // Repository name
-  assetPrefix: "/decode/", // Asset path prefix
 };
 ```
 
 ### Environment Variables
 
-For production deployment, ensure these are set:
+Copy `.env.example` to `.env.local` for local development and configure production values in Vercel:
 
-| Variable   | Description      | Default       |
-| ---------- | ---------------- | ------------- |
-| `NODE_ENV` | Environment mode | `development` |
+| Variable | Description |
+| -------- | ----------- |
+| `DATABASE_URL` | CockroachDB connection string for Prisma |
+| `AUTH_SECRET` / `NEXTAUTH_SECRET` | Auth session secret |
+| `NEXTAUTH_URL` | Canonical app URL for Auth.js callbacks |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
+| `GITHUB_ID`, `GITHUB_SECRET` | GitHub OAuth credentials |
+| `R2_*` values | Cloudflare R2 storage configuration |
+| `SENTRY_*` values | Sentry observability configuration |
 
 ### PWA Configuration (`public/manifest.json`)
 
@@ -346,9 +377,9 @@ Uses `encodeURIComponent()` for safe URL encoding.
 
 ## 🌐 Deployment Guide
 
-### GitHub Pages Deployment
+### Vercel Deployment
 
-1. **Create GitHub Repository**
+1. **Create or connect the GitHub repository**
 
    ```bash
    git init
@@ -359,32 +390,28 @@ Uses `encodeURIComponent()` for safe URL encoding.
    git push -u origin main
    ```
 
-2. **Enable GitHub Pages**
+2. **Import the project into Vercel**
 
-   - Go to Repository → Settings → Pages
-   - Source: Select "GitHub Actions"
-   - The workflow will automatically deploy on push to `main`
+   - Framework preset: Next.js
+   - Install command: `npm ci`
+   - Build command: `npm run build`
+   - Output directory: leave as Vercel default
 
-3. **Verify Deployment**
-   - Check Actions tab for build status
-   - Access at: `https://YOUR_USERNAME.github.io/decode`
+3. **Configure environment variables**
 
-### Custom Domain (Optional)
+   - Add all required values from `.env.example`
+   - Use the Vercel production URL or custom domain for `NEXTAUTH_URL`
+   - Configure Google and GitHub OAuth callback URLs as `/api/auth/callback/google` and `/api/auth/callback/github`
 
-1. Add `CNAME` file to `public/` folder:
+4. **Verify Deployment**
 
-   ```
-   yourdomain.com
-   ```
+   - Check the Vercel deployment logs
+   - Confirm `/api/auth/signin` renders provider options
+   - Confirm `npm run ci` passes locally or in GitHub Actions
 
-2. Configure DNS:
+### Custom Domain
 
-   - Add CNAME record pointing to `YOUR_USERNAME.github.io`
-
-3. Update `next.config.ts`:
-   ```typescript
-   basePath: '',  // Remove basePath for custom domain
-   ```
+Configure the domain in Vercel, then update `APP_URL`, `NEXT_PUBLIC_APP_URL`, `NEXTAUTH_URL`, and OAuth callback URLs to the final HTTPS domain.
 
 ---
 
