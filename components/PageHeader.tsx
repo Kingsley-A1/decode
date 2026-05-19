@@ -1,7 +1,6 @@
 "use client";
 
 import { Logo } from "./Logo";
-import { ThemeToggle } from "./ThemeToggle";
 
 interface PageHeaderProps {
   title: string;
@@ -15,20 +14,14 @@ export function PageHeader({
   showLogo = true,
 }: PageHeaderProps) {
   return (
-    <div className="pt-4 pb-4 space-y-3">
-      {/* Top row: Logo and Theme Toggle */}
-      <div className="flex items-center justify-between">
-        {showLogo && <Logo size="sm" showText={true} />}
-        {!showLogo && <div />}
-        <ThemeToggle />
-      </div>
-      {/* Title row */}
-      <div className="text-center">
-        <h1 className="text-2xl md:text-3xl font-bold gradient-text">
+    <div className="space-y-3 py-2">
+      {showLogo && <Logo size="sm" showText={true} />}
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold leading-tight text-slate-950 md:text-3xl">
           {title}
         </h1>
         {subtitle && (
-          <p className="text-neutral-400 text-sm md:text-base mt-1">
+          <p className="max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
             {subtitle}
           </p>
         )}

@@ -26,21 +26,15 @@ export function Logo({
 }: LogoProps) {
   const { image: imageSize, text: textSize } = sizeMap[size];
 
-  // THE FIX: Manually define base path for GitHub Pages
-  // This ensures we look in /decode/logo.png instead of root /logo.png
-  const basePath = process.env.NODE_ENV === "production" ? "/decode" : "";
-
   const content = (
     <div className={cn("flex items-center gap-2", className)}>
-      {/* Logo first, then DECODE text */}
       <div
-        className="rounded-full overflow-hidden shrink-0 bg-white shadow-sm flex items-center justify-center"
+        className="flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200"
         style={{ width: imageSize, height: imageSize }}
       >
-        {/* Switched to standard <img> for 100% reliability on Static Export */}
         <img
-          src={`${basePath}/logo.png`}
-          alt="DECODE Logo"
+          src="/logo.svg"
+          alt={showText ? "" : "DECODE"}
           width={imageSize}
           height={imageSize}
           className="w-full h-full object-contain"
@@ -48,7 +42,7 @@ export function Logo({
       </div>
       {showText && (
         <span
-          className={cn("font-bold gradient-text tracking-tight", textSize)}
+          className={cn("font-semibold tracking-normal text-slate-950", textSize)}
         >
           DECODE
         </span>
@@ -58,7 +52,11 @@ export function Logo({
 
   if (linkToHome) {
     return (
-      <Link href="/" className="hover:opacity-90 transition-opacity">
+      <Link
+        href="/"
+        className="inline-flex min-h-11 items-center rounded-lg transition-opacity hover:opacity-90"
+        aria-label="DECODE home"
+      >
         {content}
       </Link>
     );

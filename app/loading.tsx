@@ -1,0 +1,6 @@
+import { Loading } from "@/components/Loading";
+
+export default function AppLoading() {
+  return <Loading className="mx-auto max-w-xl" />;
+}
+

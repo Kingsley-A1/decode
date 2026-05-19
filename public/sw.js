@@ -3,11 +3,14 @@ const OFFLINE_URL = "/";
 
 const ASSETS_TO_CACHE = [
   "/",
-  "/cipher",
-  "/about",
-  "/contact",
-  "/review",
-  "/logo.png",
+  "/generate",
+  "/scan",
+  "/verify",
+  "/decode",
+  "/dashboard",
+  "/logo.svg",
+  "/icon-192.svg",
+  "/icon-512.svg",
   "/manifest.json",
 ];
 

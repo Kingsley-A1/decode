@@ -88,12 +88,13 @@ export function PWAInstallPrompt() {
         initial={{ opacity: 0, y: 100 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 100 }}
-        className="fixed bottom-24 left-4 right-4 max-w-md mx-auto z-50"
+        className="fixed bottom-6 left-4 right-4 z-50 mx-auto max-w-md"
       >
-        <div className="bg-neutral-900 dark:bg-neutral-900 light:bg-white border border-neutral-700 rounded-2xl p-4 shadow-2xl">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/10">
           <button
             onClick={handleDismiss}
-            className="absolute top-3 right-3 p-1 text-neutral-500 hover:text-white transition-colors"
+            aria-label="Dismiss install prompt"
+            className="absolute right-3 top-3 rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
           >
             <X className="w-5 h-5" />
           </button>
@@ -101,7 +102,7 @@ export function PWAInstallPrompt() {
           <div className="flex items-start gap-4">
             <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 bg-white flex items-center justify-center">
               <Image
-                src="/logo.png"
+                src="/logo.svg"
                 alt="DECODE"
                 width={56}
                 height={56}
@@ -110,10 +111,10 @@ export function PWAInstallPrompt() {
             </div>
 
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-white text-lg">
+              <h3 className="text-lg font-semibold text-slate-950">
                 Install DECODE
               </h3>
-              <p className="text-neutral-400 text-sm mt-1">
+              <p className="mt-1 text-sm text-slate-600">
                 {isIOS
                   ? "Tap the share button, then 'Add to Home Screen'"
                   : "Install our app for a better experience!"}
@@ -124,7 +125,7 @@ export function PWAInstallPrompt() {
           {!isIOS && (
             <button
               onClick={handleInstall}
-              className="w-full mt-4 py-3 bg-linear-to-r from-violet-600 to-purple-600 rounded-xl font-semibold flex items-center justify-center gap-2 hover:from-violet-500 hover:to-purple-500 transition-all"
+              className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-sky-600 py-3 font-semibold text-white transition-colors hover:bg-sky-700"
             >
               <Download className="w-5 h-5" />
               Install App
@@ -132,8 +133,8 @@ export function PWAInstallPrompt() {
           )}
 
           {isIOS && (
-            <div className="mt-4 p-3 bg-neutral-800 rounded-xl">
-              <div className="flex items-center gap-2 text-sm text-neutral-300">
+            <div className="mt-4 rounded-lg bg-sky-50 p-3">
+              <div className="flex items-center gap-2 text-sm text-slate-700">
                 <span>1. Tap</span>
                 <svg
                   className="w-5 h-5"
