@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Media landing page template thumbnail">
+  <rect width="800" height="500" fill="#F8FAFC"/>
+  <rect x="72" y="72" width="656" height="356" rx="30" fill="#FFFFFF" stroke="#C7D2FE" stroke-width="2"/>
+  <rect x="136" y="150" width="210" height="140" rx="24" fill="#E0E7FF"/>
+  <path d="M220 190l78 30-78 30z" fill="#4F46E5"/>
+  <rect x="394" y="134" width="228" height="24" rx="12" fill="#0F172A"/>
+  <rect x="394" y="190" width="288" height="18" rx="9" fill="#64748B"/>
+  <rect x="394" y="232" width="224" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="394" y="304" width="150" height="48" rx="14" fill="#4F46E5"/>
+</svg>

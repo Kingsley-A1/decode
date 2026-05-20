@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Personal landing page template thumbnail">
+  <rect width="800" height="500" fill="#F8FAFC"/>
+  <rect x="68" y="64" width="664" height="372" rx="32" fill="#FFFFFF" stroke="#CFE8F7" stroke-width="2"/>
+  <circle cx="222" cy="190" r="58" fill="#E0F2FE"/>
+  <circle cx="222" cy="176" r="30" fill="#0EA5E9"/>
+  <path d="M158 284c18-48 110-48 128 0" fill="#BAE6FD"/>
+  <rect x="346" y="142" width="240" height="24" rx="12" fill="#0F172A"/>
+  <rect x="346" y="194" width="310" height="18" rx="9" fill="#94A3B8"/>
+  <rect x="346" y="236" width="252" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="346" y="310" width="184" height="48" rx="16" fill="#0EA5E9"/>
+  <rect x="552" y="310" width="104" height="48" rx="16" fill="#E0F2FE"/>
+</svg>

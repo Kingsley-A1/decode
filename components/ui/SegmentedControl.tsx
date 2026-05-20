@@ -59,7 +59,7 @@ export function SegmentedControl<TValue extends string>({
                 {option.label}
               </span>
               {option.description && (
-                <span className="mt-1 block text-xs leading-5 text-slate-600">
+                <span className="mt-1 hidden text-xs leading-5 text-slate-600 sm:block">
                   {option.description}
                 </span>
               )}

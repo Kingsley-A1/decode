@@ -6,13 +6,13 @@ import { QRGenerator } from "@/components/QRGenerator";
 export default function GeneratePage() {
   return (
     <PageShell
-      eyebrow="QR workspace"
       title="Generate QR codes"
-      description="Create static QR codes now, with the shell ready for dynamic QR creation, saved designs, and analytics workflows."
+      description="Create, design, and export scan-ready QR codes."
+      variant="workspace"
       actions={
         <Link
           href="/dashboard"
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-800"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-800 sm:min-h-11 sm:px-4"
         >
           <BarChart3 className="h-4 w-4" aria-hidden="true" />
           Dashboard

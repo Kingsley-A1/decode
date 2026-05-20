@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Hotel landing page template thumbnail">
+  <rect width="800" height="500" fill="#F8FAFC"/>
+  <rect x="76" y="66" width="648" height="368" rx="32" fill="#FFFFFF" stroke="#D8B4FE" stroke-width="2"/>
+  <rect x="136" y="170" width="180" height="154" rx="24" fill="#E0F2FE"/>
+  <rect x="166" y="204" width="48" height="34" rx="8" fill="#0EA5E9"/>
+  <rect x="238" y="204" width="48" height="34" rx="8" fill="#0EA5E9"/>
+  <rect x="166" y="262" width="120" height="32" rx="8" fill="#0369A1"/>
+  <rect x="374" y="136" width="228" height="24" rx="12" fill="#0F172A"/>
+  <rect x="374" y="190" width="296" height="18" rx="9" fill="#64748B"/>
+  <rect x="374" y="232" width="236" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="374" y="304" width="156" height="48" rx="14" fill="#7C3AED"/>
+  <rect x="552" y="304" width="118" height="48" rx="14" fill="#EDE9FE"/>
+</svg>

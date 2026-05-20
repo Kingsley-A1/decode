@@ -103,6 +103,22 @@ export function NavBar() {
         <div className="flex min-w-0 items-center justify-end gap-2 xl:min-w-44">
           <Link
             href="/generate"
+            aria-label="New QR"
+            aria-current={
+              isActivePath(pathname, "/generate") ? "page" : undefined
+            }
+            className={cn(
+              "inline-flex h-11 w-11 items-center justify-center rounded-lg shadow-sm transition-colors sm:hidden",
+              isActivePath(pathname, "/generate")
+                ? "border border-sky-200 bg-sky-100 text-sky-900"
+                : "bg-sky-700 text-white shadow-sky-700/20 hover:bg-sky-800"
+            )}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+          </Link>
+
+          <Link
+            href="/generate"
             className="hidden min-h-11 items-center gap-2 rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-sky-700/20 transition-colors hover:bg-sky-800 sm:inline-flex"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />

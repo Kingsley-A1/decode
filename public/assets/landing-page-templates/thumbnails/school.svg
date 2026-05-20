@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="School landing page template thumbnail">
+  <rect width="800" height="500" fill="#F0F9FF"/>
+  <rect x="76" y="70" width="648" height="360" rx="30" fill="#FFFFFF" stroke="#BAE6FD" stroke-width="2"/>
+  <path d="M144 246h210l-105-72z" fill="#0369A1"/>
+  <rect x="172" y="246" width="154" height="88" rx="12" fill="#E0F2FE"/>
+  <rect x="208" y="274" width="34" height="60" rx="8" fill="#0EA5E9"/>
+  <rect x="264" y="274" width="34" height="60" rx="8" fill="#0EA5E9"/>
+  <rect x="396" y="136" width="236" height="24" rx="12" fill="#0F172A"/>
+  <rect x="396" y="190" width="286" height="18" rx="9" fill="#64748B"/>
+  <rect x="396" y="232" width="224" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="396" y="304" width="172" height="48" rx="14" fill="#0EA5E9"/>
+</svg>

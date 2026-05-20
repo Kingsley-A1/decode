@@ -9,11 +9,29 @@ interface StepperStep {
 interface StepperProps {
   steps: readonly StepperStep[];
   currentStep: number;
+  variant?: "responsive" | "compact" | "cards";
 }
 
-export function Stepper({ steps, currentStep }: StepperProps) {
+export function ProgressStepper({
+  steps,
+  currentStep,
+  variant = "responsive",
+}: StepperProps) {
+  const isCompact = variant === "compact";
+  const isCards = variant === "cards";
+
   return (
-    <ol className="grid gap-3 md:grid-cols-3">
+    <ol
+      className={cn(
+        "grid grid-cols-3",
+        isCompact &&
+          "min-h-14 gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm",
+        isCards && "gap-3",
+        variant === "responsive" &&
+          "min-h-14 gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm md:min-h-0 md:gap-3 md:border-0 md:bg-transparent md:p-0 md:shadow-none"
+      )}
+      aria-label="QR creation progress"
+    >
       {steps.map((step, index) => {
         const isComplete = index < currentStep;
         const isCurrent = index === currentStep;
@@ -21,19 +39,26 @@ export function Stepper({ steps, currentStep }: StepperProps) {
         return (
           <li
             key={step.label}
+            aria-current={isCurrent ? "step" : undefined}
             className={cn(
-              "rounded-lg border p-3",
+              "rounded-lg",
+              isCompact && "px-2 py-1.5",
+              isCards && "border p-3",
+              variant === "responsive" && "px-2 py-1.5 md:border md:p-3",
               isCurrent
-                ? "border-sky-300 bg-sky-50"
+                ? cn("bg-sky-50", isCards ? "border-sky-300" : "md:border-sky-300")
                 : isComplete
-                  ? "border-emerald-200 bg-emerald-50"
-                  : "border-slate-200 bg-white"
+                  ? cn(
+                      "bg-emerald-50",
+                      isCards ? "border-emerald-200" : "md:border-emerald-200"
+                    )
+                  : cn("bg-white", isCards ? "border-slate-200" : "md:border-slate-200")
             )}
           >
             <div className="flex items-center gap-2">
               <span
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
                   isComplete
                     ? "bg-emerald-600 text-white"
                     : isCurrent
@@ -48,7 +73,12 @@ export function Stepper({ steps, currentStep }: StepperProps) {
               </span>
             </div>
             {step.description && (
-              <p className="mt-2 text-sm leading-5 text-slate-600">
+              <p
+                className={cn(
+                  "mt-2 text-sm leading-5 text-slate-600",
+                  (isCompact || variant === "responsive") && "hidden md:block"
+                )}
+              >
                 {step.description}
               </p>
             )}
@@ -57,4 +87,8 @@ export function Stepper({ steps, currentStep }: StepperProps) {
       })}
     </ol>
   );
+}
+
+export function Stepper(props: StepperProps) {
+  return <ProgressStepper {...props} />;
 }

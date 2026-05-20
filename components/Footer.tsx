@@ -1,10 +1,22 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function Footer() {
+interface FooterProps {
+  variant?: "default" | "compact";
+}
+
+export function Footer({ variant = "default" }: FooterProps) {
+  const isCompact = variant === "compact";
+
   return (
     <footer className="border-t border-slate-200 bg-slate-50">
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 text-sm text-slate-600 sm:px-6 lg:px-8">
+      <div
+        className={cn(
+          "mx-auto w-full max-w-7xl px-4 text-sm text-slate-600 sm:px-6 lg:px-8",
+          isCompact ? "py-4" : "py-8"
+        )}
+      >
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <p>
             Designed and developed by{" "}
@@ -18,7 +30,10 @@ export function Footer() {
             </a>
             .
           </p>
-          <nav aria-label="Footer navigation" className="flex flex-wrap gap-3">
+          <nav
+            aria-label="Footer navigation"
+            className={cn("flex flex-wrap gap-3", isCompact && "text-xs")}
+          >
             <Link
               href="/about"
               className="font-medium text-slate-700 hover:text-sky-800"
@@ -36,6 +51,18 @@ export function Footer() {
               className="font-medium text-slate-700 hover:text-sky-800"
             >
               Support
+            </Link>
+            <Link
+              href="/privacy"
+              className="font-medium text-slate-700 hover:text-sky-800"
+            >
+              Privacy
+            </Link>
+            <Link
+              href="/terms"
+              className="font-medium text-slate-700 hover:text-sky-800"
+            >
+              Terms
             </Link>
             <a
               href="https://kingtech.com.ng"

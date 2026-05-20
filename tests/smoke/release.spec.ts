@@ -9,6 +9,8 @@ const primaryRoutes = [
   { path: "/decode", heading: "Decode utility" },
   { path: "/dashboard", heading: "Dashboard" },
   { path: "/landing-pages", heading: "Landing pages" },
+  { path: "/privacy", heading: "Privacy Policy" },
+  { path: "/terms", heading: "Terms of Service" },
 ] as const;
 
 const screenshotViewports = [
@@ -104,6 +106,104 @@ test.describe("phase 8 release quality gate", () => {
     }
   });
 
+  test("landing page template gallery searches, filters, and loads presets", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/landing-pages");
+    await expect(
+      page.getByRole("heading", { name: "Landing pages", level: 1 })
+    ).toBeVisible();
+
+    const search = page.getByLabel("Search templates");
+    const searchCases = [
+      { term: "school", expected: "School admissions" },
+      { term: "restaurant", expected: "Restaurant menu" },
+      { term: "hotel", expected: "Hotel welcome" },
+      { term: "coupon", expected: "Promo coupon" },
+      { term: "event", expected: "Event registration" },
+      { term: "pdf", expected: "PDF document" },
+      { term: "portfolio", expected: "Portfolio" },
+      { term: "digital cv", expected: "Digital CV" },
+      { term: "delivery", expected: "Delivery links" },
+      { term: "concierge", expected: "Hotel concierge" },
+      { term: "office", expected: "Office service directory" },
+    ] as const;
+
+    for (const item of searchCases) {
+      await search.fill(item.term);
+      await expect(
+        page.getByRole("button", {
+          name: new RegExp(`^${escapeRegExp(item.expected)} template thumbnail`),
+        })
+      ).toBeVisible();
+      await expect(page.getByText(/templates? found/)).toBeVisible();
+      await expectNoDocumentOverflow(page);
+    }
+
+    await search.fill("hotel");
+    await page.getByLabel("Page type").selectOption("links");
+    await expect(
+      page.getByRole("button", {
+        name: /^Room directory template thumbnail/,
+      })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Remove hotel filter" })
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(page.getByText("36 templates found")).toBeVisible();
+
+    await search.fill("");
+    await page
+      .getByRole("toolbar", { name: "Template categories" })
+      .getByRole("button", { name: /^School\s+\d+$/ })
+      .click();
+    await page
+      .getByRole("button", { name: /^School admissions template thumbnail/ })
+      .click();
+    await page
+      .getByRole("button", { name: "Use School admissions template" })
+      .click();
+    await expect(page.getByLabel("Business name")).toHaveValue("Oakfield Academy");
+    await expect(page.getByText("School admissions template loaded.")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Mobile preview", level: 2 })
+    ).toBeVisible();
+    await expect(page.getByText("Required fields").first()).toBeVisible();
+    await expect(page.getByText("Required assets").first()).toBeVisible();
+    await expect(page.getByText("Logo (optional)").first()).toBeVisible();
+
+    await page.getByLabel("Business name").fill("Edited Academy");
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await search.fill("hotel");
+    await page
+      .getByRole("button", { name: "Use Hotel welcome template" })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: "Keep your edited content?" })
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByLabel("Business name")).toHaveValue("Edited Academy");
+
+    await page
+      .getByRole("button", { name: "Use Hotel welcome template" })
+      .click();
+    await page.getByRole("button", { name: "Keep shared fields" }).click();
+    await expect(page.getByLabel("Business name")).toHaveValue("Edited Academy");
+    await expect(
+      page.getByText("Hotel welcome template loaded with shared fields preserved.")
+    ).toBeVisible();
+
+    await page.getByLabel("Business name").fill("Changed Hotel");
+    await page
+      .getByRole("button", { name: "Use Hotel welcome template" })
+      .click();
+    await page.getByRole("button", { name: "Replace defaults" }).click();
+    await expect(page.getByLabel("Business name")).toHaveValue("Harbor View Hotel");
+    await expectNoDocumentOverflow(page);
+  });
+
   test("generator completes the static QR workflow and updates frames", async ({
     page,
   }) => {
@@ -126,13 +226,40 @@ test.describe("phase 8 release quality gate", () => {
       page.getByRole("heading", { name: "2. Design and guardrails" })
     ).toBeVisible();
 
-    const scanMeFrame = page.getByRole("button", {
+    await expect(
+      page.getByRole("radiogroup", { name: "Template preset" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("radiogroup", { name: "QR frame" })
+    ).toBeVisible();
+
+    const eventPreset = page.getByRole("radio", { name: "Event" });
+    await eventPreset.click();
+    await expect(eventPreset).toHaveAttribute("aria-checked", "true");
+    await expect(
+      page.getByRole("radio", { name: "Select Ticket frame" })
+    ).toHaveAttribute("aria-checked", "true");
+
+    const logoBuffer = createSolidLogoSvgBuffer("#EF4444");
+    await page.locator("#qr-logo-upload").setInputFiles({
+      name: "decode-logo.svg",
+      mimeType: "image/svg+xml",
+      buffer: logoBuffer,
+    });
+    await expectQrPreviewCenterToBeColor(page, {
+      red: 200,
+      maxGreen: 120,
+      maxBlue: 120,
+    });
+
+    const scanMeFrame = page.getByRole("radio", {
       name: "Select Scan me frame",
     });
     await scanMeFrame.click();
-    await expect(scanMeFrame).toHaveAttribute("aria-pressed", "true");
+    await expect(scanMeFrame).toHaveAttribute("aria-checked", "true");
+    const scanabilityMeter = page.getByLabel("Scanability meter");
     await expect(
-      page.getByText("No scanability warnings detected for the current design.")
+      scanabilityMeter.getByText("Ready").first()
     ).toBeVisible();
 
     const framedPreviewBox = await page.getByLabel("QR preview").boundingBox();
@@ -142,16 +269,179 @@ test.describe("phase 8 release quality gate", () => {
       Math.abs((framedPreviewBox?.width ?? 0) - (initialPreviewBox?.width ?? 0))
     ).toBeLessThanOrEqual(80);
 
+    await page.getByLabel("Background hex", { exact: true }).fill("#7C3AED");
+    await expect(
+      scanabilityMeter.getByText("Blocked for publish").first()
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Reset design" }).click();
+    await expect(page.getByRole("radio", { name: "Clean" })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+    await expect(scanabilityMeter.getByText("Ready").first()).toBeVisible();
+
     await page.getByRole("button", { name: "Continue to export" }).click();
     await expect(
       page.getByRole("heading", { name: "3. Export and publish" })
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /^PNG\b/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^SVG\b/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^PDF\b/i })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "PNG" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "SVG" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "PDF" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Download PNG" })
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Copy payload" })
     ).toBeEnabled();
+  });
+
+  test("generator mobile cleanup keeps preview, progress, and frame choice fast", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/generate");
+    await expect(
+      page.getByRole("heading", { name: "Generate QR codes", level: 1 })
+    ).toBeVisible();
+    await waitForRouteHydration(page);
+
+    const progressBox = await page
+      .locator('[aria-label="QR creation progress"]')
+      .boundingBox();
+    const previewTray = page.getByTestId("mobile-preview-tray");
+    const previewBox = await previewTray.boundingBox();
+    const continueButton = page.getByRole("button", {
+      name: "Continue to design",
+    });
+    const continueBox = await continueButton.boundingBox();
+
+    expect(progressBox?.height).toBeLessThanOrEqual(58);
+    await expect(previewTray).toBeVisible();
+    expect(
+      (previewBox?.y ?? 0) + (previewBox?.height ?? 0)
+    ).toBeLessThanOrEqual(844);
+    expect(continueBox?.y).toBeLessThanOrEqual(844 * 1.4);
+
+    await page.getByLabel("Website URL").fill("https://decode.com.ng/phase-1");
+    await continueButton.click();
+
+    const designHeading = page.getByRole("heading", {
+      name: "2. Design and guardrails",
+    });
+    await expect(designHeading).toBeVisible();
+    await expect(designHeading).toBeFocused();
+
+    const framePickerBox = await page.getByTestId("frame-picker").boundingBox();
+    const railMetrics = await page
+      .getByTestId("frame-picker-rail")
+      .evaluate((node) => ({
+        clientWidth: node.clientWidth,
+        scrollWidth: node.scrollWidth,
+      }));
+
+    expect(framePickerBox?.height).toBeLessThanOrEqual(300);
+    expect(railMetrics.scrollWidth).toBeGreaterThan(railMetrics.clientWidth);
+
+    const noFrame = page.getByRole("radio", {
+      name: "Select No frame frame",
+    });
+    const scanMeFrame = page.getByRole("radio", {
+      name: "Select Scan me frame",
+    });
+    await noFrame.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(scanMeFrame).toHaveAttribute("aria-checked", "true");
+    await expectNoDocumentOverflow(page);
+  });
+
+  test("generator builder supports keyboard-only controls and WCAG checks", async ({
+    page,
+  }) => {
+    await page.goto("/generate");
+    await expect(
+      page.getByRole("heading", { name: "Generate QR codes", level: 1 })
+    ).toBeVisible();
+    await waitForRouteHydration(page);
+    await expectNoSeriousAxeViolations(page);
+
+    await page.getByLabel("Website URL").fill("https://decode.com.ng/phase-5");
+    await page.getByRole("button", { name: "Continue to design" }).focus();
+    await page.keyboard.press("Enter");
+
+    const designHeading = page.getByRole("heading", {
+      name: "2. Design and guardrails",
+    });
+    await expect(designHeading).toBeFocused();
+
+    const cleanPreset = page.getByRole("radio", { name: "Clean" });
+    const corporatePreset = page.getByRole("radio", { name: "Corporate" });
+    await cleanPreset.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(corporatePreset).toHaveAttribute("aria-checked", "true");
+
+    const noFrame = page.getByRole("radio", {
+      name: "Select No frame frame",
+    });
+    const scanMeFrame = page.getByRole("radio", {
+      name: "Select Scan me frame",
+    });
+    await noFrame.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(scanMeFrame).toHaveAttribute("aria-checked", "true");
+
+    const advancedSummary = page.locator("summary", {
+      hasText: "Advanced design controls",
+    });
+    await advancedSummary.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("radiogroup", { name: "Dot style" })
+    ).toBeVisible();
+
+    const dotStyleGroup = page.getByRole("radiogroup", {
+      name: "Dot style",
+    });
+    await dotStyleGroup.getByRole("radio", { name: "Square", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(
+      dotStyleGroup.getByRole("radio", { name: "Rounded", exact: true })
+    ).toHaveAttribute("aria-checked", "true");
+
+    const logoBuffer = createSolidLogoSvgBuffer("#EF4444");
+    const logoInput = page.locator("#qr-logo-upload");
+    await logoInput.focus();
+    await expect(logoInput).toBeFocused();
+    await logoInput.setInputFiles({
+      name: "decode-release-logo.svg",
+      mimeType: "image/svg+xml",
+      buffer: logoBuffer,
+    });
+    await expect(page.getByLabel("Error correction")).toHaveValue("H");
+    await expect(
+      page.getByLabel("Scanability meter").getByText("Ready").first()
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Continue to export" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { name: "3. Export and publish" })
+    ).toBeFocused();
+
+    const exportFormatGroup = page.getByRole("radiogroup", {
+      name: "Export format",
+    });
+    await exportFormatGroup.getByRole("radio", { name: "PNG" }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(
+      exportFormatGroup.getByRole("radio", { name: "SVG" })
+    ).toHaveAttribute("aria-checked", "true");
+    await expect(
+      page.getByRole("button", { name: "Download SVG" })
+    ).toBeVisible();
+
+    await expectNoDocumentOverflow(page);
+    await expectNoSeriousAxeViolations(page);
   });
 
   test("scanner upload fallback decodes QR images and links to verifier", async ({
@@ -431,6 +721,11 @@ async function expectNoClippedInteractiveText(page: Page) {
           return false;
         }
 
+        const label = node.getAttribute("aria-label") ?? node.textContent ?? "";
+        if (/Next\.js Dev Tools/i.test(label)) {
+          return false;
+        }
+
         return (
           node.scrollWidth > Math.ceil(node.clientWidth) + 2 ||
           node.scrollHeight > Math.ceil(node.clientHeight) + 2
@@ -448,4 +743,51 @@ async function expectNoClippedInteractiveText(page: Page) {
 
 function slugify(path: string) {
   return path === "/" ? "home" : path.replace(/^\//, "").replace(/\//g, "-");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function createSolidLogoSvgBuffer(color: string) {
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="${color}"/></svg>`
+  );
+}
+
+async function expectQrPreviewCenterToBeColor(
+  page: Page,
+  color: {
+    readonly red: number;
+    readonly maxGreen: number;
+    readonly maxBlue: number;
+  }
+) {
+  const canvas = page.getByLabel("QR preview").locator("canvas").first();
+
+  await expect
+    .poll(
+      async () => {
+        const pixel = await canvas.evaluate((node) => {
+          const previewCanvas = node as HTMLCanvasElement;
+          const context = previewCanvas.getContext("2d");
+          if (!context) return null;
+
+          const x = Math.floor(previewCanvas.width / 2);
+          const y = Math.floor(previewCanvas.height / 2);
+          const [red, green, blue] = context.getImageData(x, y, 1, 1).data;
+
+          return { red, green, blue };
+        });
+
+        return Boolean(
+          pixel &&
+            pixel.red >= color.red &&
+            pixel.green <= color.maxGreen &&
+            pixel.blue <= color.maxBlue
+        );
+      },
+      { message: "uploaded logo should render in the QR preview on first upload" }
+    )
+    .toBe(true);
 }

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Retail landing page template thumbnail">
+  <rect width="800" height="500" fill="#F8FAFC"/>
+  <rect x="72" y="72" width="656" height="356" rx="30" fill="#FFFFFF" stroke="#BBF7D0" stroke-width="2"/>
+  <rect x="142" y="168" width="82" height="128" rx="18" fill="#D1FAE5"/>
+  <rect x="244" y="136" width="110" height="160" rx="20" fill="#A7F3D0"/>
+  <rect x="274" y="174" width="50" height="26" rx="8" fill="#059669"/>
+  <rect x="406" y="132" width="230" height="24" rx="12" fill="#0F172A"/>
+  <rect x="406" y="188" width="286" height="18" rx="9" fill="#64748B"/>
+  <rect x="406" y="230" width="216" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="406" y="304" width="158" height="48" rx="14" fill="#059669"/>
+</svg>

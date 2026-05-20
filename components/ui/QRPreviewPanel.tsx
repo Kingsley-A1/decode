@@ -24,7 +24,7 @@ export function QRPreviewPanel({
     >
       <div
         className={cn(
-          "relative mx-auto flex aspect-square w-full max-w-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white p-5 shadow-[0_20px_60px_rgba(14,165,233,0.12)]",
+          "relative mx-auto flex aspect-square w-full max-w-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white p-5 shadow-[0_20px_60px_rgba(0,122,255,0.12)]",
           isLoading && "animate-pulse"
         )}
       >

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Documents landing page template thumbnail">
+  <rect width="800" height="500" fill="#FFF1F2"/>
+  <rect x="74" y="70" width="652" height="360" rx="30" fill="#FFFFFF" stroke="#FECDD3" stroke-width="2"/>
+  <rect x="166" y="118" width="160" height="238" rx="20" fill="#FFE4E6"/>
+  <rect x="198" y="162" width="94" height="18" rx="9" fill="#E11D48"/>
+  <rect x="198" y="212" width="96" height="12" rx="6" fill="#FDA4AF"/>
+  <rect x="198" y="244" width="78" height="12" rx="6" fill="#FDA4AF"/>
+  <rect x="388" y="136" width="224" height="24" rx="12" fill="#0F172A"/>
+  <rect x="388" y="190" width="290" height="18" rx="9" fill="#64748B"/>
+  <rect x="388" y="304" width="154" height="48" rx="14" fill="#E11D48"/>
+</svg>

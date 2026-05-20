@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Healthcare landing page template thumbnail">
+  <rect width="800" height="500" fill="#F0FDFA"/>
+  <rect x="76" y="70" width="648" height="360" rx="30" fill="#FFFFFF" stroke="#99F6E4" stroke-width="2"/>
+  <rect x="160" y="156" width="152" height="152" rx="28" fill="#CCFBF1"/>
+  <rect x="222" y="186" width="28" height="92" rx="8" fill="#0F766E"/>
+  <rect x="190" y="218" width="92" height="28" rx="8" fill="#0F766E"/>
+  <rect x="374" y="136" width="230" height="24" rx="12" fill="#0F172A"/>
+  <rect x="374" y="190" width="294" height="18" rx="9" fill="#64748B"/>
+  <rect x="374" y="232" width="218" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="374" y="306" width="160" height="48" rx="14" fill="#0D9488"/>
+</svg>

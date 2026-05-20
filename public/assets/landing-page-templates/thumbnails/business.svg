@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Business landing page template thumbnail">
+  <rect width="800" height="500" fill="#F8FAFC"/>
+  <rect x="72" y="74" width="656" height="352" rx="28" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+  <rect x="128" y="132" width="128" height="128" rx="24" fill="#E0F2FE"/>
+  <path d="M160 220h64v-48h32v88h-96z" fill="#0369A1"/>
+  <rect x="304" y="136" width="260" height="24" rx="12" fill="#0F172A"/>
+  <rect x="304" y="188" width="348" height="18" rx="9" fill="#64748B"/>
+  <rect x="304" y="230" width="284" height="18" rx="9" fill="#CBD5E1"/>
+  <rect x="128" y="318" width="164" height="48" rx="14" fill="#0EA5E9"/>
+  <rect x="316" y="318" width="132" height="48" rx="14" fill="#E2E8F0"/>
+  <rect x="472" y="318" width="132" height="48" rx="14" fill="#F1F5F9"/>
+</svg>

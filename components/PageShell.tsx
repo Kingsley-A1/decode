@@ -8,6 +8,7 @@ interface PageShellProps {
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
+  variant?: "default" | "workspace";
 }
 
 export function PageShell({
@@ -17,26 +18,48 @@ export function PageShell({
   actions,
   children,
   className,
+  variant = "default",
 }: PageShellProps) {
+  const isWorkspace = variant === "workspace";
+
   return (
-    <section className={cn("space-y-6", className)}>
-      <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
-        <div className="max-w-3xl space-y-2">
+    <section className={cn(isWorkspace ? "space-y-4" : "space-y-6", className)}>
+      <div
+        className={cn(
+          "flex flex-col border-b border-slate-200 md:flex-row md:justify-between",
+          isWorkspace
+            ? "gap-3 pb-3 md:items-center"
+            : "gap-4 pb-6 md:items-end"
+        )}
+      >
+        <div className={cn("max-w-3xl", isWorkspace ? "space-y-1" : "space-y-2")}>
           {eyebrow && (
             <p className="text-sm font-semibold uppercase tracking-normal text-sky-700">
               {eyebrow}
             </p>
           )}
-          <h1 className="text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">
+          <h1
+            className={cn(
+              "font-semibold leading-tight text-slate-950",
+              isWorkspace ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl"
+            )}
+          >
             {title}
           </h1>
           {description && (
-            <p className="max-w-2xl text-base leading-7 text-slate-600">
+            <p
+              className={cn(
+                "max-w-2xl text-slate-600",
+                isWorkspace ? "text-sm leading-6" : "text-base leading-7"
+              )}
+            >
               {description}
             </p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+        {actions && (
+          <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>
+        )}
       </div>
       {children}
     </section>

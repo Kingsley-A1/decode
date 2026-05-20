@@ -292,28 +292,29 @@ function renderPreviewBody({
           subtitle={content.description}
         />
         <div className="grid gap-3">
-          {content.images.map((image) => (
-            <figure
-              key={image.id}
-              className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
-            >
-              {image.previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+          {content.images.length > 0 ? (
+            content.images.map((image) => (
+              <figure
+                key={image.id}
+                className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+              >
+                <PreviewImageFrame
                   src={image.previewUrl}
                   alt={image.alt || "Landing page image"}
-                  className="aspect-video w-full object-cover"
                 />
-              ) : (
-                <div className="flex aspect-video items-center justify-center bg-sky-50 text-sky-700">
-                  <ImageIcon className="h-8 w-8" aria-hidden="true" />
-                </div>
-              )}
+                <figcaption className="p-3 text-sm leading-6 text-slate-600">
+                  {image.caption || image.alt || "Image caption"}
+                </figcaption>
+              </figure>
+            ))
+          ) : (
+            <figure className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+              <PreviewImageFrame alt="Gallery image placeholder" />
               <figcaption className="p-3 text-sm leading-6 text-slate-600">
-                {image.caption || image.alt || "Image caption"}
+                Add images to preview the gallery.
               </figcaption>
             </figure>
-          ))}
+          )}
         </div>
       </PreviewStack>
     );
@@ -452,12 +453,14 @@ function MediaLogo({
 }) {
   if (src) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt={label}
-        className="h-24 w-24 rounded-2xl border border-sky-100 object-cover"
-      />
+      <span className="relative block h-24 w-24 overflow-hidden rounded-2xl border border-sky-100 bg-sky-50">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={label}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      </span>
     );
   }
 
@@ -467,6 +470,31 @@ function MediaLogo({
       className="flex h-24 w-24 items-center justify-center rounded-2xl border border-sky-100 bg-sky-50 text-2xl font-semibold text-sky-800"
     >
       {(fallback || "D").slice(0, 1).toUpperCase()}
+    </div>
+  );
+}
+
+function PreviewImageFrame({
+  src,
+  alt,
+}: {
+  readonly src?: string;
+  readonly alt: string;
+}) {
+  return (
+    <div className="relative aspect-video w-full overflow-hidden bg-sky-50 text-sky-700">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={alt}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <ImageIcon className="h-8 w-8" aria-hidden="true" />
+        </div>
+      )}
     </div>
   );
 }
@@ -483,7 +511,7 @@ function DocumentPanel({
   return (
     <div
       aria-label={label}
-      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4"
+      className="flex min-h-20 items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4"
     >
       <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
         {icon}

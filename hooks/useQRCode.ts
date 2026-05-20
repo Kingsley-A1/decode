@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface QROptions {
   data: string;
@@ -32,10 +32,19 @@ export function useQRCode(options: QROptions) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    let isActive = true;
+
     const initQR = async () => {
       if (typeof window === "undefined") return;
 
-      const QRCodeStyling = (await import("qr-code-styling")).default;
+      setIsReady(false);
+
+      const [{ default: QRCodeStyling }] = await Promise.all([
+        import("qr-code-styling"),
+        options.logoUrl ? preloadLogoImage(options.logoUrl) : Promise.resolve(),
+      ]);
+
+      if (!isActive) return;
 
       const qrCode = new QRCodeStyling({
         width: options.width || 280,
@@ -76,10 +85,20 @@ export function useQRCode(options: QROptions) {
         qrCode.append(ref.current);
       }
 
-      setIsReady(true);
+      if (isActive) {
+        setIsReady(true);
+      }
     };
 
-    initQR();
+    initQR().catch(() => {
+      if (isActive) {
+        setIsReady(false);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
   }, [
     options.data,
     options.dotsColor,
@@ -130,6 +149,24 @@ export function useQRCode(options: QROptions) {
   }, [options.width]);
 
   return { ref, download, downloadPdf, isReady };
+}
+
+function preloadLogoImage(source: string): Promise<void> {
+  return new Promise((resolve) => {
+    const image = new Image();
+
+    image.decoding = "async";
+    if (!source.startsWith("data:")) {
+      image.crossOrigin = "anonymous";
+    }
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
+    image.src = source;
+
+    if (image.complete) {
+      resolve();
+    }
+  });
 }
 
 function createSingleImagePdf({

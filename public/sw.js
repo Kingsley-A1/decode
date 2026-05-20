@@ -1,4 +1,4 @@
-const CACHE_NAME = "decode-v1";
+const CACHE_NAME = "decode-v2";
 const OFFLINE_URL = "/";
 
 const ASSETS_TO_CACHE = [
@@ -8,7 +8,10 @@ const ASSETS_TO_CACHE = [
   "/verify",
   "/decode",
   "/dashboard",
+  "/privacy",
+  "/terms",
   "/logo.svg",
+  "/icon-512.jpg",
   "/icon-192.svg",
   "/icon-512.svg",
   "/manifest.json",

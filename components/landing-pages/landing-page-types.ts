@@ -85,11 +85,3 @@ export interface LandingPageContent {
   readonly audioUrl: string;
   readonly audio?: LandingPageMediaAsset;
 }
-
-export interface LandingPageTemplate {
-  readonly type: LandingPageType;
-  readonly label: string;
-  readonly description: string;
-  readonly mediaKind?: "image" | "pdf" | "audio";
-}
-

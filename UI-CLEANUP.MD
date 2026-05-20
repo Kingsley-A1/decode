@@ -66,31 +66,31 @@ Warnings should become a compact "scanability status" system, not just alert box
 
 Goal: make the current QR generator feel faster without changing the backend or product model.
 
-- [ ] Replace the verbose mobile stepper with a compact progress header.
+- [x] Replace the verbose mobile stepper with a compact progress header.
   - Mobile target: max `56px` height.
   - Show `Content`, `Design`, `Export` as compact steps with `aria-current="step"`.
   - Keep the existing descriptive step cards only for tablet/desktop if they still help.
-- [ ] Add scroll and focus management between steps.
+- [x] Add scroll and focus management between steps.
   - When moving from Content to Design or Design to Export, scroll the builder top into view.
   - Programmatically focus the new step heading with `tabIndex={-1}`.
   - Add `scroll-margin-top` so sticky nav never obscures the focused heading.
-- [ ] Move mobile preview into a compact preview tray near the top of the builder.
+- [x] Move mobile preview into a compact preview tray near the top of the builder.
   - Show QR thumbnail, mode, type, scanability status, and an "Expand" action.
   - Keep the full `QRPreviewPanel` in the desktop aside.
   - On mobile, avoid making users reach the bottom before seeing the QR result.
-- [ ] Convert QR type selection from a 2-column description grid to a horizontal choice rail.
+- [x] Convert QR type selection from a 2-column description grid to a horizontal choice rail.
   - Use short labels: URL, Text, Email, Phone, SMS, WhatsApp, Wi-Fi, vCard.
   - Put the explanation below the selected option, not repeated inside every card.
   - Keep disabled dynamic-only states accessible with clear messaging.
-- [ ] Convert frame selection to a horizontal swipe rail.
+- [x] Convert frame selection to a horizontal swipe rail.
   - Each frame card should be about `148-180px` wide on mobile.
   - Use `overflow-x-auto`, `scroll-snap-type: x mandatory`, and visible selected state.
   - Keep thumbnail first, then short label. Move "best for" into a subtle tooltip or selected detail row.
   - Target: the full frame picker should take less than `300px` vertical space on mobile.
-- [ ] Reduce content copy.
+- [x] Reduce content copy.
   - Remove or collapse repeated paragraphs that explain static/dynamic and design guardrails.
   - Keep direct inline help only where the choice has real consequences.
-- [ ] Add a mobile sticky action bar inside the builder.
+- [x] Add a mobile sticky action bar inside the builder.
   - Content: `Continue to design`.
   - Design: `Back`, `Continue to export`.
   - Export: `Download PNG`, secondary formats in a menu or rail.
@@ -98,114 +98,114 @@ Goal: make the current QR generator feel faster without changing the backend or 
 
 Acceptance criteria:
 
-- [ ] On `390x844`, the content step primary CTA is reachable within about `1.4` viewport heights.
-- [ ] On `390x844`, a QR preview or preview tray is visible within the first viewport after the page header.
-- [ ] On `390x844`, the design step no longer requires scrolling through six full-height frame cards.
-- [ ] Step changes land the user at the new step heading, not at the previous scroll depth.
-- [ ] `npm run lint`, `npm run typecheck`, and targeted Playwright generator tests pass.
+- [x] On `390x844`, the content step primary CTA is reachable within about `1.4` viewport heights.
+- [x] On `390x844`, a QR preview or preview tray is visible within the first viewport after the page header.
+- [x] On `390x844`, the design step no longer requires scrolling through six full-height frame cards.
+- [x] Step changes land the user at the new step heading, not at the previous scroll depth.
+- [x] `npm run lint`, `npm run typecheck`, and targeted Playwright generator tests pass.
 
 ### Phase 2 - Reusable Choice And Action Components
 
 Goal: avoid one-off cleanup and create reusable primitives for the rest of Decode.
 
-- [ ] Add `ChoiceRail` to `components/ui`.
+- [x] Add `ChoiceRail` to `components/ui`.
   - Props: `value`, `options`, `onChange`, `label`, `size`, `renderPreview`, `getDescription`.
   - Semantics: use a `fieldset`/`legend` or radio-group pattern for mutually exclusive choices.
   - Keyboard: Tab into the group, arrow keys or native radio behavior where practical, Enter/Space selects.
   - Mobile: horizontal snap rail.
   - Desktop: can wrap into compact grid.
-- [ ] Add `MobilePreviewTray`.
+- [x] Add `MobilePreviewTray`.
   - Compact QR thumbnail, current payload summary, scanability badge, expand/collapse action.
   - Should not duplicate the full desktop preview markup unnecessarily.
-- [ ] Add `BuilderActionBar`.
+- [x] Add `BuilderActionBar`.
   - Handles mobile sticky actions and desktop inline actions from one API.
   - Includes safe-area padding and focus-safe behavior.
-- [ ] Add `ProgressStepper` variants.
+- [x] Add `ProgressStepper` variants.
   - `compact` for mobile.
   - `cards` for desktop.
   - Current step should be conveyed by text, icon, and ARIA, not color alone.
-- [ ] Add `DisclosureSection` for advanced controls.
+- [x] Add `DisclosureSection` for advanced controls.
   - Default open state can depend on warnings or user changes.
   - Advanced design controls should remain reachable without overwhelming first-time users.
 
 Acceptance criteria:
 
-- [ ] QR type, dot style, corner style, frame, and export choices share consistent selection behavior.
-- [ ] Touch targets remain at least `44x44px`.
-- [ ] Keyboard operation works without pointer input.
-- [ ] Axe has no serious or critical WCAG violations on `/generate`.
+- [x] QR type, dot style, corner style, frame, and export choices share consistent selection behavior.
+- [x] Touch targets remain at least `44x44px`.
+- [x] Keyboard operation works without pointer input.
+- [x] Axe has no serious or critical WCAG violations on `/generate`.
 
 ### Phase 3 - Design Step Professionalization
 
 Goal: make customization feel premium and safer, not longer.
 
-- [ ] Add template presets before granular controls.
+- [x] Add template presets before granular controls.
   - Examples: Clean, Corporate, Event, Menu, Social, Coupon.
   - Presets should set dot style, corner style, color, frame, and error correction together.
   - Keep "Custom" when users manually change a setting.
-- [ ] Reorder design controls by real user priority.
+- [x] Reorder design controls by real user priority.
   - Recommended first pass: Templates, Color, Frame, Logo.
   - Advanced: Dots, Corners, Quiet zone, Error correction, Export size.
-- [ ] Replace alert-only guardrails with a scanability meter.
+- [x] Replace alert-only guardrails with a scanability meter.
   - States: `Ready`, `Needs attention`, `Blocked for publish`.
   - Show reasons in a compact list.
   - Block final publish for objectively unsafe combinations unless an explicit override is part of product policy.
-- [ ] Improve frame thumbnails.
+- [x] Improve frame thumbnails.
   - Ensure dark frames do not hide tiny CTA text.
   - Keep thumbnails visually comparable by using stable dimensions.
   - Avoid cards that look selected because of hover or screenshot artifacts.
-- [ ] Add "Reset design" and later "Save as preset".
+- [x] Add "Reset design" and later "Save as preset".
   - Reset should restore safe defaults.
   - Save preset can wait for authenticated workspace UX.
 
 Acceptance criteria:
 
-- [ ] A user can create a polished framed QR with color and logo without opening advanced controls.
-- [ ] A risky design produces a clear, actionable scanability reason.
-- [ ] Frame changes update preview immediately and keep the selected frame visible in the rail.
-- [ ] Design controls do not cause layout shift in the preview area.
+- [x] A user can create a polished framed QR with color and logo without opening advanced controls.
+- [x] A risky design produces a clear, actionable scanability reason.
+- [x] Frame changes update preview immediately and keep the selected frame visible in the rail.
+- [x] Design controls do not cause layout shift in the preview area.
 
 ### Phase 4 - Workspace Chrome Cleanup
 
 Goal: make operational pages feel like tools, not landing pages.
 
-- [ ] Add an `AppShell` mode for workspace pages.
+- [x] Add an `AppShell` mode for workspace pages.
   - Example: `chrome="workspace"` hides or compresses `TrustedBy` and large footer sections.
   - Keep marketing trust content for public/marketing routes.
-- [ ] Reduce `/generate` page header height.
+- [x] Reduce `/generate` page header height.
   - Current page intro repeats platform readiness language.
   - Use a shorter title block: title, one-line purpose, dashboard action.
-- [ ] Keep sticky nav from competing with builder controls.
+- [x] Keep sticky nav from competing with builder controls.
   - Confirm sticky top offsets for focused headings and preview panels.
   - Avoid mid-page sticky visual collisions during transitions.
-- [ ] Review route-level navigation priority.
+- [x] Review route-level navigation priority.
   - Current top nav includes `Pages`; this is valid for platform direction.
   - Make sure the primary "New QR" action stays visible without crowding mobile.
 
 Acceptance criteria:
 
-- [ ] `/generate` feels like a creation workspace from the first viewport.
-- [ ] Footer/trust content no longer distracts during active QR creation.
-- [ ] No fixed or sticky element obscures focused content.
+- [x] `/generate` feels like a creation workspace from the first viewport.
+- [x] Footer/trust content no longer distracts during active QR creation.
+- [x] No fixed or sticky element obscures focused content.
 
 ### Phase 5 - Verification And Release Gate
 
 Goal: make the cleanup measurable and safe to ship.
 
-- [ ] Update Playwright coverage for the new mobile flow.
+- [x] Update Playwright coverage for the new mobile flow.
   - Assert no horizontal overflow.
   - Assert compact stepper renders on mobile.
   - Assert frame rail is horizontally scrollable and selectable.
   - Assert preview tray is visible on mobile.
   - Assert step transition focuses the next heading.
-- [ ] Keep existing axe checks and add builder-specific assertions.
+- [x] Keep existing axe checks and add builder-specific assertions.
   - Check WCAG 2.2 tags through `@axe-core/playwright`.
   - Manually test keyboard-only operation for rails, disclosures, file upload, and export.
-- [ ] Run visual screenshots at:
+- [x] Run visual screenshots at:
   - `390x844`
   - `768x1024`
   - `1366x900`
-- [ ] Run quality gates:
+- [x] Run quality gates:
   - `npm run lint`
   - `npm run typecheck`
   - `npm run test`
@@ -214,10 +214,10 @@ Goal: make the cleanup measurable and safe to ship.
 
 Acceptance criteria:
 
-- [ ] The generator remains functional for static URL QR creation.
-- [ ] Frame selection, preview update, and export step still pass smoke tests.
-- [ ] No serious accessibility regressions.
-- [ ] No mobile horizontal overflow.
+- [x] The generator remains functional for static URL QR creation.
+- [x] Frame selection, preview update, and export step still pass smoke tests.
+- [x] No serious accessibility regressions.
+- [x] No mobile horizontal overflow.
 - [ ] No clipped button text.
 
 ## Specific File-Level Recommendations
@@ -406,4 +406,3 @@ Measurable finish line:
 - [ ] No horizontal overflow on primary breakpoints.
 - [ ] No serious axe violations.
 - [ ] Existing generator workflow tests continue to pass.
-

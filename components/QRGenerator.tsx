@@ -1,35 +1,50 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  Contact as ContactIcon,
   Copy,
   Download,
+  Facebook,
   FileDown,
+  Instagram,
   Link as LinkIcon,
+  Linkedin,
+  Mail,
+  MessageCircle,
   Palette,
+  Phone,
   Rocket,
   ShieldCheck,
   Sparkles,
+  UploadCloud,
+  Wifi,
   X,
+  Youtube,
+  type LucideIcon,
 } from "lucide-react";
 import { useQRCode, type QROptions } from "@/hooks/useQRCode";
 import { PageHeader } from "./PageHeader";
 import {
   Alert,
   Badge,
+  BuilderActionBar,
   Button,
+  ChoiceRail,
   ColorInput,
   ColorSwatch,
+  DisclosureSection,
   FileUpload,
   IconButton,
   Input,
+  MobilePreviewTray,
+  ProgressStepper,
   QRPreviewPanel,
   Select,
   SegmentedControl,
   Slider,
-  Stepper,
   Textarea,
 } from "@/components/ui";
 
@@ -47,6 +62,7 @@ type QRType =
 type DotStyle = "square" | "rounded" | "dots" | "classy" | "extra-rounded";
 type CornerStyle = "square" | "rounded" | "dot";
 type ErrorCorrectionLevel = "L" | "M" | "Q" | "H";
+type ExportFormat = "png" | "svg" | "pdf";
 type FrameStyle =
   | "none"
   | "scan-me"
@@ -54,6 +70,29 @@ type FrameStyle =
   | "ticket"
   | "badge"
   | "minimal";
+type LogoChoiceValue =
+  | "none"
+  | "upload"
+  | "link"
+  | "instagram"
+  | "facebook"
+  | "youtube"
+  | "linkedin"
+  | "email"
+  | "phone"
+  | "sms"
+  | "whatsapp"
+  | "wifi"
+  | "vcard";
+type DesignPreset =
+  | "clean"
+  | "corporate"
+  | "event"
+  | "menu"
+  | "social"
+  | "coupon"
+  | "custom";
+type ScanabilityState = "ready" | "needs-attention" | "blocked";
 
 interface QRGeneratorProps {
   showHeader?: boolean;
@@ -104,6 +143,25 @@ interface PayloadResult {
   summary: string;
 }
 
+interface ScanabilityResult {
+  state: ScanabilityState;
+  label: string;
+  description: string;
+  reasons: string[];
+  blocksPublish: boolean;
+}
+
+interface LogoChoiceOption {
+  value: LogoChoiceValue;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  color: string;
+  initials: string;
+  qrTypes?: readonly QRType[];
+  ariaLabel?: string;
+}
+
 interface ApiResponse<TData> {
   ok: boolean;
   data?: TData;
@@ -128,28 +186,69 @@ const workflowSteps = [
 const typeOptions: {
   value: QRType;
   label: string;
+  shortLabel: string;
   description: string;
 }[] = [
-  { value: "url", label: "Website URL", description: "Open a web destination." },
-  { value: "text", label: "Plain text", description: "Encode readable text." },
-  { value: "email", label: "Email", description: "Create a mailto action." },
-  { value: "phone", label: "Phone call", description: "Dial a phone number." },
-  { value: "sms", label: "SMS", description: "Pre-fill a text message." },
-  { value: "whatsapp", label: "WhatsApp", description: "Open a WhatsApp chat." },
-  { value: "wifi", label: "Wi-Fi", description: "Share network access." },
-  { value: "vcard", label: "vCard", description: "Share contact details." },
+  {
+    value: "url",
+    label: "Website URL",
+    shortLabel: "URL",
+    description: "Open a web destination.",
+  },
+  {
+    value: "text",
+    label: "Plain text",
+    shortLabel: "Text",
+    description: "Encode readable text.",
+  },
+  {
+    value: "email",
+    label: "Email",
+    shortLabel: "Email",
+    description: "Create a mailto action.",
+  },
+  {
+    value: "phone",
+    label: "Phone call",
+    shortLabel: "Phone",
+    description: "Dial a phone number.",
+  },
+  {
+    value: "sms",
+    label: "SMS",
+    shortLabel: "SMS",
+    description: "Pre-fill a text message.",
+  },
+  {
+    value: "whatsapp",
+    label: "WhatsApp",
+    shortLabel: "WhatsApp",
+    description: "Open a WhatsApp chat.",
+  },
+  {
+    value: "wifi",
+    label: "Wi-Fi",
+    shortLabel: "Wi-Fi",
+    description: "Share network access.",
+  },
+  {
+    value: "vcard",
+    label: "vCard",
+    shortLabel: "vCard",
+    description: "Share contact details.",
+  },
 ];
 
 const modeOptions = [
   {
     value: "static",
     label: "Static",
-    description: "Final content is encoded directly and cannot be edited later.",
+    description: "Fixed after download.",
   },
   {
     value: "dynamic",
     label: "Dynamic",
-    description: "Encodes a Decode redirect URL that can change destination later.",
+    description: "Editable and trackable.",
   },
 ] as const;
 
@@ -167,15 +266,274 @@ const cornerStyleOptions: { value: CornerStyle; label: string }[] = [
   { value: "dot", label: "Dot" },
 ];
 
+const exportFormatOptions: {
+  readonly value: ExportFormat;
+  readonly label: string;
+  readonly description: string;
+}[] = [
+  {
+    value: "png",
+    label: "PNG",
+    description: "Raster image for print and social use.",
+  },
+  {
+    value: "svg",
+    label: "SVG",
+    description: "Vector QR for layouts, signs, and design tools.",
+  },
+  {
+    value: "pdf",
+    label: "PDF",
+    description: "A4 sheet with the QR code embedded.",
+  },
+];
+
 const colorPresets = [
   { name: "Ink", value: "#0f172a" },
-  { name: "Sky", value: "#0369a1" },
+  { name: "Apple blue", value: "#007AFF" },
   { name: "Cyan", value: "#0891b2" },
   { name: "Violet", value: "#7c3aed" },
   { name: "Green", value: "#047857" },
   { name: "Amber", value: "#b45309" },
   { name: "Rose", value: "#be123c" },
   { name: "Slate", value: "#334155" },
+];
+
+type PresetDesignState = Pick<
+  DesignState,
+  | "foregroundColor"
+  | "backgroundColor"
+  | "dotStyle"
+  | "cornerStyle"
+  | "margin"
+  | "errorCorrectionLevel"
+  | "frameStyle"
+>;
+
+const designPresetOptions: {
+  readonly value: DesignPreset;
+  readonly label: string;
+  readonly description: string;
+}[] = [
+  {
+    value: "clean",
+    label: "Clean",
+    description: "Neutral color with a minimal, scan-first setup.",
+  },
+  {
+    value: "corporate",
+    label: "Corporate",
+    description: "Structured blue styling for business materials.",
+  },
+  {
+    value: "event",
+    label: "Event",
+    description: "Ticket framing with a stronger campaign color.",
+  },
+  {
+    value: "menu",
+    label: "Menu",
+    description: "Fresh color and low-noise framing for tables and counters.",
+  },
+  {
+    value: "social",
+    label: "Social",
+    description: "CTA-forward styling with logo-safe correction.",
+  },
+  {
+    value: "coupon",
+    label: "Coupon",
+    description: "Promotional badge styling for offers and flyers.",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    description: "Manual settings are active.",
+  },
+];
+
+const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> = {
+  clean: {
+    foregroundColor: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    dotStyle: "rounded",
+    cornerStyle: "rounded",
+    margin: 4,
+    errorCorrectionLevel: "Q",
+    frameStyle: "none",
+  },
+  corporate: {
+    foregroundColor: "#007AFF",
+    backgroundColor: "#FFFFFF",
+    dotStyle: "square",
+    cornerStyle: "square",
+    margin: 4,
+    errorCorrectionLevel: "Q",
+    frameStyle: "classic",
+  },
+  event: {
+    foregroundColor: "#7C3AED",
+    backgroundColor: "#F5F3FF",
+    dotStyle: "dots",
+    cornerStyle: "dot",
+    margin: 4,
+    errorCorrectionLevel: "H",
+    frameStyle: "ticket",
+  },
+  menu: {
+    foregroundColor: "#047857",
+    backgroundColor: "#ECFDF5",
+    dotStyle: "rounded",
+    cornerStyle: "rounded",
+    margin: 4,
+    errorCorrectionLevel: "Q",
+    frameStyle: "minimal",
+  },
+  social: {
+    foregroundColor: "#0891B2",
+    backgroundColor: "#ECFEFF",
+    dotStyle: "classy",
+    cornerStyle: "dot",
+    margin: 4,
+    errorCorrectionLevel: "H",
+    frameStyle: "scan-me",
+  },
+  coupon: {
+    foregroundColor: "#B45309",
+    backgroundColor: "#FFFBEB",
+    dotStyle: "extra-rounded",
+    cornerStyle: "rounded",
+    margin: 4,
+    errorCorrectionLevel: "H",
+    frameStyle: "badge",
+  },
+};
+
+const noLogoChoice: LogoChoiceOption = {
+  value: "none",
+  label: "None",
+  description: "Use the QR without a center logo.",
+  icon: X,
+  color: "#64748B",
+  initials: "X",
+  ariaLabel: "Use no logo",
+};
+
+const uploadedLogoChoice: LogoChoiceOption = {
+  value: "upload",
+  label: "Uploaded",
+  description: "Use the image selected from your device.",
+  icon: UploadCloud,
+  color: "#0F172A",
+  initials: "IMG",
+  ariaLabel: "Use uploaded logo",
+};
+
+const logoPresetOptions: readonly LogoChoiceOption[] = [
+  {
+    value: "link",
+    label: "Link",
+    description: "Generic web link icon for website QR codes.",
+    icon: LinkIcon,
+    color: "#7C3AED",
+    initials: "URL",
+    qrTypes: ["url"],
+  },
+  {
+    value: "instagram",
+    label: "IG",
+    description: "Social profile icon for Instagram destinations.",
+    icon: Instagram,
+    color: "#C13584",
+    initials: "IG",
+    qrTypes: ["url"],
+    ariaLabel: "Use Instagram logo",
+  },
+  {
+    value: "facebook",
+    label: "FB",
+    description: "Social profile icon for Facebook destinations.",
+    icon: Facebook,
+    color: "#1877F2",
+    initials: "FB",
+    qrTypes: ["url"],
+    ariaLabel: "Use Facebook logo",
+  },
+  {
+    value: "youtube",
+    label: "YT",
+    description: "Video channel icon for YouTube destinations.",
+    icon: Youtube,
+    color: "#DC2626",
+    initials: "YT",
+    qrTypes: ["url"],
+    ariaLabel: "Use YouTube logo",
+  },
+  {
+    value: "linkedin",
+    label: "IN",
+    description: "Professional profile icon for LinkedIn destinations.",
+    icon: Linkedin,
+    color: "#0A66C2",
+    initials: "IN",
+    qrTypes: ["url"],
+    ariaLabel: "Use LinkedIn logo",
+  },
+  {
+    value: "email",
+    label: "Email",
+    description: "Mail icon for email QR codes.",
+    icon: Mail,
+    color: "#F59E0B",
+    initials: "@",
+    qrTypes: ["email"],
+  },
+  {
+    value: "phone",
+    label: "Phone",
+    description: "Phone icon for call QR codes.",
+    icon: Phone,
+    color: "#0F766E",
+    initials: "TEL",
+    qrTypes: ["phone"],
+  },
+  {
+    value: "sms",
+    label: "SMS",
+    description: "Message icon for SMS QR codes.",
+    icon: MessageCircle,
+    color: "#2563EB",
+    initials: "SMS",
+    qrTypes: ["sms"],
+  },
+  {
+    value: "whatsapp",
+    label: "WA",
+    description: "Chat icon for WhatsApp QR codes.",
+    icon: MessageCircle,
+    color: "#22C55E",
+    initials: "WA",
+    qrTypes: ["whatsapp"],
+    ariaLabel: "Use WhatsApp logo",
+  },
+  {
+    value: "wifi",
+    label: "Wi-Fi",
+    description: "Wi-Fi icon for network access QR codes.",
+    icon: Wifi,
+    color: "#0284C7",
+    initials: "WiFi",
+    qrTypes: ["wifi"],
+  },
+  {
+    value: "vcard",
+    label: "vCard",
+    description: "Contact card icon for vCard QR codes.",
+    icon: ContactIcon,
+    color: "#007AFF",
+    initials: "VC",
+    qrTypes: ["vcard"],
+  },
 ];
 
 const frameOptions: {
@@ -273,12 +631,17 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
   const [type, setType] = useState<QRType>("url");
   const [form, setForm] = useState<FormState>(initialFormState);
   const [design, setDesign] = useState<DesignState>(initialDesignState);
+  const [selectedPreset, setSelectedPreset] = useState<DesignPreset>("clean");
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoChoice, setLogoChoice] = useState<LogoChoiceValue>("none");
   const [copied, setCopied] = useState(false);
   const [publishStatus, setPublishStatus] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const builderTopRef = useRef<HTMLDivElement>(null);
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const previousStepRef = useRef(currentStep);
 
   const validation = useMemo(
     () => validateContent({ type, mode, form }),
@@ -302,19 +665,17 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
     }),
     [design]
   );
-  const designWarnings = useMemo(
-    () => getDesignWarnings({ design, hasLogo: Boolean(logoUrl) }),
+  const scanability = useMemo(
+    () => getScanability({ design, hasLogo: Boolean(logoUrl) }),
     [design, logoUrl]
+  );
+  const logoChoices = useMemo(
+    () => getLogoChoiceOptions(type, logoChoice),
+    [type, logoChoice]
   );
   const stepIndex = ["content", "design", "export"].indexOf(currentStep);
   const previewValue = payload?.value || "https://decode.com.ng";
-
-  const {
-    ref: qrRef,
-    download,
-    downloadPdf,
-    isReady,
-  } = useQRCode({
+  const qrOptions = useMemo<QROptions>(() => ({
     data: previewValue,
     width: renderableDesign.size,
     height: renderableDesign.size,
@@ -328,7 +689,49 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
     logoUrl,
     logoSize: logoUrl ? renderableDesign.logoSizeRatio : 0,
     containerKey: renderableDesign.frameStyle,
-  } satisfies QROptions);
+  }), [
+    previewValue,
+    renderableDesign.size,
+    renderableDesign.margin,
+    renderableDesign.foregroundColor,
+    renderableDesign.backgroundColor,
+    renderableDesign.dotStyle,
+    renderableDesign.cornerStyle,
+    renderableDesign.errorCorrectionLevel,
+    renderableDesign.frameStyle,
+    logoUrl,
+    renderableDesign.logoSizeRatio,
+  ]);
+  const mobileQrOptions = useMemo<QROptions>(() => ({
+    ...qrOptions,
+    width: 256,
+    height: 256,
+  }), [qrOptions]);
+
+  const {
+    ref: qrRef,
+    download,
+    downloadPdf,
+    isReady,
+  } = useQRCode(qrOptions);
+  const {
+    ref: mobileQrRef,
+    isReady: isMobilePreviewReady,
+  } = useQRCode(mobileQrOptions);
+
+  useEffect(() => {
+    if (previousStepRef.current === currentStep) return;
+
+    previousStepRef.current = currentStep;
+    builderTopRef.current?.scrollIntoView({ block: "start" });
+    window.requestAnimationFrame(() => {
+      stepHeadingRef.current?.focus({ preventScroll: true });
+    });
+  }, [currentStep]);
+
+  const goToStep = (nextStep: WorkflowStep) => {
+    setCurrentStep(nextStep);
+  };
 
   const handleFormChange = (key: keyof FormState, value: string | boolean) => {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -341,24 +744,80 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
     }
   };
 
+  const handlePresetChange = (nextPreset: DesignPreset) => {
+    setSelectedPreset(nextPreset);
+
+    if (nextPreset === "custom") return;
+
+    setDesign((previous) => ({
+      ...previous,
+      ...designPresets[nextPreset],
+    }));
+  };
+
+  const handleDesignChange: React.Dispatch<React.SetStateAction<DesignState>> = (
+    nextDesign
+  ) => {
+    setSelectedPreset("custom");
+    setDesign(nextDesign);
+  };
+
+  const handleResetDesign = () => {
+    setSelectedPreset("clean");
+    setLogoUrl("");
+    setLogoChoice("none");
+    setDesign(initialDesignState);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const applyLogoSafeDesign = () => {
+    setDesign((previous) => ({
+      ...previous,
+      logoSizeRatio: previous.logoSizeRatio > 0 ? previous.logoSizeRatio : 0.16,
+      errorCorrectionLevel: "H",
+    }));
+  };
+
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setSelectedPreset("custom");
+    setLogoChoice("upload");
     const reader = new FileReader();
     reader.onloadend = () => setLogoUrl(reader.result as string);
     reader.readAsDataURL(file);
-    setDesign((previous) => ({
-      ...previous,
-      logoSizeRatio: previous.logoSizeRatio > 0 ? previous.logoSizeRatio : 0.16,
-      errorCorrectionLevel:
-        previous.errorCorrectionLevel === "H" ? "H" : "Q",
-    }));
+    applyLogoSafeDesign();
   };
 
   const handleRemoveLogo = () => {
+    setSelectedPreset("custom");
     setLogoUrl("");
+    setLogoChoice("none");
     setDesign((previous) => ({ ...previous, logoSizeRatio: 0 }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleLogoChoiceChange = (nextChoice: LogoChoiceValue) => {
+    setSelectedPreset("custom");
+
+    if (nextChoice === "upload") return;
+
+    if (nextChoice === "none") {
+      handleRemoveLogo();
+      return;
+    }
+
+    const option = logoPresetOptions.find((item) => item.value === nextChoice);
+    if (!option) return;
+
+    setLogoChoice(nextChoice);
+    setLogoUrl(createLogoPresetDataUrl(option));
+    applyLogoSafeDesign();
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -374,11 +833,17 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
 
   const handleContinueToDesign = () => {
     if (!validation.isValid) return;
-    setCurrentStep("design");
+    goToStep("design");
   };
 
   const handlePublishDynamic = async () => {
     if (mode !== "dynamic" || type !== "url" || !validation.isValid) return;
+
+    if (scanability.blocksPublish) {
+      setPublishError("Resolve blocked scanability issues before publishing.");
+      setPublishStatus(null);
+      return;
+    }
 
     setIsPublishing(true);
     setPublishError(null);
@@ -421,7 +886,7 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
   };
 
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-4 p-4">
       {showHeader && (
         <PageHeader
           title="QR Generator"
@@ -429,12 +894,35 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
         />
       )}
 
-      <Stepper steps={workflowSteps} currentStep={Math.max(stepIndex, 0)} />
+      <div ref={builderTopRef} className="scroll-mt-24">
+        <ProgressStepper
+          steps={workflowSteps}
+          currentStep={Math.max(stepIndex, 0)}
+        />
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
-        <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <MobilePreviewTray
+        title={`${mode === "dynamic" ? "Dynamic" : "Static"} / ${getTypeLabel(type)}`}
+        summary={payload?.summary ?? "Complete content to preview the payload."}
+        preview={
+          <div
+            ref={mobileQrRef}
+            className="w-full overflow-hidden rounded-md [&_canvas]:!h-auto [&_canvas]:!w-full"
+          />
+        }
+        status={{
+          label: scanability.label,
+          variant: getScanabilityBadgeVariant(scanability.state),
+        }}
+        isLoading={!isMobilePreviewReady}
+        data-testid="mobile-preview-tray"
+      />
+
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <section className="min-w-0 space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           {currentStep === "content" && (
             <ContentStep
+              headingRef={stepHeadingRef}
               mode={mode}
               type={type}
               form={form}
@@ -448,31 +936,40 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
 
           {currentStep === "design" && (
             <DesignStep
+              headingRef={stepHeadingRef}
               design={design}
               logoUrl={logoUrl}
-              warnings={designWarnings}
-              onDesignChange={setDesign}
+              logoChoice={logoChoice}
+              logoChoices={logoChoices}
+              selectedPreset={selectedPreset}
+              scanability={scanability}
+              onPresetChange={handlePresetChange}
+              onDesignChange={handleDesignChange}
+              onLogoChoiceChange={handleLogoChoiceChange}
               onLogoUpload={handleLogoUpload}
               onRemoveLogo={handleRemoveLogo}
+              onResetDesign={handleResetDesign}
               logoInputRef={fileInputRef}
-              onBack={() => setCurrentStep("content")}
-              onContinue={() => setCurrentStep("export")}
+              onBack={() => goToStep("content")}
+              onContinue={() => goToStep("export")}
             />
           )}
 
           {currentStep === "export" && (
             <ExportStep
+              headingRef={stepHeadingRef}
               mode={mode}
               type={type}
               form={form}
               payload={payload}
               design={design}
+              scanability={scanability}
               isReady={isReady}
               copied={copied}
               publishStatus={publishStatus}
               publishError={publishError}
               isPublishing={isPublishing}
-              onBack={() => setCurrentStep("design")}
+              onBack={() => goToStep("design")}
               onCopyPayload={handleCopyPayload}
               onDownloadPng={() => download("png")}
               onDownloadSvg={() => download("svg")}
@@ -482,7 +979,7 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
           )}
         </section>
 
-        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+        <aside className="hidden space-y-4 xl:sticky xl:top-24 xl:block xl:self-start">
           <QRPreviewPanel isLoading={!isReady}>
             <QRFrame
               key={design.frameStyle}
@@ -512,10 +1009,8 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
                 {mode === "dynamic" ? "Dynamic" : "Static"}
               </Badge>
               <Badge variant="neutral">{getTypeLabel(type)}</Badge>
-              <Badge variant={designWarnings.length > 0 ? "warning" : "success"}>
-                {designWarnings.length > 0
-                  ? `${designWarnings.length} warning${designWarnings.length === 1 ? "" : "s"}`
-                  : "Scan-ready"}
+              <Badge variant={getScanabilityBadgeVariant(scanability.state)}>
+                {scanability.label}
               </Badge>
             </div>
             <p className="mt-3 break-all text-sm leading-6 text-slate-600">
@@ -529,6 +1024,7 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
 }
 
 function ContentStep({
+  headingRef,
   mode,
   type,
   form,
@@ -538,6 +1034,7 @@ function ContentStep({
   onFormChange,
   onContinue,
 }: {
+  readonly headingRef: React.RefObject<HTMLHeadingElement | null>;
   readonly mode: QRMode;
   readonly type: QRType;
   readonly form: FormState;
@@ -557,12 +1054,16 @@ function ContentStep({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-slate-950">
+        <h2
+          id="qr-step-content-heading"
+          ref={headingRef}
+          tabIndex={-1}
+          className="scroll-mt-28 text-lg font-semibold text-slate-950 focus:outline-none"
+        >
           1. Choose content
         </h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          Static QR codes encode final content directly. Dynamic QR codes encode
-          a Decode redirect URL that can be edited after publishing.
+          Pick the QR behavior, then enter the minimum content needed.
         </p>
       </div>
 
@@ -576,17 +1077,37 @@ function ContentStep({
 
       {isDynamic && (
         <Alert variant="info" title="Dynamic v1 supports URL redirects">
-          Dynamic QR codes currently require a website URL, a stable slug, and
-          sign-in before publishing to a workspace.
+          Dynamic QR codes require a website URL and stable slug before publish.
         </Alert>
       )}
 
-      <SegmentedControl
+      <ChoiceRail
         value={type}
-        options={visibleTypeOptions}
+        options={visibleTypeOptions.map((option) => ({
+          value: option.value,
+          label: option.shortLabel,
+          disabled: option.disabled,
+          ariaLabel: `${option.shortLabel} QR type`,
+        }))}
         onChange={onTypeChange}
         label="QR type"
-        columns={4}
+        size="sm"
+        desktopColumns={4}
+        getDescription={(option) => {
+          const typeOption = typeOptions.find(
+            (item) => item.value === option.value
+          );
+
+          return (
+            <>
+              <span className="font-medium text-slate-800">
+                {typeOption?.label ?? option.label}:
+              </span>{" "}
+              {typeOption?.description}
+              {isDynamic ? " Dynamic v1 supports URL codes only." : ""}
+            </>
+          );
+        }}
       />
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -599,21 +1120,41 @@ function ContentStep({
         />
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-600" aria-live="polite">
-          {validation.isValid
-            ? "Content is valid. Continue to QR design."
-            : "Complete the required fields to continue."}
-        </p>
-        <Button
-          variant="primary"
-          onClick={onContinue}
-          disabled={!validation.isValid}
-          rightIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
-        >
-          Continue to design
-        </Button>
-      </div>
+      <p className="text-sm text-slate-600 sm:hidden" aria-live="polite">
+        {validation.isValid
+          ? "Content is valid."
+          : "Complete the required fields to continue."}
+      </p>
+      <BuilderActionBar
+        desktop={
+          <>
+            <p className="text-sm text-slate-600" aria-live="polite">
+              {validation.isValid
+                ? "Content is valid. Continue to QR design."
+                : "Complete the required fields to continue."}
+            </p>
+            <Button
+              variant="primary"
+              onClick={onContinue}
+              disabled={!validation.isValid}
+              rightIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
+            >
+              Continue to design
+            </Button>
+          </>
+        }
+        mobile={
+          <Button
+            variant="primary"
+            onClick={onContinue}
+            disabled={!validation.isValid}
+            className="w-full"
+            rightIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
+          >
+            Continue to design
+          </Button>
+        }
+      />
     </div>
   );
 }
@@ -852,103 +1393,133 @@ function ContentFields({
 }
 
 function DesignStep({
+  headingRef,
   design,
   logoUrl,
-  warnings,
+  logoChoice,
+  logoChoices,
+  selectedPreset,
+  scanability,
   logoInputRef,
+  onPresetChange,
   onDesignChange,
+  onLogoChoiceChange,
   onLogoUpload,
   onRemoveLogo,
+  onResetDesign,
   onBack,
   onContinue,
 }: {
+  readonly headingRef: React.RefObject<HTMLHeadingElement | null>;
   readonly design: DesignState;
   readonly logoUrl: string;
-  readonly warnings: string[];
+  readonly logoChoice: LogoChoiceValue;
+  readonly logoChoices: readonly LogoChoiceOption[];
+  readonly selectedPreset: DesignPreset;
+  readonly scanability: ScanabilityResult;
   readonly logoInputRef: React.RefObject<HTMLInputElement | null>;
+  readonly onPresetChange: (preset: DesignPreset) => void;
   readonly onDesignChange: React.Dispatch<React.SetStateAction<DesignState>>;
+  readonly onLogoChoiceChange: (value: LogoChoiceValue) => void;
   readonly onLogoUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   readonly onRemoveLogo: () => void;
+  readonly onResetDesign: () => void;
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }) {
+  const shouldOpenAdvanced = scanability.state !== "ready";
+
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-950">
-          2. Design and guardrails
-        </h2>
-        <p className="mt-1 text-sm leading-6 text-slate-600">
-          Choose a visual style while preserving contrast, quiet zone, and logo
-          safety.
-        </p>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ColorInput
-          label="Foreground hex"
-          value={design.foregroundColor}
-          onChange={(value) =>
-            onDesignChange((previous) => ({
-              ...previous,
-              foregroundColor: normalizeHexDraft(value),
-            }))
-          }
-        />
-        <ColorInput
-          label="Background hex"
-          value={design.backgroundColor}
-          onChange={(value) =>
-            onDesignChange((previous) => ({
-              ...previous,
-              backgroundColor: normalizeHexDraft(value),
-            }))
-          }
-        />
-      </div>
-
-      <div className="space-y-2">
-        <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
-          <Palette className="h-4 w-4" aria-hidden="true" />
-          Foreground presets
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {colorPresets.map((preset) => (
-            <ColorSwatch
-              key={preset.value}
-              color={preset.value}
-              label={`Use ${preset.name} foreground`}
-              isSelected={design.foregroundColor.toLowerCase() === preset.value}
-              onClick={() =>
-                onDesignChange((previous) => ({
-                  ...previous,
-                  foregroundColor: preset.value.toUpperCase(),
-                }))
-              }
-            />
-          ))}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2
+            id="qr-step-design-heading"
+            ref={headingRef}
+            tabIndex={-1}
+            className="scroll-mt-28 text-lg font-semibold text-slate-950 focus:outline-none"
+          >
+            2. Design and guardrails
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Start with a safe preset, then refine only what matters.
+          </p>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onResetDesign}
+          className="self-start"
+        >
+          Reset design
+        </Button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SegmentedControl
-          value={design.dotStyle}
-          options={dotStyleOptions}
-          onChange={(value) =>
-            onDesignChange((previous) => ({ ...previous, dotStyle: value }))
-          }
-          label="Dot style"
-          columns={3}
-        />
-        <SegmentedControl
-          value={design.cornerStyle}
-          options={cornerStyleOptions}
-          onChange={(value) =>
-            onDesignChange((previous) => ({ ...previous, cornerStyle: value }))
-          }
-          label="Corner style"
-          columns={3}
-        />
+      <ChoiceRail
+        value={selectedPreset}
+        options={designPresetOptions}
+        onChange={onPresetChange}
+        label="Template preset"
+        size="md"
+        desktopColumns={3}
+        getDescription={(option) => (
+          <>
+            <span className="font-medium text-slate-800">
+              {option.label}:
+            </span>{" "}
+            {option.description}
+          </>
+        )}
+      />
+
+      <div className="space-y-3">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ColorInput
+            label="Foreground hex"
+            value={design.foregroundColor}
+            onChange={(value) =>
+              onDesignChange((previous) => ({
+                ...previous,
+                foregroundColor: normalizeHexDraft(value),
+              }))
+            }
+          />
+          <ColorInput
+            label="Background hex"
+            value={design.backgroundColor}
+            onChange={(value) =>
+              onDesignChange((previous) => ({
+                ...previous,
+                backgroundColor: normalizeHexDraft(value),
+              }))
+            }
+          />
+        </div>
+
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
+            <Palette className="h-4 w-4" aria-hidden="true" />
+            Foreground presets
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {colorPresets.map((preset) => (
+              <ColorSwatch
+                key={preset.value}
+                color={preset.value}
+                label={`Use ${preset.name} foreground`}
+                isSelected={
+                  design.foregroundColor.toLowerCase() === preset.value
+                }
+                onClick={() =>
+                  onDesignChange((previous) => ({
+                    ...previous,
+                    foregroundColor: preset.value.toUpperCase(),
+                  }))
+                }
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
       <FramePicker
@@ -958,73 +1529,6 @@ function DesignStep({
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Slider
-          label="Quiet zone"
-          valueLabel={String(design.margin)}
-          min={0}
-          max={16}
-          value={design.margin}
-          minLabel="0"
-          maxLabel="16"
-          onChange={(event) =>
-            onDesignChange((previous) => ({
-              ...previous,
-              margin: Number(event.target.value),
-            }))
-          }
-        />
-        <Slider
-          label="Logo size"
-          valueLabel={`${Math.round(design.logoSizeRatio * 100)}%`}
-          min={0}
-          max={35}
-          value={Math.round(design.logoSizeRatio * 100)}
-          minLabel="0%"
-          maxLabel="35%"
-          onChange={(event) =>
-            onDesignChange((previous) => ({
-              ...previous,
-              logoSizeRatio: Number(event.target.value) / 100,
-            }))
-          }
-        />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Select
-          label="Error correction"
-          value={design.errorCorrectionLevel}
-          onChange={(event) =>
-            onDesignChange((previous) => ({
-              ...previous,
-              errorCorrectionLevel: event.target.value as ErrorCorrectionLevel,
-            }))
-          }
-          hint="Use high correction when adding a logo."
-        >
-          <option value="L">Low - smallest code</option>
-          <option value="M">Medium</option>
-          <option value="Q">Quartile - recommended</option>
-          <option value="H">High - best for logos</option>
-        </Select>
-        <Select
-          label="Export size"
-          value={String(design.size)}
-          onChange={(event) =>
-            onDesignChange((previous) => ({
-              ...previous,
-              size: Number(event.target.value),
-            }))
-          }
-          hint="PNG and PDF exports use this source size."
-        >
-          <option value="512">512 x 512</option>
-          <option value="1024">1024 x 1024</option>
-          <option value="2048">2048 x 2048</option>
-        </Select>
-      </div>
-
       <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
         <FileUpload
           id="qr-logo-upload"
@@ -1032,7 +1536,7 @@ function DesignStep({
           label="Logo"
           accept="image/*"
           onChange={onLogoUpload}
-          hint="Square PNG or SVG logos work best."
+          hint="Upload a square PNG or SVG, or choose a preset icon below."
         />
         <Button
           variant="secondary"
@@ -1044,42 +1548,255 @@ function DesignStep({
         </Button>
       </div>
 
-      <div className="space-y-2" aria-live="polite">
-        {warnings.length > 0 ? (
-          warnings.map((warning) => (
-            <Alert key={warning} variant="warning" icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}>
-              {warning}
-            </Alert>
-          ))
-        ) : (
-          <Alert variant="success" icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}>
-            No scanability warnings detected for the current design.
-          </Alert>
+      <ChoiceRail
+        value={logoChoice}
+        options={logoChoices}
+        onChange={onLogoChoiceChange}
+        label="Logo icon"
+        size="icon"
+        desktopColumns={4}
+        renderPreview={(option) => <LogoChoicePreview option={option} />}
+        getDescription={(option) => (
+          <>
+            <span className="font-medium text-slate-800">
+              {option.label}:
+            </span>{" "}
+            {option.description}
+          </>
         )}
-      </div>
+      />
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-        <Button variant="secondary" onClick={onBack}>
-          Back to content
-        </Button>
-        <Button
-          variant="primary"
-          onClick={onContinue}
-          rightIcon={<FileDown className="h-4 w-4" aria-hidden="true" />}
-        >
-          Continue to export
-        </Button>
-      </div>
+      <ScanabilityMeter scanability={scanability} />
+
+      <DisclosureSection
+        title="Advanced design controls"
+        description="Dots, corners, quiet zone, correction, and export source size."
+        defaultOpen={shouldOpenAdvanced}
+      >
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChoiceRail
+              value={design.dotStyle}
+              options={dotStyleOptions}
+              onChange={(value) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  dotStyle: value,
+                }))
+              }
+              label="Dot style"
+              size="sm"
+              desktopColumns={3}
+            />
+            <ChoiceRail
+              value={design.cornerStyle}
+              options={cornerStyleOptions}
+              onChange={(value) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  cornerStyle: value,
+                }))
+              }
+              label="Corner style"
+              size="sm"
+              desktopColumns={3}
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Slider
+              label="Quiet zone"
+              valueLabel={String(design.margin)}
+              min={0}
+              max={16}
+              value={design.margin}
+              minLabel="0"
+              maxLabel="16"
+              onChange={(event) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  margin: Number(event.target.value),
+                }))
+              }
+            />
+            <Slider
+              label="Logo size"
+              valueLabel={`${Math.round(design.logoSizeRatio * 100)}%`}
+              min={0}
+              max={35}
+              value={Math.round(design.logoSizeRatio * 100)}
+              minLabel="0%"
+              maxLabel="35%"
+              onChange={(event) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  logoSizeRatio: Number(event.target.value) / 100,
+                }))
+              }
+            />
+            <Select
+              label="Error correction"
+              value={design.errorCorrectionLevel}
+              onChange={(event) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  errorCorrectionLevel:
+                    event.target.value as ErrorCorrectionLevel,
+                }))
+              }
+              hint="Use high correction when adding a logo."
+            >
+              <option value="L">Low - smallest code</option>
+              <option value="M">Medium</option>
+              <option value="Q">Quartile - recommended</option>
+              <option value="H">High - best for logos</option>
+            </Select>
+            <Select
+              label="Export size"
+              value={String(design.size)}
+              onChange={(event) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  size: Number(event.target.value),
+                }))
+              }
+              hint="PNG and PDF exports use this source size."
+            >
+              <option value="512">512 x 512</option>
+              <option value="1024">1024 x 1024</option>
+              <option value="2048">2048 x 2048</option>
+            </Select>
+          </div>
+        </div>
+      </DisclosureSection>
+
+      <BuilderActionBar
+        desktop={
+          <>
+            <Button variant="secondary" onClick={onBack}>
+              Back to content
+            </Button>
+            <Button
+              variant="primary"
+              onClick={onContinue}
+              rightIcon={<FileDown className="h-4 w-4" aria-hidden="true" />}
+            >
+              Continue to export
+            </Button>
+          </>
+        }
+        desktopClassName="sm:justify-between"
+        mobile={
+          <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+            <Button variant="secondary" onClick={onBack} className="w-full">
+              Back
+            </Button>
+            <Button
+              variant="primary"
+              onClick={onContinue}
+              className="w-full"
+              rightIcon={<FileDown className="h-4 w-4" aria-hidden="true" />}
+            >
+              Continue
+            </Button>
+          </div>
+        }
+      />
     </div>
   );
 }
 
+function LogoChoicePreview({
+  option,
+}: {
+  readonly option: LogoChoiceOption;
+}) {
+  const Icon = option.icon;
+  const isNone = option.value === "none";
+
+  return (
+    <span
+      className={[
+        "mx-auto flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm",
+        isNone
+          ? "border-slate-200 bg-white text-slate-600"
+          : "border-transparent text-white",
+      ].join(" ")}
+      style={isNone ? undefined : { backgroundColor: option.color }}
+      aria-hidden="true"
+    >
+      <Icon className="h-5 w-5" />
+    </span>
+  );
+}
+
+function ScanabilityMeter({
+  scanability,
+}: {
+  readonly scanability: ScanabilityResult;
+}) {
+  const isReady = scanability.state === "ready";
+  const icon = isReady ? (
+    <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+  ) : (
+    <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+  );
+
+  return (
+    <section
+      aria-live="polite"
+      aria-label="Scanability meter"
+      className={`rounded-xl border p-4 ${getScanabilityPanelClassName(
+        scanability.state
+      )}`}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <span
+            className={`mt-0.5 shrink-0 ${getScanabilityIconClassName(
+              scanability.state
+            )}`}
+          >
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-950">
+              {scanability.label}
+            </p>
+            <p className="mt-1 text-sm leading-5 text-slate-700">
+              {scanability.description}
+            </p>
+          </div>
+        </div>
+        <Badge
+          variant={getScanabilityBadgeVariant(scanability.state)}
+          className="self-start"
+        >
+          {scanability.label}
+        </Badge>
+      </div>
+      {scanability.reasons.length > 0 && (
+        <ul className="mt-3 space-y-1.5 text-sm leading-5 text-slate-700">
+          {scanability.reasons.map((reason) => (
+            <li key={reason} className="flex gap-2">
+              <span aria-hidden="true">-</span>
+              <span>{reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function ExportStep({
+  headingRef,
   mode,
   type,
   form,
   payload,
   design,
+  scanability,
   isReady,
   copied,
   publishStatus,
@@ -1092,11 +1809,13 @@ function ExportStep({
   onDownloadPdf,
   onPublishDynamic,
 }: {
+  readonly headingRef: React.RefObject<HTMLHeadingElement | null>;
   readonly mode: QRMode;
   readonly type: QRType;
   readonly form: FormState;
   readonly payload: PayloadResult | null;
   readonly design: DesignState;
+  readonly scanability: ScanabilityResult;
   readonly isReady: boolean;
   readonly copied: boolean;
   readonly publishStatus: string | null;
@@ -1109,38 +1828,58 @@ function ExportStep({
   readonly onDownloadPdf: () => void;
   readonly onPublishDynamic: () => void;
 }) {
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const selectedExport =
+    exportFormatOptions.find((option) => option.value === exportFormat) ??
+    exportFormatOptions[0];
+  const handleDownloadSelected = () => {
+    if (exportFormat === "png") {
+      onDownloadPng();
+      return;
+    }
+
+    if (exportFormat === "svg") {
+      onDownloadSvg();
+      return;
+    }
+
+    onDownloadPdf();
+  };
+
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-slate-950">
+        <h2
+          id="qr-step-export-heading"
+          ref={headingRef}
+          tabIndex={-1}
+          className="scroll-mt-28 text-lg font-semibold text-slate-950 focus:outline-none"
+        >
           3. Export and publish
         </h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          Download a static artifact, or publish a dynamic QR redirect if you
-          are signed in.
+          Download the QR or publish a dynamic redirect when signed in.
         </p>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
-        <ExportCard
-          title="PNG"
-          description={`${design.size} x ${design.size} raster image for print and social use.`}
-          onClick={onDownloadPng}
-          disabled={!isReady}
-        />
-        <ExportCard
-          title="SVG"
-          description="Vector QR for layouts, signs, and design tools."
-          onClick={onDownloadSvg}
-          disabled={!isReady}
-        />
-        <ExportCard
-          title="PDF"
-          description="A4 PDF sheet with the QR code embedded."
-          onClick={onDownloadPdf}
-          disabled={!isReady}
-        />
-      </div>
+      <ChoiceRail
+        value={exportFormat}
+        options={exportFormatOptions}
+        onChange={setExportFormat}
+        label="Export format"
+        size="md"
+        desktopColumns={3}
+        getDescription={(option) => (
+          <>
+            <span className="font-medium text-slate-800">
+              {option.label}:
+            </span>{" "}
+            {option.value === "png"
+              ? `${design.size} x ${design.size} ${option.description.toLowerCase()}`
+              : option.description}
+          </>
+        )}
+      />
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -1173,6 +1912,7 @@ function ExportStep({
             <Button
               variant="primary"
               onClick={onPublishDynamic}
+              disabled={scanability.blocksPublish}
               isLoading={isPublishing}
               leftIcon={<Rocket className="h-4 w-4" aria-hidden="true" />}
             >
@@ -1188,42 +1928,49 @@ function ExportStep({
           {form.slug || "required"}
         </Alert>
       )}
+      {mode === "dynamic" && scanability.blocksPublish && (
+        <Alert variant="danger" title="Publish blocked">
+          Resolve blocked scanability issues before publishing this dynamic QR.
+        </Alert>
+      )}
       {publishStatus && <Alert variant="success">{publishStatus}</Alert>}
       {publishError && <Alert variant="danger">{publishError}</Alert>}
 
-      <Button variant="secondary" onClick={onBack}>
-        Back to design
-      </Button>
+      <BuilderActionBar
+        desktop={
+          <>
+            <Button variant="secondary" onClick={onBack}>
+              Back to design
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleDownloadSelected}
+              disabled={!isReady}
+              leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
+            >
+              Download {selectedExport.label}
+            </Button>
+          </>
+        }
+        desktopClassName="sm:justify-between"
+        mobile={
+          <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+            <Button variant="secondary" onClick={onBack} className="w-full">
+              Back
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleDownloadSelected}
+              disabled={!isReady}
+              className="w-full"
+              leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
+            >
+              Download {selectedExport.label}
+            </Button>
+          </div>
+        }
+      />
     </div>
-  );
-}
-
-function ExportCard({
-  title,
-  description,
-  disabled,
-  onClick,
-}: {
-  readonly title: string;
-  readonly description: string;
-  readonly disabled: boolean;
-  readonly onClick: () => void;
-}) {
-  return (
-    <Button
-      variant="secondary"
-      onClick={onClick}
-      disabled={disabled}
-      className="h-full justify-start p-4 text-left"
-      leftIcon={<Download className="h-5 w-5" aria-hidden="true" />}
-    >
-      <span>
-        <span className="block text-sm font-semibold">{title}</span>
-        <span className="mt-1 block text-xs font-normal leading-5 text-slate-600">
-          {description}
-        </span>
-      </span>
-    </Button>
   );
 }
 
@@ -1235,70 +1982,44 @@ function FramePicker({
   readonly onChange: (value: FrameStyle) => void;
 }) {
   return (
-    <fieldset className="space-y-4">
-      <legend className="text-sm font-semibold text-slate-900">
-        QR frame
-      </legend>
-      <p className="max-w-xl text-xs leading-5 text-slate-600">
-        Frames sit outside the quiet zone and add a clear scan cue without
-        covering the QR modules.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {frameOptions.map((option) => {
-          const isSelected = value === option.value;
+    <ChoiceRail
+      value={value}
+      options={frameOptions.map((option) => ({
+        value: option.value,
+        label: option.label,
+        ariaLabel: `Select ${option.label} frame`,
+      }))}
+      onChange={onChange}
+      label="QR frame"
+      size="lg"
+      desktopColumns={3}
+      data-testid="frame-picker"
+      railTestId="frame-picker-rail"
+      renderPreview={(option) => (
+        <FrameThumbnail frameStyle={option.value as FrameStyle} />
+      )}
+      getDescription={(option) => {
+        const frameOption = frameOptions.find(
+          (item) => item.value === option.value
+        );
 
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              aria-pressed={isSelected}
-              aria-label={`Select ${option.label} frame`}
-              className={[
-                "group relative flex min-h-64 flex-col rounded-xl border p-3 text-left shadow-sm transition-colors",
-                isSelected
-                  ? "border-sky-500 bg-sky-50 text-sky-950 ring-2 ring-sky-100"
-                  : "border-slate-200 bg-white text-slate-800 hover:border-sky-300 hover:bg-sky-50/60",
-              ].join(" ")}
-            >
-              <span className="flex items-start justify-between gap-3">
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">
-                    {option.label}
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-slate-600">
-                    {option.description}
-                  </span>
-                </span>
-                <span
-                  className={[
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
-                    isSelected
-                      ? "border-sky-700 bg-sky-700 text-white"
-                      : "border-slate-200 bg-white text-transparent group-hover:border-sky-300",
-                  ].join(" ")}
-                  aria-hidden="true"
-                >
-                  <Check className="h-3.5 w-3.5" />
-                </span>
-              </span>
-              <span className="mt-3 block text-[11px] font-medium uppercase text-slate-500">
-                {option.bestFor}
-              </span>
-              <span className="mt-3 block grow">
-                <FrameThumbnail frameStyle={option.value} />
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </fieldset>
+        return (
+          <>
+            <span className="font-medium text-slate-800">
+              {frameOption?.label ?? option.label}:
+            </span>{" "}
+            {frameOption?.description} Best for{" "}
+            {frameOption?.bestFor.toLowerCase()}.
+          </>
+        );
+      }}
+    />
   );
 }
 
 function FrameThumbnail({ frameStyle }: { readonly frameStyle: FrameStyle }) {
   return (
-    <div className="flex h-full min-h-32 items-center justify-center rounded-lg border border-slate-100 bg-slate-50 p-3">
+    <div className="flex h-28 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50 p-2 sm:h-32 sm:p-3">
       <QRFrame frameStyle={frameStyle} title="Scan me" isThumbnail>
         <MiniQRCode />
       </QRFrame>
@@ -1371,8 +2092,8 @@ function QRFrame({
         <p
           className={
             isThumbnail
-              ? "mt-1 bg-sky-700 px-2 py-1 text-[8px] font-bold uppercase text-white"
-              : "mt-4 bg-sky-700 px-4 py-2 text-xs font-bold uppercase tracking-normal text-white"
+              ? "mt-1 bg-sky-700 px-2 py-1 text-[8px] font-bold uppercase !text-white"
+              : "mt-4 bg-sky-700 px-4 py-2 text-xs font-bold uppercase tracking-normal !text-white"
           }
         >
           SCAN ME
@@ -1456,8 +2177,8 @@ function QRFrame({
           title={safeTitle}
           className={
             isThumbnail
-              ? "truncate px-3 pb-2 text-[8px] font-bold text-white"
-              : "truncate px-5 pb-4 text-sm font-bold text-white"
+              ? "truncate px-3 pb-2 text-[8px] font-bold !text-white"
+              : "truncate px-5 pb-4 text-sm font-bold !text-white"
           }
         >
           {displayTitle}
@@ -1647,40 +2368,142 @@ function buildPayload({
   }
 }
 
-function getDesignWarnings({
+function getScanability({
   design,
   hasLogo,
 }: {
   readonly design: DesignState;
   readonly hasLogo: boolean;
-}): string[] {
-  const warnings: string[] = [];
+}): ScanabilityResult {
+  const reasons: string[] = [];
+  let isBlocked = false;
+  const hasValidColors =
+    isValidHexColor(design.foregroundColor) &&
+    isValidHexColor(design.backgroundColor);
 
-  if (!isValidHexColor(design.foregroundColor) || !isValidHexColor(design.backgroundColor)) {
-    warnings.push("Use valid 6-digit hex colors before exporting.");
-  }
-
-  if (getContrastRatio(design.foregroundColor, design.backgroundColor) < 4.5) {
-    warnings.push(
-      "Foreground and background colors may not have enough contrast for reliable scanning."
+  if (!hasValidColors) {
+    isBlocked = true;
+    reasons.push("Enter valid 6-digit foreground and background hex colors.");
+  } else {
+    const contrastRatio = getContrastRatio(
+      design.foregroundColor,
+      design.backgroundColor
     );
+
+    if (contrastRatio < 2) {
+      isBlocked = true;
+      reasons.push(
+        "Increase foreground and background contrast before publishing."
+      );
+    } else if (contrastRatio < 3) {
+      reasons.push(
+        "Increase color contrast for more reliable scanning in low light."
+      );
+    }
   }
 
-  if (design.margin < 4) {
-    warnings.push(
-      "Quiet zone is smaller than recommended. Use margin 4 or higher."
-    );
+  if (design.margin < 2) {
+    isBlocked = true;
+    reasons.push("Increase the quiet zone to at least 4 modules.");
+  } else if (design.margin < 4) {
+    reasons.push("Quiet zone is small. Use margin 4 or higher.");
   }
 
-  if (hasLogo && design.logoSizeRatio > 0.2) {
-    warnings.push("Logo size is above 20% and may cover required QR modules.");
+  if (hasLogo && design.logoSizeRatio > 0.3) {
+    isBlocked = true;
+    reasons.push("Reduce logo size below 30% so it does not cover QR modules.");
+  } else if (hasLogo && design.logoSizeRatio > 0.2) {
+    reasons.push("Logo size is above 20% and may cover required QR modules.");
   }
 
   if (hasLogo && design.errorCorrectionLevel !== "H") {
-    warnings.push("Use high error correction when adding a logo.");
+    reasons.push("Use high error correction when adding a logo.");
   }
 
-  return warnings;
+  if (isBlocked) {
+    return {
+      state: "blocked",
+      label: "Blocked for publish",
+      description: "Resolve the required scanability fixes before publishing.",
+      reasons,
+      blocksPublish: true,
+    };
+  }
+
+  if (reasons.length > 0) {
+    return {
+      state: "needs-attention",
+      label: "Needs attention",
+      description: "The QR can be exported, but these settings should be fixed.",
+      reasons,
+      blocksPublish: false,
+    };
+  }
+
+  return {
+    state: "ready",
+    label: "Ready",
+    description: "Design passes current scanability checks.",
+    reasons,
+    blocksPublish: false,
+  };
+}
+
+function getScanabilityBadgeVariant(
+  state: ScanabilityState
+): "success" | "warning" | "danger" {
+  if (state === "blocked") return "danger";
+  if (state === "needs-attention") return "warning";
+
+  return "success";
+}
+
+function getScanabilityPanelClassName(state: ScanabilityState): string {
+  if (state === "blocked") return "border-rose-200 bg-rose-50";
+  if (state === "needs-attention") return "border-amber-200 bg-amber-50";
+
+  return "border-emerald-200 bg-emerald-50";
+}
+
+function getScanabilityIconClassName(state: ScanabilityState): string {
+  if (state === "blocked") return "text-rose-700";
+  if (state === "needs-attention") return "text-amber-700";
+
+  return "text-emerald-700";
+}
+
+function getLogoChoiceOptions(
+  type: QRType,
+  currentChoice: LogoChoiceValue
+): readonly LogoChoiceOption[] {
+  const options = logoPresetOptions.filter(
+    (option) => !option.qrTypes || option.qrTypes.includes(type)
+  );
+  const currentPreset = logoPresetOptions.find(
+    (option) => option.value === currentChoice
+  );
+  const shouldIncludeCurrentPreset =
+    currentPreset && !options.some((option) => option.value === currentChoice);
+
+  return [
+    noLogoChoice,
+    ...(currentChoice === "upload" ? [uploadedLogoChoice] : []),
+    ...options,
+    ...(shouldIncludeCurrentPreset ? [currentPreset] : []),
+  ];
+}
+
+function createLogoPresetDataUrl(option: LogoChoiceOption): string {
+  const safeText = option.initials.replace(/[<>&]/g, "");
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
+    `<rect width="128" height="128" rx="28" fill="${option.color}"/>`,
+    `<circle cx="64" cy="64" r="44" fill="rgba(255,255,255,0.12)"/>`,
+    `<text x="64" y="72" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${safeText.length > 2 ? 26 : 34}" font-weight="700" fill="#FFFFFF">${safeText}</text>`,
+    `</svg>`,
+  ].join("");
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function getApiDesign(design: DesignState, hasLogo: boolean) {
