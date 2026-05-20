@@ -255,3 +255,77 @@ model AuditLog {
   @@index([workspaceId, entityType, entityId, createdAt])
   @@index([actorUserId, createdAt])
 }
+
+model AdminUser {
+  id                String             @id @default(cuid())
+  name              String
+  email             String             @unique
+  passwordHash      String
+  role              String
+  status            String             @default("active")
+  lastLoginAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  disabledAt        DateTime?
+  sessions          AdminSession[]
+  authEvents        AdminAuthEvent[]
+  platformAuditLogs PlatformAuditLog[] @relation("PlatformAuditActor")
+
+  @@index([role, status])
+  @@index([status, createdAt])
+}
+
+model AdminSession {
+  id               String    @id @default(cuid())
+  adminUserId      String
+  sessionTokenHash String    @unique
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  lastSeenAt       DateTime  @default(now())
+  revokedAt        DateTime?
+  ipHash           String?
+  userAgentHash    String?
+  adminUser        AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId, revokedAt, expiresAt])
+  @@index([expiresAt])
+}
+
+model AdminAuthEvent {
+  id            String     @id @default(cuid())
+  adminUserId   String?
+  email         String
+  event         String
+  outcome       String
+  reason        String?
+  requestId     String
+  ipHash        String?
+  userAgentHash String?
+  createdAt     DateTime   @default(now())
+  adminUser     AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@index([adminUserId, createdAt])
+  @@index([event, outcome, createdAt])
+  @@index([requestId])
+}
+
+model PlatformAuditLog {
+  id               String     @id @default(cuid())
+  actorAdminUserId String?
+  action           String
+  entityType       String
+  entityId         String?
+  requestId        String?
+  metadata         Json?
+  ipHash           String?
+  userAgentHash    String?
+  createdAt        DateTime   @default(now())
+  actor            AdminUser? @relation("PlatformAuditActor", fields: [actorAdminUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorAdminUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+  @@index([requestId])
+  @@index([createdAt])
+}
