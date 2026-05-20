@@ -230,7 +230,7 @@ const thumbnailQrActiveCells = new Set([
 
 const initialFormState: FormState = {
   title: "Decode QR Code",
-  url: "https://decode.local/",
+  url: "https://decode.com.ng",
   text: "Decode makes QR workflows safer and more useful.",
   email: "",
   emailSubject: "",
@@ -307,7 +307,7 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
     [design, logoUrl]
   );
   const stepIndex = ["content", "design", "export"].indexOf(currentStep);
-  const previewValue = payload?.value || "https://decode.local/";
+  const previewValue = payload?.value || "https://decode.com.ng";
 
   const {
     ref: qrRef,
@@ -1274,7 +1274,7 @@ function FramePicker({
                   className={[
                     "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
                     isSelected
-                      ? "border-sky-600 bg-sky-600 text-white"
+                      ? "border-sky-700 bg-sky-700 text-white"
                       : "border-slate-200 bg-white text-transparent group-hover:border-sky-300",
                   ].join(" ")}
                   aria-hidden="true"
@@ -1363,7 +1363,7 @@ function QRFrame({
   if (frameStyle === "scan-me") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto overflow-hidden rounded-[22px] border-2 border-sky-600 bg-white text-center shadow-sm`}
+        className={`${frameWidthClass} mx-auto overflow-hidden rounded-[22px] border-2 border-sky-700 bg-white text-center shadow-sm`}
       >
         <div className={isThumbnail ? "px-3 pt-2" : "px-5 pt-5"}>
           <div className={qrSlotClass}>{children}</div>
@@ -1371,8 +1371,8 @@ function QRFrame({
         <p
           className={
             isThumbnail
-              ? "mt-1 bg-sky-600 px-2 py-1 text-[8px] font-bold uppercase text-white"
-              : "mt-4 bg-sky-600 px-4 py-2 text-xs font-bold uppercase tracking-normal text-white"
+              ? "mt-1 bg-sky-700 px-2 py-1 text-[8px] font-bold uppercase text-white"
+              : "mt-4 bg-sky-700 px-4 py-2 text-xs font-bold uppercase tracking-normal text-white"
           }
         >
           SCAN ME

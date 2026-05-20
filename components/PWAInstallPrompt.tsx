@@ -125,7 +125,7 @@ export function PWAInstallPrompt() {
           {!isIOS && (
             <button
               onClick={handleInstall}
-              className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-sky-600 py-3 font-semibold text-white transition-colors hover:bg-sky-700"
+              className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-sky-700 py-3 font-semibold text-white transition-colors hover:bg-sky-800"
             >
               <Download className="w-5 h-5" />
               Install App

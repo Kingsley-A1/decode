@@ -37,7 +37,7 @@ export function Stepper({ steps, currentStep }: StepperProps) {
                   isComplete
                     ? "bg-emerald-600 text-white"
                     : isCurrent
-                      ? "bg-sky-600 text-white"
+                      ? "bg-sky-700 text-white"
                       : "bg-slate-100 text-slate-600"
                 )}
               >

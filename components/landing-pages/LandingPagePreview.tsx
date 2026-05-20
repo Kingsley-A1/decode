@@ -416,7 +416,7 @@ function PreviewLinks({
         <a
           key={link.id}
           href={link.url}
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-sky-600/20 transition-colors hover:bg-sky-700"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-sky-700/20 transition-colors hover:bg-sky-800"
         >
           <Link2 className="h-4 w-4" aria-hidden="true" />
           {link.label}
@@ -497,4 +497,3 @@ function DocumentPanel({
     </div>
   );
 }
-

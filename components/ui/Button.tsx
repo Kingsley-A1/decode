@@ -12,7 +12,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   primary:
-    "border-sky-600 bg-sky-600 text-white shadow-sm shadow-sky-600/20 hover:bg-sky-700 hover:border-sky-700",
+    "border-sky-700 bg-sky-700 text-white shadow-sm shadow-sky-700/20 hover:bg-sky-800 hover:border-sky-800",
   secondary:
     "border-slate-200 bg-white text-slate-800 shadow-sm hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900",
   ghost:

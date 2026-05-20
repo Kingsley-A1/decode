@@ -103,7 +103,7 @@ export function NavBar() {
         <div className="flex min-w-0 items-center justify-end gap-2 xl:min-w-44">
           <Link
             href="/generate"
-            className="hidden min-h-11 items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-sky-600/20 transition-colors hover:bg-sky-700 sm:inline-flex"
+            className="hidden min-h-11 items-center gap-2 rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-sky-700/20 transition-colors hover:bg-sky-800 sm:inline-flex"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             New QR
@@ -182,7 +182,7 @@ export function NavBar() {
               <Link
                 href="/generate"
                 onClick={() => setIsMenuOpen(false)}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-sky-600/20 transition-colors hover:bg-sky-700"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-sky-700/20 transition-colors hover:bg-sky-800"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Create new QR

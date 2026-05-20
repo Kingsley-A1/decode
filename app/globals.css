@@ -181,6 +181,8 @@ textarea::placeholder {
 .dark .text-white[class*="from-orange"],
 .light .text-white[class*="bg-orange-500"],
 .dark .text-white[class*="bg-orange-500"],
+.light .text-white[class*="bg-sky-"],
+.dark .text-white[class*="bg-sky-"],
 .light .text-white[class*="bg-blue-"],
 .dark .text-white[class*="bg-blue-"],
 .light .text-white[class*="bg-green-"],
