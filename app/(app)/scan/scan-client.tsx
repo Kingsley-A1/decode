@@ -7,7 +7,9 @@ const QRScanner = dynamic(
   () => import("@/components/QRScanner").then((module) => module.QRScanner),
   {
     ssr: false,
-    loading: () => <Loading label="Loading scanner" />,
+    loading: () => (
+      <Loading label="Loading scanner" className="min-h-[560px]" />
+    ),
   }
 );
 

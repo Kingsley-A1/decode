@@ -2,10 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import { AppShell } from "@/components/AppShell";
-import { ThemeProvider } from "@/context/ThemeContext";
-import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
-import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 
 const appUrl =
   process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000";
@@ -87,11 +83,7 @@ export default function RootLayout({
       <body
         className="min-h-screen bg-[var(--background)] text-[var(--foreground)] antialiased"
       >
-        <ThemeProvider>
-          <AppShell>{children}</AppShell>
-          <PWAInstallPrompt />
-          <ServiceWorkerRegistration />
-        </ThemeProvider>
+        {children}
         <Analytics />
         <SpeedInsights />
       </body>
