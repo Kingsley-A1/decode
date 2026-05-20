@@ -4,7 +4,14 @@ const baseUrl = `http://127.0.0.1:${port}`;
 module.exports = {
   ci: {
     collect: {
-      url: [`${baseUrl}/`, `${baseUrl}/documentation`, `${baseUrl}/about`],
+      url: [
+        `${baseUrl}/generate`,
+        `${baseUrl}/scan`,
+        `${baseUrl}/verify`,
+        `${baseUrl}/decode`,
+        `${baseUrl}/dashboard`,
+        `${baseUrl}/landing-pages`,
+      ],
       startServerCommand: `npm run start -- --hostname 127.0.0.1 --port ${port}`,
       startServerReadyPattern: "Ready",
       numberOfRuns: 1,
