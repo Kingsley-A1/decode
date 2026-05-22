@@ -91,8 +91,12 @@ function getLinkCheckRecord(now: Date): LinkCheckRecord {
     id: "link_check_123",
     normalizedUrl: "https://example.com/",
     verdict: LINK_VERDICT.SAFE,
-    confidence: 90,
+    // The wire confidence is re-derived from evidence on read, so the
+    // value persisted in this column is informational only.
+    confidence: 40,
     reasons: [],
+    evidence: [],
+    probeSummary: null,
     checkedAt: now,
     expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
   };

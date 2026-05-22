@@ -4,10 +4,10 @@ import {
   BookOpen,
   CheckCircle2,
   ExternalLink,
+  Link2,
   Mail,
   MessageCircle,
   Phone,
-  ShieldCheck,
 } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { Badge } from "@/components/ui";
@@ -44,10 +44,10 @@ const supportPaths = [
     icon: BookOpen,
   },
   {
-    title: "Check a suspicious link",
-    description: "Verify URLs before opening or sharing QR destinations.",
-    href: "/verify",
-    icon: ShieldCheck,
+    title: "Links",
+    description: "Link safety workflows are being rebuilt for public use.",
+    href: "/links",
+    icon: Link2,
   },
 ] as const;
 

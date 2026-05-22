@@ -4,6 +4,15 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  async redirects() {
+    return [
+      {
+        source: "/verify",
+        destination: "/links",
+        permanent: false,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

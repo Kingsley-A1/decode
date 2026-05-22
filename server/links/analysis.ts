@@ -1,31 +1,52 @@
-import { isIP } from "node:net";
+import {
+  isIpLiteral,
+  isLocalhost,
+  isPrivateOrReservedIp,
+  stripIpv6Brackets,
+} from "@/server/net/ipPolicy";
 import {
   LINK_REASON_CODE,
-  LINK_VERDICT,
   type LinkReasonCode,
-  type LinkVerdict,
 } from "@/server/links/constants";
+import {
+  type Evidence,
+  type EvidenceDataValue,
+  type EvidenceSeverity,
+  type VerificationVerdict,
+} from "@/server/links/evidence";
+import { scoreEvidence } from "@/server/links/score";
 
-export interface LinkReason {
-  readonly code: LinkReasonCode;
-  readonly message: string;
-  readonly severity: "low" | "medium" | "high";
-}
+// Phase B refactor: the analyzer now emits Evidence and consults
+// scoreEvidence for the verdict + confidence. The shape that was visible
+// to API consumers (verdict / confidence / normalizedUrl / host / reasons)
+// stays the same on the wire — service.ts projects `reasons` from the
+// canonical `evidence` list before responding. The flat-90% rule that
+// made every SAFE verdict claim the same confidence is gone: a heuristic-
+// only SAFE now reports the low confidence that matches its evidence.
 
 export interface LinkAnalysisResult {
-  readonly verdict: LinkVerdict;
+  readonly verdict: VerificationVerdict;
   readonly confidence: number;
   readonly normalizedUrl: string | null;
   readonly host: string | null;
-  readonly reasons: readonly LinkReason[];
-  readonly ssrfProtected: true;
+  readonly evidence: readonly Evidence[];
+  /** True iff a network probe ran under SSRF protection. Phase B always
+   *  returns false because no probe runs yet. The flag is no longer a
+   *  hard-coded marketing claim — it tracks what the verifier actually did. */
+  readonly ssrfProtected: boolean;
+}
+
+export interface LegacyReason {
+  readonly code: LinkReasonCode;
+  readonly message: string;
+  readonly severity: "low" | "medium" | "high";
 }
 
 interface LinkNormalizationResult {
   readonly url: URL | null;
   readonly normalizedUrl: string | null;
   readonly host: string | null;
-  readonly reasons: readonly LinkReason[];
+  readonly evidence: readonly Evidence[];
 }
 
 const RISKY_TLDS = new Set([
@@ -62,43 +83,53 @@ const BRAND_LOOKALIKE_PATTERNS = [
 const SUSPICIOUS_CHARACTER_PATTERN = /[@<>"'\\]|\s{2,}/;
 const ENCODED_CONTROL_PATTERN = /%(?:00|0a|0d|1f|7f)/i;
 
-const HARD_BLOCK_REASON_CODES = new Set<LinkReasonCode>([
-  LINK_REASON_CODE.BRAND_SPOOF,
-  LINK_REASON_CODE.LOCALHOST_HOST,
-  LINK_REASON_CODE.MALFORMED_URL,
-  LINK_REASON_CODE.PRIVATE_NETWORK_HOST,
-  LINK_REASON_CODE.RAW_IP_HOST,
-  LINK_REASON_CODE.UNSUPPORTED_PROTOCOL,
-]);
-
 export function analyzeLink(input: string): LinkAnalysisResult {
-  const normalizedLink = normalizeLink(input);
+  const normalized = normalizeLink(input);
 
-  if (!normalizedLink.url) {
-    return getAnalysisResult({
-      normalizedUrl: normalizedLink.normalizedUrl,
-      host: normalizedLink.host,
-      reasons: normalizedLink.reasons,
+  const evidence = normalized.url
+    ? [
+        ...normalized.evidence,
+        ...getHostEvidence(normalized.url.hostname),
+        ...getPathEvidence(normalized.url),
+      ]
+    : normalized.evidence;
+
+  const scored = scoreEvidence(evidence);
+
+  return {
+    verdict: scored.verdict,
+    confidence: scored.confidence,
+    normalizedUrl: normalized.normalizedUrl,
+    host: normalized.host,
+    evidence,
+    ssrfProtected: false,
+  };
+}
+
+/** Projects the canonical Evidence array onto the legacy `LinkReason[]`
+ *  shape consumed by SuspiciousLinkChecker and the LinkCheck.reasons column.
+ *  Only heuristic-source items are surfaced; the new sources land in Phase E. */
+export function toLegacyReasons(
+  evidence: readonly Evidence[]
+): readonly LegacyReason[] {
+  const reasons: LegacyReason[] = [];
+  for (const entry of evidence) {
+    if (entry.source !== "heuristic") continue;
+    if (!isLegacyReasonCode(entry.code)) continue;
+    reasons.push({
+      code: entry.code,
+      message: entry.message,
+      severity: mapLegacySeverity(entry.severity),
     });
   }
 
-  const reasons = [
-    ...normalizedLink.reasons,
-    ...getHostReasons(normalizedLink.url.hostname),
-    ...getPathReasons(normalizedLink.url),
-  ];
-
-  return getAnalysisResult({
-    normalizedUrl: normalizedLink.normalizedUrl,
-    host: normalizedLink.host,
-    reasons,
-  });
+  return reasons;
 }
 
 export function normalizeLink(input: string): LinkNormalizationResult {
   const trimmedInput = input.trim();
   const candidate = getUrlCandidate(trimmedInput);
-  const reasons: LinkReason[] = [];
+  const evidence: Evidence[] = [];
 
   try {
     const url = new URL(candidate);
@@ -108,11 +139,12 @@ export function normalizeLink(input: string): LinkNormalizationResult {
         url: null,
         normalizedUrl: null,
         host: url.hostname.toLowerCase() || null,
-        reasons: [
-          getReason(
+        evidence: [
+          getHeuristicEvidence(
             LINK_REASON_CODE.UNSUPPORTED_PROTOCOL,
             "Only http and https URLs can be verified.",
-            "high"
+            "high",
+            { protocol: url.protocol }
           ),
         ],
       };
@@ -122,8 +154,8 @@ export function normalizeLink(input: string): LinkNormalizationResult {
     url.hostname = url.hostname.toLowerCase();
 
     if (url.username || url.password) {
-      reasons.push(
-        getReason(
+      evidence.push(
+        getHeuristicEvidence(
           LINK_REASON_CODE.URL_CREDENTIALS,
           "URL contains embedded credentials.",
           "high"
@@ -137,15 +169,15 @@ export function normalizeLink(input: string): LinkNormalizationResult {
       url,
       normalizedUrl: url.toString(),
       host: url.hostname,
-      reasons,
+      evidence,
     };
   } catch {
     return {
       url: null,
       normalizedUrl: null,
       host: null,
-      reasons: [
-        getReason(
+      evidence: [
+        getHeuristicEvidence(
           LINK_REASON_CODE.MALFORMED_URL,
           "URL is malformed and cannot be safely parsed.",
           "high"
@@ -161,13 +193,13 @@ function getUrlCandidate(input: string): string {
   return hasScheme ? input : `https://${input}`;
 }
 
-function getHostReasons(hostname: string): LinkReason[] {
+function getHostEvidence(hostname: string): readonly Evidence[] {
   const host = stripIpv6Brackets(hostname.toLowerCase());
-  const reasons: LinkReason[] = [];
+  const evidence: Evidence[] = [];
 
   if (isLocalhost(host)) {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.LOCALHOST_HOST,
         "Localhost links are not valid public destinations.",
         "high"
@@ -175,9 +207,9 @@ function getHostReasons(hostname: string): LinkReason[] {
     );
   }
 
-  if (isIP(host)) {
-    reasons.push(
-      getReason(
+  if (isIpLiteral(host)) {
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.RAW_IP_HOST,
         "URL uses a raw IP address instead of a domain name.",
         "high"
@@ -186,8 +218,8 @@ function getHostReasons(hostname: string): LinkReason[] {
   }
 
   if (isPrivateOrReservedIp(host)) {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.PRIVATE_NETWORK_HOST,
         "URL targets a private, local, metadata, or reserved network range.",
         "high"
@@ -196,8 +228,8 @@ function getHostReasons(hostname: string): LinkReason[] {
   }
 
   if (host.includes("xn--")) {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.PUNYCODE_HOST,
         "Punycode domain detected, which may indicate a homograph attack.",
         "medium"
@@ -207,65 +239,73 @@ function getHostReasons(hostname: string): LinkReason[] {
 
   const tld = getTld(host);
   if (RISKY_TLDS.has(tld)) {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.RISKY_TLD,
         `High-risk top-level domain: .${tld}.`,
-        "medium"
+        "medium",
+        { tld }
       )
     );
   }
 
-  if (host.split(".").filter(Boolean).length > 4) {
-    reasons.push(
-      getReason(
+  const subdomainCount = host.split(".").filter(Boolean).length;
+  if (subdomainCount > 4) {
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.EXCESSIVE_SUBDOMAINS,
         "URL uses an unusually deep subdomain chain.",
-        "medium"
+        "medium",
+        { subdomain_count: subdomainCount }
       )
     );
   }
 
-  if (looksLikeBrandSpoof(host)) {
-    reasons.push(
-      getReason(
+  const spoof = matchBrandSpoof(host);
+  if (spoof) {
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.BRAND_SPOOF,
         "Domain looks similar to a trusted brand pattern.",
-        "high"
+        "high",
+        { matched_brand: spoof.brand, matched_pattern: spoof.pattern }
       )
     );
   }
 
-  return reasons;
+  return evidence;
 }
 
-function getPathReasons(url: URL): LinkReason[] {
+function getPathEvidence(url: URL): readonly Evidence[] {
   const pathAndQuery = `${url.pathname}${url.search}`;
-  const reasons: LinkReason[] = [];
+  const evidence: Evidence[] = [];
 
   if (pathAndQuery.length > 200) {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.LONG_PATH,
         "URL path or query is unusually long.",
-        "medium"
+        "medium",
+        { length: pathAndQuery.length }
       )
     );
   }
 
-  if ((url.pathname.match(/\//g) ?? []).length > 6) {
-    reasons.push(
-      getReason(
+  const pathDepth = (url.pathname.match(/\//g) ?? []).length;
+  if (pathDepth > 6) {
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.EXCESSIVE_PATH_DEPTH,
         "URL path has excessive depth.",
-        "medium"
+        "medium",
+        { path_depth: pathDepth }
       )
     );
   }
 
   if (SUSPICIOUS_CHARACTER_PATTERN.test(pathAndQuery)) {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.SUSPICIOUS_CHARACTERS,
         "URL path or query contains suspicious characters.",
         "medium"
@@ -274,8 +314,8 @@ function getPathReasons(url: URL): LinkReason[] {
   }
 
   if (ENCODED_CONTROL_PATTERN.test(pathAndQuery)) {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.ENCODED_CONTROL_CHARS,
         "URL contains encoded control characters.",
         "high"
@@ -284,8 +324,8 @@ function getPathReasons(url: URL): LinkReason[] {
   }
 
   if (hasSuspiciousKeywords(pathAndQuery)) {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.SUSPICIOUS_KEYWORDS,
         "URL contains high-risk keywords such as login, verify, or payment.",
         "medium"
@@ -294,125 +334,33 @@ function getPathReasons(url: URL): LinkReason[] {
   }
 
   if (url.port && url.port !== "80" && url.port !== "443") {
-    reasons.push(
-      getReason(
+    evidence.push(
+      getHeuristicEvidence(
         LINK_REASON_CODE.NONSTANDARD_PORT,
         `URL uses non-standard port ${url.port}.`,
-        "medium"
+        "medium",
+        { port: Number.parseInt(url.port, 10) }
       )
     );
   }
 
-  return reasons;
+  return evidence;
 }
 
-function getAnalysisResult({
-  normalizedUrl,
-  host,
-  reasons,
-}: {
-  readonly normalizedUrl: string | null;
-  readonly host: string | null;
-  readonly reasons: readonly LinkReason[];
-}): LinkAnalysisResult {
-  const riskScore = reasons.reduce(
-    (sum, reason) => sum + getReasonRiskWeight(reason),
-    0
-  );
-  const verdict = getVerdict(riskScore, reasons);
-
-  return {
-    verdict,
-    confidence: getConfidence(verdict, riskScore),
-    normalizedUrl,
-    host,
-    reasons,
-    ssrfProtected: true,
-  };
-}
-
-function getVerdict(
-  riskScore: number,
-  reasons: readonly LinkReason[]
-): LinkVerdict {
-  if (reasons.some((reason) => HARD_BLOCK_REASON_CODES.has(reason.code))) {
-    return LINK_VERDICT.SUSPICIOUS;
-  }
-
-  if (riskScore >= 45) return LINK_VERDICT.SUSPICIOUS;
-  if (riskScore > 0) return LINK_VERDICT.CAUTION;
-
-  return LINK_VERDICT.SAFE;
-}
-
-function getConfidence(verdict: LinkVerdict, riskScore: number): number {
-  if (verdict === LINK_VERDICT.SAFE) return 90;
-
-  return Math.min(98, 55 + riskScore);
-}
-
-function getReasonRiskWeight(reason: LinkReason): number {
-  if (reason.severity === "high") return 35;
-  if (reason.severity === "medium") return 18;
-
-  return 8;
-}
-
-function getReason(
+function getHeuristicEvidence(
   code: LinkReasonCode,
   message: string,
-  severity: LinkReason["severity"]
-): LinkReason {
-  return { code, message, severity };
-}
-
-function isLocalhost(host: string): boolean {
-  return host === "localhost" || host.endsWith(".localhost");
-}
-
-function isPrivateOrReservedIp(host: string): boolean {
-  const ipVersion = isIP(host);
-  if (ipVersion === 4) return isPrivateOrReservedIpv4(host);
-  if (ipVersion === 6) return isPrivateOrReservedIpv6(host);
-
-  return false;
-}
-
-function isPrivateOrReservedIpv4(host: string): boolean {
-  const octets = host.split(".").map(Number);
-  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet))) {
-    return false;
-  }
-
-  const [first, second, third, fourth] = octets;
-  if (octets.some((octet) => octet < 0 || octet > 255)) return false;
-  if (first === 0 || first === 10 || first === 127) return true;
-  if (first === 100 && second >= 64 && second <= 127) return true;
-  if (first === 169 && second === 254) return true;
-  if (first === 172 && second >= 16 && second <= 31) return true;
-  if (first === 192 && second === 168) return true;
-  if (first === 192 && second === 0 && third === 0) return true;
-  if (first === 198 && (second === 18 || second === 19)) return true;
-  if (first >= 224) return true;
-  if (first === 255 && second === 255 && third === 255 && fourth === 255) {
-    return true;
-  }
-
-  return false;
-}
-
-function isPrivateOrReservedIpv6(host: string): boolean {
-  const normalizedHost = host.toLowerCase();
-  if (normalizedHost === "::" || normalizedHost === "::1") return true;
-  if (normalizedHost.startsWith("fc") || normalizedHost.startsWith("fd")) {
-    return true;
-  }
-
-  return /^fe[89ab]/.test(normalizedHost);
-}
-
-function stripIpv6Brackets(host: string): string {
-  return host.replace(/^\[/, "").replace(/\]$/, "");
+  severity: EvidenceSeverity,
+  data?: Readonly<Record<string, EvidenceDataValue>>
+): Evidence {
+  return {
+    code,
+    source: "heuristic",
+    severity,
+    message,
+    observedAt: new Date().toISOString(),
+    ...(data ? { data } : {}),
+  };
 }
 
 function getTld(host: string): string {
@@ -427,12 +375,31 @@ function hasSuspiciousKeywords(pathAndQuery: string): boolean {
   return SUSPICIOUS_KEYWORDS.some((word) => lower.includes(word));
 }
 
-function looksLikeBrandSpoof(host: string): boolean {
+function matchBrandSpoof(
+  host: string
+): { readonly brand: string; readonly pattern: string } | null {
   const lower = host.toLowerCase();
+  for (const entry of BRAND_LOOKALIKE_PATTERNS) {
+    for (const pattern of entry.patterns) {
+      if (lower.includes(pattern)) return { brand: entry.brand, pattern };
+    }
+    if (lower.includes(`${entry.brand}-secure`)) {
+      return { brand: entry.brand, pattern: `${entry.brand}-secure` };
+    }
+  }
 
-  return BRAND_LOOKALIKE_PATTERNS.some(
-    (entry) =>
-      entry.patterns.some((pattern) => lower.includes(pattern)) ||
-      lower.includes(`${entry.brand}-secure`)
-  );
+  return null;
+}
+
+function isLegacyReasonCode(code: string): code is LinkReasonCode {
+  return Object.values(LINK_REASON_CODE).includes(code as LinkReasonCode);
+}
+
+function mapLegacySeverity(
+  severity: EvidenceSeverity
+): "low" | "medium" | "high" {
+  if (severity === "critical") return "high";
+  if (severity === "info") return "low";
+
+  return severity;
 }

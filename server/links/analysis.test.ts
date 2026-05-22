@@ -8,8 +8,16 @@ describe("analyzeLink", () => {
 
     expect(result.verdict).toBe(LINK_VERDICT.SAFE);
     expect(result.normalizedUrl).toBe("https://example.com/docs");
-    expect(result.reasons).toHaveLength(0);
-    expect(result.ssrfProtected).toBe(true);
+    expect(result.evidence).toHaveLength(0);
+    // Phase B: no probe runs yet, so the flag is honestly false.
+    expect(result.ssrfProtected).toBe(false);
+  });
+
+  it("reports low confidence for safe verdicts without corroborating sources", () => {
+    const result = analyzeLink("https://example.com/docs");
+
+    expect(result.verdict).toBe(LINK_VERDICT.SAFE);
+    expect(result.confidence).toBeLessThanOrEqual(50);
   });
 
   it("returns suspicious verdicts for malformed URLs", () => {
@@ -31,7 +39,6 @@ describe("analyzeLink", () => {
     const result = analyzeLink("http://192.168.1.10/admin");
 
     expect(result.verdict).toBe(LINK_VERDICT.SUSPICIOUS);
-    expect(result.ssrfProtected).toBe(true);
     expect(getReasonCodes(result)).toEqual(
       expect.arrayContaining([
         LINK_REASON_CODE.RAW_IP_HOST,
@@ -44,7 +51,6 @@ describe("analyzeLink", () => {
     const result = analyzeLink("http://localhost:3000/login");
 
     expect(result.verdict).toBe(LINK_VERDICT.SUSPICIOUS);
-    expect(result.ssrfProtected).toBe(true);
     expect(getReasonCodes(result)).toContain(LINK_REASON_CODE.LOCALHOST_HOST);
   });
 
@@ -96,5 +102,7 @@ describe("analyzeLink", () => {
 });
 
 function getReasonCodes(result: ReturnType<typeof analyzeLink>): string[] {
-  return result.reasons.map((reason) => reason.code);
+  return result.evidence
+    .filter((entry) => entry.source === "heuristic")
+    .map((entry) => entry.code);
 }

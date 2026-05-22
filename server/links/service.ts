@@ -1,21 +1,22 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
 import {
   analyzeLink,
+  toLegacyReasons,
+  type LegacyReason,
   type LinkAnalysisResult,
-  type LinkReason,
 } from "@/server/links/analysis";
-import {
-  LINK_VERDICT,
-  type LinkReasonCode,
-  type LinkVerdict,
-} from "@/server/links/constants";
+import type {
+  Evidence,
+  ProbeSummary,
+  VerificationVerdict,
+} from "@/server/links/evidence";
 import {
   prismaLinkCheckRepository,
   type LinkCheckRecord,
   type LinkCheckRepository,
 } from "@/server/links/repository";
+import { scoreEvidence } from "@/server/links/score";
 
 export interface VerifyLinkInput {
   readonly url: string;
@@ -29,7 +30,18 @@ export interface LinkVerificationCacheMetadata {
   readonly expiresAt: string | null;
 }
 
-export interface LinkVerificationResult extends LinkAnalysisResult {
+/** Wire shape returned from POST /api/links/verify. Phase B adds
+ *  `evidence` and `probe`; `reasons` is now a projection of `evidence`
+ *  filtered to heuristic-source items and is kept for the existing UI. */
+export interface LinkVerificationResult {
+  readonly verdict: VerificationVerdict;
+  readonly confidence: number;
+  readonly normalizedUrl: string | null;
+  readonly host: string | null;
+  readonly reasons: readonly LegacyReason[];
+  readonly evidence: readonly Evidence[];
+  readonly probe: ProbeSummary | null;
+  readonly ssrfProtected: boolean;
   readonly cache: LinkVerificationCacheMetadata;
 }
 
@@ -40,7 +52,7 @@ export async function verifyLink(
   repository: LinkCheckRepository = prismaLinkCheckRepository
 ): Promise<LinkVerificationResult> {
   const now = input.now ?? new Date();
-  const analysis = analyzeLink(input.url);
+  const analysis = analyzeForWire(input.url);
 
   if (!analysis.normalizedUrl) {
     return {
@@ -55,29 +67,25 @@ export async function verifyLink(
   }
 
   try {
-    const cachedVerdict = await repository.findFreshByNormalizedUrl(
+    const cached = await repository.findFreshByNormalizedUrl(
       analysis.normalizedUrl,
       now
     );
 
-    if (cachedVerdict) {
-      return getCachedVerificationResult(cachedVerdict);
+    if (cached) {
+      return getCachedVerificationResult(cached);
     }
 
     const expiresAt = new Date(now.getTime() + LINK_CHECK_CACHE_TTL_MS);
-    const storedVerdict = await repository.upsertVerdict(
-      analysis,
-      now,
-      expiresAt
-    );
+    const stored = await repository.upsertVerdict(analysis, now, expiresAt);
 
     return {
       ...analysis,
       cache: {
         hit: false,
         cacheable: true,
-        checkedAt: storedVerdict.checkedAt.toISOString(),
-        expiresAt: storedVerdict.expiresAt.toISOString(),
+        checkedAt: stored.checkedAt.toISOString(),
+        expiresAt: stored.expiresAt.toISOString(),
       },
     };
   } catch {
@@ -93,16 +101,41 @@ export async function verifyLink(
   }
 }
 
+/** Runs the heuristic analyzer and adds the wire-only fields. Phase B
+ *  has no probe, so `probe` is null and `ssrfProtected` is false. */
+function analyzeForWire(
+  url: string
+): Omit<LinkVerificationResult, "cache"> {
+  const analysis: LinkAnalysisResult = analyzeLink(url);
+
+  return {
+    verdict: analysis.verdict,
+    confidence: analysis.confidence,
+    normalizedUrl: analysis.normalizedUrl,
+    host: analysis.host,
+    reasons: toLegacyReasons(analysis.evidence),
+    evidence: analysis.evidence,
+    probe: null,
+    ssrfProtected: analysis.ssrfProtected,
+  };
+}
+
 function getCachedVerificationResult(
   record: LinkCheckRecord
 ): LinkVerificationResult {
+  const evidence = readStoredEvidence(record);
+  const scored = scoreEvidence(evidence);
+  const host = safeHostname(record.normalizedUrl);
+
   return {
-    verdict: getStoredVerdict(record.verdict),
-    confidence: record.confidence,
+    verdict: scored.verdict,
+    confidence: scored.confidence,
     normalizedUrl: record.normalizedUrl,
-    host: new URL(record.normalizedUrl).hostname,
-    reasons: getStoredReasons(record.reasons),
-    ssrfProtected: true,
+    host,
+    reasons: toLegacyReasons(evidence),
+    evidence,
+    probe: readStoredProbe(record),
+    ssrfProtected: readStoredProbe(record) !== null,
     cache: {
       hit: true,
       cacheable: true,
@@ -112,49 +145,99 @@ function getCachedVerificationResult(
   };
 }
 
-function getStoredVerdict(value: string): LinkVerdict {
-  if (
-    value === LINK_VERDICT.SAFE ||
-    value === LINK_VERDICT.CAUTION ||
-    value === LINK_VERDICT.SUSPICIOUS
-  ) {
-    return value;
+function readStoredEvidence(record: LinkCheckRecord): readonly Evidence[] {
+  if (Array.isArray(record.evidence)) {
+    return record.evidence
+      .map((entry) => coerceEvidence(entry))
+      .filter((entry): entry is Evidence => entry !== null);
   }
 
-  return LINK_VERDICT.SUSPICIOUS;
+  // Legacy rows written before Phase B only carry the `reasons` column.
+  // Lift them into the Evidence shape so the scorer can consume them.
+  if (Array.isArray(record.reasons)) {
+    return record.reasons
+      .map((entry) => coerceLegacyReasonToEvidence(entry, record.checkedAt))
+      .filter((entry): entry is Evidence => entry !== null);
+  }
+
+  return [];
 }
 
-function getStoredReasons(reasons: Prisma.JsonValue): readonly LinkReason[] {
-  if (!Array.isArray(reasons)) return [];
-
-  return reasons
-    .map((reason) => getStoredReason(reason))
-    .filter((reason): reason is LinkReason => Boolean(reason));
-}
-
-function getStoredReason(reason: Prisma.JsonValue): LinkReason | null {
-  if (!reason || typeof reason !== "object" || Array.isArray(reason)) {
+function readStoredProbe(record: LinkCheckRecord): ProbeSummary | null {
+  const stored = record.probeSummary;
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
     return null;
   }
 
-  const record = reason as Record<string, Prisma.JsonValue>;
+  // Trust persisted shape until Phase C adds a validator. The wire field
+  // is null in Phase B because nothing writes to probeSummary yet.
+  return stored as unknown as ProbeSummary;
+}
+
+function coerceEvidence(value: unknown): Evidence | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+
+  if (
+    typeof record.code !== "string" ||
+    typeof record.source !== "string" ||
+    typeof record.severity !== "string" ||
+    typeof record.message !== "string" ||
+    typeof record.observedAt !== "string"
+  ) {
+    return null;
+  }
+
+  const evidence: Evidence = {
+    code: record.code,
+    source: record.source as Evidence["source"],
+    severity: record.severity as Evidence["severity"],
+    message: record.message,
+    observedAt: record.observedAt,
+    ...(record.data && typeof record.data === "object" && !Array.isArray(record.data)
+      ? { data: record.data as Evidence["data"] }
+      : {}),
+  };
+
+  return evidence;
+}
+
+function coerceLegacyReasonToEvidence(
+  value: unknown,
+  observedAt: Date
+): Evidence | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+
   if (
     typeof record.code !== "string" ||
     typeof record.message !== "string" ||
-    !isReasonSeverity(record.severity)
+    typeof record.severity !== "string"
+  ) {
+    return null;
+  }
+
+  if (
+    record.severity !== "low" &&
+    record.severity !== "medium" &&
+    record.severity !== "high"
   ) {
     return null;
   }
 
   return {
-    code: record.code as LinkReasonCode,
-    message: record.message,
+    code: record.code,
+    source: "heuristic",
     severity: record.severity,
+    message: record.message,
+    observedAt: observedAt.toISOString(),
   };
 }
 
-function isReasonSeverity(
-  value: Prisma.JsonValue
-): value is LinkReason["severity"] {
-  return value === "low" || value === "medium" || value === "high";
+function safeHostname(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
 }

@@ -8,10 +8,10 @@ import {
   BarChart3,
   FileCode2,
   FileText,
+  Link2,
   Plus,
   QrCode,
   ScanLine,
-  ShieldCheck,
 } from "lucide-react";
 import { DashboardAnalytics } from "@/components/dashboard/DashboardAnalytics";
 import { DashboardQRCodeTable } from "@/components/dashboard/DashboardQRCodeTable";
@@ -54,11 +54,11 @@ const demoFeatures: readonly DemoFeature[] = [
     cta: "Scan",
   },
   {
-    title: "Link verification",
-    description: "Run server-backed verdicts with reasons, confidence, and cautious open flow.",
-    href: "/verify",
-    icon: ShieldCheck,
-    cta: "Verify",
+    title: "Links",
+    description: "Link evidence, scoring, and review workflows are coming soon.",
+    href: "/links",
+    icon: Link2,
+    cta: "Preview",
   },
   {
     title: "Decode utility",

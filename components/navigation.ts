@@ -6,11 +6,13 @@ import {
   FileText,
   HelpCircle,
   Info,
+  Link2,
+  LockKeyhole,
   MessageSquareQuote,
   QrCode,
   ScanLine,
-  ShieldCheck,
   Sparkles,
+  ScrollText,
   UserRound,
 } from "lucide-react";
 
@@ -52,10 +54,10 @@ export const primaryNavItems: readonly NavigationItem[] = [
     description: "Build editable QR landing pages.",
   },
   {
-    href: "/verify",
-    icon: ShieldCheck,
-    label: "Verify",
-    description: "Run server-backed URL safety checks.",
+    href: "/links",
+    icon: Link2,
+    label: "Links",
+    description: "Link safety system coming soon.",
   },
 ] as const;
 
@@ -120,6 +122,18 @@ export const appNavSections: readonly NavigationSection[] = [
         label: "Support",
         description: "Contact channels and help paths.",
       },
+      {
+        href: "/privacy",
+        icon: LockKeyhole,
+        label: "Privacy",
+        description: "How Decode handles product and workspace data.",
+      },
+      {
+        href: "/terms",
+        icon: ScrollText,
+        label: "Terms",
+        description: "Terms for using Decode QR workflows.",
+      },
     ],
   },
 ] as const;
@@ -173,6 +187,18 @@ export const menuNavItems: readonly NavigationItem[] = [
     icon: HelpCircle,
     label: "Support",
     description: "Contact channels and help paths.",
+  },
+  {
+    href: "/privacy",
+    icon: LockKeyhole,
+    label: "Privacy",
+    description: "How Decode handles product and workspace data.",
+  },
+  {
+    href: "/terms",
+    icon: ScrollText,
+    label: "Terms",
+    description: "Terms for using Decode QR workflows.",
   },
 ] as const;
 

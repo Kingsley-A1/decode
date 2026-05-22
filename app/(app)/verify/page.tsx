@@ -1,16 +1,19 @@
-import { PageShell } from "@/components/PageShell";
-import { SuspiciousLinkChecker } from "@/components/SuspiciousLinkChecker";
+import { redirect } from "next/navigation";
 
-export default function VerifyPage() {
-  return (
-    <PageShell
-      eyebrow="Link safety"
-      title="Verify a link"
-      description="Run server-side URL checks before opening or sharing a destination from a QR code."
-    >
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <SuspiciousLinkChecker />
-      </div>
-    </PageShell>
-  );
+interface VerifyRedirectPageProps {
+  readonly searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function VerifyRedirectPage({
+  searchParams,
+}: VerifyRedirectPageProps) {
+  const params = await searchParams;
+  const query = new URLSearchParams();
+  const url = params?.url;
+
+  if (typeof url === "string" && url.trim()) {
+    query.set("url", url);
+  }
+
+  redirect(query.size > 0 ? `/links?${query.toString()}` : "/links");
 }

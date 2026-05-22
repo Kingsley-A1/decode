@@ -5,9 +5,9 @@ import {
   CheckCircle2,
   FileCode2,
   FileText,
+  Link2,
   QrCode,
   ScanLine,
-  ShieldCheck,
 } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { Badge } from "@/components/ui";
@@ -38,14 +38,13 @@ const workflowDocs = [
     ],
   },
   {
-    title: "Verify links",
-    href: "/verify",
-    icon: ShieldCheck,
-    description:
-      "Run server-backed link checks before opening a QR destination.",
+    title: "Links",
+    href: "/links",
+    icon: Link2,
+    description: "Link evidence and safety workflows are coming soon.",
     bullets: [
-      "Review normalized URLs, verdicts, confidence, and reason codes.",
-      "Require confirmation before opening suspicious destinations.",
+      "The evidence, scoring, and review system is still being finalized.",
+      "Use cautious open flows for untrusted destinations until links reopens.",
       "Use verification directly from scan results when content is a URL.",
     ],
   },
@@ -120,7 +119,7 @@ export default function DocsPage() {
           <ol className="mt-4 grid gap-3 text-sm leading-6 text-slate-700 sm:grid-cols-3">
             {[
               "Create a QR code or landing page.",
-              "Verify the destination before sharing.",
+              "Review the destination before sharing.",
               "Track saved codes and scan activity in the dashboard.",
             ].map((item, index) => (
               <li key={item} className="rounded-lg bg-slate-50 p-4">

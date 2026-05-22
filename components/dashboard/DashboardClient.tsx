@@ -15,11 +15,11 @@ import {
   BarChart3,
   FileCode2,
   FileText,
+  Link2,
   Plus,
   QrCode,
   RefreshCw,
   ScanLine,
-  ShieldCheck,
 } from "lucide-react";
 import { DashboardAnalytics } from "@/components/dashboard/DashboardAnalytics";
 import { DashboardQRCodeTable } from "@/components/dashboard/DashboardQRCodeTable";
@@ -87,10 +87,10 @@ const platformActions = [
     icon: ScanLine,
   },
   {
-    title: "Verify links",
-    description: "Check destinations server-side before opening or sharing.",
-    href: "/verify",
-    icon: ShieldCheck,
+    title: "Links",
+    description: "Link safety system coming soon.",
+    href: "/links",
+    icon: Link2,
   },
   {
     title: "Decode text",

@@ -351,7 +351,7 @@ export function QRScanner() {
           <FeatureNote
             icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}
             title="Safe by default"
-            text="URL results can be verified before opening."
+            text="URL results require explicit review before opening."
           />
         </div>
       </section>
@@ -419,11 +419,11 @@ export function QRScanner() {
                 </Button>
                 {resultUrl && (
                   <Link
-                    href={`/verify?url=${encodeURIComponent(resultUrl)}`}
+                    href={`/links?url=${encodeURIComponent(resultUrl)}`}
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900"
                   >
-                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                    Verify link
+                    <LinkIcon className="h-4 w-4" aria-hidden="true" />
+                    Links
                   </Link>
                 )}
                 <Button
@@ -464,7 +464,7 @@ export function QRScanner() {
       <Dialog
         open={isOpenDialogVisible}
         title="Open scanned link?"
-        description="Decode has not verified this URL in the scanner. Verify it first if you do not fully trust the source."
+        description="Decode has not reviewed this URL in the scanner. Use caution if you do not fully trust the source."
         onClose={() => setIsOpenDialogVisible(false)}
       >
         <div className="space-y-4">
@@ -480,11 +480,11 @@ export function QRScanner() {
             </Button>
             {resultUrl && (
               <Link
-                href={`/verify?url=${encodeURIComponent(resultUrl)}`}
+                href={`/links?url=${encodeURIComponent(resultUrl)}`}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900"
               >
-                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                Verify first
+                <LinkIcon className="h-4 w-4" aria-hidden="true" />
+                Links status
               </Link>
             )}
             <Button
@@ -651,4 +651,3 @@ function playBeep(enabled: boolean) {
     oscillator.stop(context.currentTime + 0.15);
   } catch {}
 }
-
