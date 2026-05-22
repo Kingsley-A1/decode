@@ -6,6 +6,7 @@ import { adminApiError } from "@/server/admin/api";
 import { getRequiredAdminSession } from "@/server/admin/auth";
 import {
   listAdminAssets,
+  listAdminLandingPageTemplates,
   listAdminLandingPages,
   listAdminLinkChecks,
   listAdminQRCodes,
@@ -65,6 +66,8 @@ function listAdminResource(
       return listAdminQRCodes(query);
     case "landing-pages":
       return listAdminLandingPages(query);
+    case "landing-page-templates":
+      return listAdminLandingPageTemplates(query);
     case "assets":
       return listAdminAssets(query);
     case "scans":

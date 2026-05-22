@@ -14,6 +14,10 @@ import {
   LandingPageNotFoundError,
   LandingPageStateError,
 } from "@/server/landing-pages/errors";
+import {
+  findUsableTemplateByKey,
+  recordLandingPageTemplateUsage,
+} from "@/server/landing-page-templates/service";
 import { landingPageSummarySelect } from "@/server/landing-pages/selectors";
 import {
   getLandingPageContentAssetIds,
@@ -75,10 +79,16 @@ export async function createLandingPage({
 
       assertDynamicQRCodeCanUseLandingPage(qrCode);
 
+      const template = await findUsableTemplateByKey({
+        templateKey: request.templateKey,
+        transaction,
+      });
+
       const landingPage = await transaction.landingPage.create({
         data: {
           workspaceId,
           qrCodeId: qrCode.id,
+          ...(template ? { templateId: template.id } : {}),
           type: request.type,
           title: request.title,
           status: request.status,
@@ -107,6 +117,16 @@ export async function createLandingPage({
         });
       }
 
+      if (template) {
+        await recordLandingPageTemplateUsage({
+          transaction,
+          templateId: template.id,
+          workspaceId,
+          landingPageId: landingPage.id,
+          actorUserId: userId,
+        });
+      }
+
       await transaction.auditLog.create({
         data: {
           workspaceId,
@@ -116,6 +136,7 @@ export async function createLandingPage({
           entityId: landingPage.id,
           metadata: {
             qrCodeId: qrCode.id,
+            templateKey: template?.key ?? request.templateKey,
             type: request.type,
             status: request.status,
           },

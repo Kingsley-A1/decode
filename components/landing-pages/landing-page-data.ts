@@ -19,6 +19,7 @@ type LandingPageTemplatePresetSeed = Omit<
   | "optionalFields"
   | "requiredFields"
   | "sortPriority"
+  | "source"
   | "status"
   | "thumbnail"
 > & {
@@ -66,7 +67,7 @@ const pdfAsset: LandingPageTemplateAssetRequirement = {
   slot: "pdf",
   label: "PDF",
   kind: "pdf",
-  required: true,
+  required: false,
 };
 
 const audioAsset: LandingPageTemplateAssetRequirement = {
@@ -74,6 +75,507 @@ const audioAsset: LandingPageTemplateAssetRequirement = {
   label: "Audio",
   kind: "audio",
   required: false,
+};
+
+const firstPartyImageAssets = {
+  businessLogo: {
+    assetPath:
+      "/assets/landing-page-templates/business/business-logo-placeholder.png",
+    alt: "Generic business logo placeholder.",
+    width: 512,
+    height: 512,
+  },
+  businessOfficeTeam: {
+    assetPath:
+      "/assets/landing-page-templates/business/business-office-team-hero.webp",
+    alt: "Professional office team in a meeting space.",
+    width: 1600,
+    height: 900,
+  },
+  businessProductDisplay: {
+    assetPath:
+      "/assets/landing-page-templates/business/business-product-service-display.webp",
+    alt: "Product and service display on a clean counter.",
+    width: 1600,
+    height: 900,
+  },
+  businessServiceBooking: {
+    assetPath:
+      "/assets/landing-page-templates/business/business-service-booking-hero.webp",
+    alt: "Appointment booking desk with calendar and service notes.",
+    width: 1600,
+    height: 900,
+  },
+  healthcareAppointmentDesk: {
+    assetPath:
+      "/assets/landing-page-templates/healthcare/healthcare-appointment-desk.webp",
+    alt: "Clinic appointment desk prepared for patient check-in.",
+    width: 1600,
+    height: 900,
+  },
+  healthcareClinicLogo: {
+    assetPath:
+      "/assets/landing-page-templates/healthcare/healthcare-clinic-logo-placeholder.png",
+    alt: "Generic clinic logo placeholder.",
+    width: 512,
+    height: 512,
+  },
+  healthcareClinicReception: {
+    assetPath:
+      "/assets/landing-page-templates/healthcare/healthcare-clinic-reception.webp",
+    alt: "Clean clinic reception area.",
+    width: 1600,
+    height: 900,
+  },
+  healthcareDoctorPortrait: {
+    assetPath:
+      "/assets/landing-page-templates/healthcare/healthcare-doctor-portrait-placeholder.png",
+    alt: "Generic doctor portrait placeholder.",
+    width: 512,
+    height: 512,
+  },
+  healthcarePatientInfo: {
+    assetPath:
+      "/assets/landing-page-templates/healthcare/healthcare-patient-info-cover.webp",
+    alt: "Patient information folder on a clinic counter.",
+    width: 1600,
+    height: 900,
+  },
+  hotelConciergeGuide: {
+    assetPath:
+      "/assets/landing-page-templates/hotel/hotel-concierge-local-guide.webp",
+    alt: "Hotel concierge local guide materials.",
+    width: 1600,
+    height: 900,
+  },
+  hotelDiningRestaurant: {
+    assetPath:
+      "/assets/landing-page-templates/hotel/hotel-dining-restaurant.webp",
+    alt: "Hotel dining restaurant table setting.",
+    width: 1600,
+    height: 900,
+  },
+  hotelEventHall: {
+    assetPath: "/assets/landing-page-templates/hotel/hotel-event-hall.webp",
+    alt: "Hotel event hall prepared for guests.",
+    width: 1600,
+    height: 900,
+  },
+  hotelExterior: {
+    assetPath: "/assets/landing-page-templates/hotel/hotel-exterior.webp",
+    alt: "Hotel exterior entrance.",
+    width: 1600,
+    height: 900,
+  },
+  hotelGuestRoom: {
+    assetPath: "/assets/landing-page-templates/hotel/hotel-guest-room.webp",
+    alt: "Hotel guest room interior.",
+    width: 1600,
+    height: 900,
+  },
+  hotelLobby: {
+    assetPath: "/assets/landing-page-templates/hotel/hotel-lobby.webp",
+    alt: "Hotel lobby and reception area.",
+    width: 1600,
+    height: 900,
+  },
+  institutionChurchAuditorium: {
+    assetPath:
+      "/assets/landing-page-templates/institution/institution-church-auditorium.webp",
+    alt: "Church auditorium prepared for service.",
+    width: 1600,
+    height: 900,
+  },
+  institutionCommunityEvent: {
+    assetPath:
+      "/assets/landing-page-templates/institution/institution-community-event.webp",
+    alt: "Community event with people gathered indoors.",
+    width: 1600,
+    height: 900,
+  },
+  institutionLogo: {
+    assetPath:
+      "/assets/landing-page-templates/institution/institution-logo-placeholder.png",
+    alt: "Generic institution logo placeholder.",
+    width: 512,
+    height: 512,
+  },
+  institutionNgoFieldWork: {
+    assetPath:
+      "/assets/landing-page-templates/institution/institution-ngo-field-work.webp",
+    alt: "Nonprofit field work and community support.",
+    width: 1600,
+    height: 900,
+  },
+  institutionPublicOffice: {
+    assetPath:
+      "/assets/landing-page-templates/institution/institution-public-office-reception.webp",
+    alt: "Public office reception counter.",
+    width: 1600,
+    height: 900,
+  },
+  institutionTrainingRoom: {
+    assetPath:
+      "/assets/landing-page-templates/institution/institution-training-room.webp",
+    alt: "Institution training room with seats and presentation setup.",
+    width: 1600,
+    height: 900,
+  },
+  mediaAudioCover: {
+    assetPath:
+      "/assets/landing-page-templates/media/media-audio-cover-placeholder.webp",
+    alt: "Abstract audio cover placeholder.",
+    width: 1600,
+    height: 900,
+  },
+  mediaPodcastCover: {
+    assetPath:
+      "/assets/landing-page-templates/media/media-podcast-cover-placeholder.webp",
+    alt: "Abstract podcast cover placeholder.",
+    width: 1600,
+    height: 900,
+  },
+  mediaVideoCover: {
+    assetPath:
+      "/assets/landing-page-templates/media/media-video-cover-placeholder.webp",
+    alt: "Abstract video cover placeholder.",
+    width: 1600,
+    height: 900,
+  },
+  personalCreatorWorkspace: {
+    assetPath:
+      "/assets/landing-page-templates/personal/personal-creator-workspace.webp",
+    alt: "Creator workspace with laptop and notes.",
+    width: 1600,
+    height: 900,
+  },
+  personalCvCover: {
+    assetPath:
+      "/assets/landing-page-templates/personal/personal-digital-cv-cover.webp",
+    alt: "Digital CV cover placeholder.",
+    width: 1600,
+    height: 900,
+  },
+  personalPortfolioProject: {
+    assetPath:
+      "/assets/landing-page-templates/personal/personal-portfolio-project-thumbnail.webp",
+    alt: "Portfolio project thumbnail.",
+    width: 1600,
+    height: 900,
+  },
+  personalPortrait: {
+    assetPath:
+      "/assets/landing-page-templates/personal/personal-portrait-placeholder.png",
+    alt: "Generic personal portrait placeholder.",
+    width: 512,
+    height: 512,
+  },
+  realEstateLivingRoom: {
+    assetPath:
+      "/assets/landing-page-templates/real-estate/real-estate-living-room.webp",
+    alt: "Real estate living room interior.",
+    width: 1600,
+    height: 900,
+  },
+  realEstatePropertyExterior: {
+    assetPath:
+      "/assets/landing-page-templates/real-estate/real-estate-property-exterior.webp",
+    alt: "Real estate property exterior.",
+    width: 1600,
+    height: 900,
+  },
+  restaurantCoffeeBreakfast: {
+    assetPath:
+      "/assets/landing-page-templates/restaurant/restaurant-coffee-breakfast.webp",
+    alt: "Coffee and breakfast dishes on a restaurant table.",
+    width: 1600,
+    height: 900,
+  },
+  restaurantCouponFood: {
+    assetPath:
+      "/assets/landing-page-templates/restaurant/restaurant-coupon-food-background.webp",
+    alt: "Restaurant food background for a coupon offer.",
+    width: 1600,
+    height: 900,
+  },
+  restaurantDeliveryPackage: {
+    assetPath:
+      "/assets/landing-page-templates/restaurant/restaurant-delivery-package.webp",
+    alt: "Restaurant delivery package ready for pickup.",
+    width: 1600,
+    height: 900,
+  },
+  restaurantInterior: {
+    assetPath:
+      "/assets/landing-page-templates/restaurant/restaurant-interior.webp",
+    alt: "Restaurant interior dining area.",
+    width: 1600,
+    height: 900,
+  },
+  restaurantMenuBoard: {
+    assetPath:
+      "/assets/landing-page-templates/restaurant/restaurant-menu-board.webp",
+    alt: "Restaurant menu board.",
+    width: 1600,
+    height: 900,
+  },
+  restaurantPlatedMeal: {
+    assetPath:
+      "/assets/landing-page-templates/restaurant/restaurant-plated-meal.webp",
+    alt: "Plated restaurant meal.",
+    width: 1600,
+    height: 900,
+  },
+  retailCatalogSpread: {
+    assetPath:
+      "/assets/landing-page-templates/retail/retail-catalog-spread.webp",
+    alt: "Generic retail catalog spread.",
+    width: 1600,
+    height: 900,
+  },
+  retailProductPackaging: {
+    assetPath:
+      "/assets/landing-page-templates/retail/retail-product-packaging.webp",
+    alt: "Generic product packaging display.",
+    width: 1600,
+    height: 900,
+  },
+  retailWarrantyCard: {
+    assetPath:
+      "/assets/landing-page-templates/retail/retail-warranty-card.webp",
+    alt: "Generic warranty card placeholder.",
+    width: 800,
+    height: 500,
+  },
+  schoolCampus: {
+    assetPath:
+      "/assets/landing-page-templates/school/school-campus-exterior.webp",
+    alt: "School campus exterior.",
+    width: 1600,
+    height: 900,
+  },
+  schoolClassroom: {
+    assetPath: "/assets/landing-page-templates/school/school-classroom.webp",
+    alt: "School classroom prepared for students.",
+    width: 1600,
+    height: 900,
+  },
+  schoolLibrary: {
+    assetPath:
+      "/assets/landing-page-templates/school/school-library-resource-center.webp",
+    alt: "School library and resource center.",
+    width: 1600,
+    height: 900,
+  },
+  schoolLogo: {
+    assetPath:
+      "/assets/landing-page-templates/school/school-logo-placeholder.png",
+    alt: "Generic school logo placeholder.",
+    width: 512,
+    height: 512,
+  },
+  schoolOpenDay: {
+    assetPath:
+      "/assets/landing-page-templates/school/school-open-day-event.webp",
+    alt: "School open day event with visitors.",
+    width: 1600,
+    height: 900,
+  },
+  schoolProspectusCover: {
+    assetPath:
+      "/assets/landing-page-templates/school/school-prospectus-cover.webp",
+    alt: "School prospectus cover.",
+    width: 1600,
+    height: 900,
+  },
+  schoolStudentsStudying: {
+    assetPath:
+      "/assets/landing-page-templates/school/school-students-studying.webp",
+    alt: "Students studying together.",
+    width: 1600,
+    height: 900,
+  },
+} as const;
+
+type FirstPartyImageAsset =
+  (typeof firstPartyImageAssets)[keyof typeof firstPartyImageAssets];
+type TemplateAssetSlot = LandingPageTemplateAssetRequirement["slot"];
+
+function withAssetPath(
+  asset: LandingPageTemplateAssetRequirement,
+  image: FirstPartyImageAsset
+): LandingPageTemplateAssetRequirement {
+  return {
+    ...asset,
+    assetPath: image.assetPath,
+    alt: image.alt,
+    width: image.width,
+    height: image.height,
+  };
+}
+
+interface TemplateAssetAssignment {
+  readonly thumbnail?: FirstPartyImageAsset;
+  readonly assets?: Partial<Record<TemplateAssetSlot, FirstPartyImageAsset>>;
+  readonly gallery?: readonly FirstPartyImageAsset[];
+}
+
+const templateAssetAssignments: Partial<
+  Record<string, TemplateAssetAssignment>
+> = {
+  "personal-profile": {
+    thumbnail: firstPartyImageAssets.personalPortrait,
+    assets: { avatar: firstPartyImageAssets.personalPortrait },
+  },
+  "digital-business-card": {
+    thumbnail: firstPartyImageAssets.personalPortrait,
+    assets: { avatar: firstPartyImageAssets.personalPortrait },
+  },
+  "business-contact": {
+    thumbnail: firstPartyImageAssets.businessOfficeTeam,
+    assets: { logo: firstPartyImageAssets.businessLogo },
+  },
+  "service-booking": {
+    thumbnail: firstPartyImageAssets.businessServiceBooking,
+    assets: {
+      logo: firstPartyImageAssets.businessLogo,
+      hero: firstPartyImageAssets.businessServiceBooking,
+    },
+  },
+  "product-info": {
+    thumbnail: firstPartyImageAssets.businessProductDisplay,
+    assets: { hero: firstPartyImageAssets.businessProductDisplay },
+  },
+  "creator-link-hub": {
+    thumbnail: firstPartyImageAssets.personalCreatorWorkspace,
+    assets: { avatar: firstPartyImageAssets.personalPortrait },
+  },
+  portfolio: {
+    thumbnail: firstPartyImageAssets.personalPortfolioProject,
+    assets: {
+      avatar: firstPartyImageAssets.personalPortrait,
+      hero: firstPartyImageAssets.personalPortfolioProject,
+    },
+  },
+  "digital-cv": {
+    thumbnail: firstPartyImageAssets.personalCvCover,
+    assets: { avatar: firstPartyImageAssets.personalPortrait },
+  },
+  "restaurant-menu": {
+    thumbnail: firstPartyImageAssets.restaurantMenuBoard,
+    assets: { hero: firstPartyImageAssets.restaurantMenuBoard },
+  },
+  "daily-specials": {
+    thumbnail: firstPartyImageAssets.restaurantPlatedMeal,
+    assets: { hero: firstPartyImageAssets.restaurantPlatedMeal },
+  },
+  "restaurant-reservation": {
+    thumbnail: firstPartyImageAssets.restaurantInterior,
+    assets: { hero: firstPartyImageAssets.restaurantInterior },
+  },
+  "delivery-links": {
+    thumbnail: firstPartyImageAssets.restaurantDeliveryPackage,
+  },
+  "restaurant-coupon": {
+    thumbnail: firstPartyImageAssets.restaurantCouponFood,
+    assets: { hero: firstPartyImageAssets.restaurantCouponFood },
+  },
+  "promo-coupon": {
+    thumbnail: firstPartyImageAssets.retailCatalogSpread,
+    assets: { hero: firstPartyImageAssets.retailCatalogSpread },
+  },
+  "event-registration": {
+    thumbnail: firstPartyImageAssets.institutionCommunityEvent,
+    assets: { hero: firstPartyImageAssets.institutionCommunityEvent },
+  },
+  "pdf-document": {
+    thumbnail: firstPartyImageAssets.retailCatalogSpread,
+    assets: { hero: firstPartyImageAssets.retailCatalogSpread },
+  },
+  "image-gallery": {
+    thumbnail: firstPartyImageAssets.hotelGuestRoom,
+    assets: { gallery: firstPartyImageAssets.hotelGuestRoom },
+    gallery: [
+      firstPartyImageAssets.hotelGuestRoom,
+      firstPartyImageAssets.restaurantInterior,
+      firstPartyImageAssets.personalPortfolioProject,
+    ],
+  },
+  "school-admissions": {
+    thumbnail: firstPartyImageAssets.schoolCampus,
+    assets: {
+      logo: firstPartyImageAssets.schoolLogo,
+      hero: firstPartyImageAssets.schoolCampus,
+    },
+  },
+  "school-notice-board": {
+    thumbnail: firstPartyImageAssets.schoolLibrary,
+    assets: { logo: firstPartyImageAssets.schoolLogo },
+  },
+  "school-open-day": {
+    thumbnail: firstPartyImageAssets.schoolOpenDay,
+    assets: { hero: firstPartyImageAssets.schoolOpenDay },
+  },
+  "school-prospectus": {
+    thumbnail: firstPartyImageAssets.schoolProspectusCover,
+    assets: { logo: firstPartyImageAssets.schoolLogo },
+  },
+  "alumni-registration": {
+    thumbnail: firstPartyImageAssets.schoolStudentsStudying,
+    assets: { logo: firstPartyImageAssets.schoolLogo },
+  },
+  "hotel-welcome": {
+    thumbnail: firstPartyImageAssets.hotelLobby,
+    assets: { hero: firstPartyImageAssets.hotelLobby },
+  },
+  "hotel-room-directory": {
+    thumbnail: firstPartyImageAssets.hotelGuestRoom,
+  },
+  "hotel-concierge": {
+    thumbnail: firstPartyImageAssets.hotelConciergeGuide,
+    assets: { hero: firstPartyImageAssets.hotelConciergeGuide },
+  },
+  "hotel-booking": {
+    thumbnail: firstPartyImageAssets.hotelExterior,
+    assets: { hero: firstPartyImageAssets.hotelExterior },
+  },
+  "hotel-guest-feedback": {
+    thumbnail: firstPartyImageAssets.hotelLobby,
+  },
+  "clinic-appointment": {
+    thumbnail: firstPartyImageAssets.healthcareAppointmentDesk,
+    assets: { logo: firstPartyImageAssets.healthcareClinicLogo },
+  },
+  "clinic-profile": {
+    thumbnail: firstPartyImageAssets.healthcareClinicReception,
+    assets: {
+      logo: firstPartyImageAssets.healthcareClinicLogo,
+      hero: firstPartyImageAssets.healthcareClinicReception,
+    },
+  },
+  "church-information": {
+    thumbnail: firstPartyImageAssets.institutionChurchAuditorium,
+    assets: {
+      logo: firstPartyImageAssets.institutionLogo,
+      hero: firstPartyImageAssets.institutionChurchAuditorium,
+    },
+  },
+  "office-service-directory": {
+    thumbnail: firstPartyImageAssets.institutionPublicOffice,
+    assets: { logo: firstPartyImageAssets.institutionLogo },
+  },
+  "property-listing": {
+    thumbnail: firstPartyImageAssets.realEstatePropertyExterior,
+    assets: { gallery: firstPartyImageAssets.realEstatePropertyExterior },
+    gallery: [
+      firstPartyImageAssets.realEstatePropertyExterior,
+      firstPartyImageAssets.realEstateLivingRoom,
+    ],
+  },
+  "product-warranty": {
+    thumbnail: firstPartyImageAssets.retailWarrantyCard,
+    assets: { hero: firstPartyImageAssets.retailWarrantyCard },
+  },
 };
 
 const templateThumbnailAssetPaths: Record<LandingPageTemplateCategory, string> = {
@@ -232,8 +734,14 @@ const templatePresetSeeds: readonly LandingPageTemplatePresetSeed[] =
           { id: "link-support", label: "Contact support", url: "https://example.com/support" },
         ],
       },
-      assetRequirements: [heroAsset],
-      thumbnail: { label: "Product", tone: "slate" },
+      assetRequirements: [
+        withAssetPath(heroAsset, firstPartyImageAssets.retailProductPackaging),
+      ],
+      thumbnail: {
+        label: "Product",
+        tone: "slate",
+        assetPath: firstPartyImageAssets.retailProductPackaging.assetPath,
+      },
     },
     {
       key: "creator-link-hub",
@@ -507,8 +1015,15 @@ const templatePresetSeeds: readonly LandingPageTemplatePresetSeed[] =
         pdfTitle: "Product catalog",
         description: "Open the latest document from this QR code.",
       },
-      assetRequirements: [pdfAsset],
-      thumbnail: { label: "PDF", tone: "rose" },
+      assetRequirements: [
+        pdfAsset,
+        withAssetPath(heroAsset, firstPartyImageAssets.retailCatalogSpread),
+      ],
+      thumbnail: {
+        label: "PDF",
+        tone: "rose",
+        assetPath: firstPartyImageAssets.retailCatalogSpread.assetPath,
+      },
     },
     {
       key: "image-gallery",
@@ -551,8 +1066,14 @@ const templatePresetSeeds: readonly LandingPageTemplatePresetSeed[] =
         videoUrl: "https://example.com/video",
         description: "Open the hosted video from this QR code.",
       },
-      assetRequirements: [heroAsset],
-      thumbnail: { label: "Video", tone: "indigo" },
+      assetRequirements: [
+        withAssetPath(heroAsset, firstPartyImageAssets.mediaVideoCover),
+      ],
+      thumbnail: {
+        label: "Video",
+        tone: "indigo",
+        assetPath: firstPartyImageAssets.mediaVideoCover.assetPath,
+      },
     },
     {
       key: "audio-link",
@@ -569,8 +1090,15 @@ const templatePresetSeeds: readonly LandingPageTemplatePresetSeed[] =
         audioUrl: "https://example.com/audio",
         description: "Play or open the audio from this QR code.",
       },
-      assetRequirements: [audioAsset],
-      thumbnail: { label: "Audio", tone: "slate" },
+      assetRequirements: [
+        audioAsset,
+        withAssetPath(heroAsset, firstPartyImageAssets.mediaAudioCover),
+      ],
+      thumbnail: {
+        label: "Audio",
+        tone: "slate",
+        assetPath: firstPartyImageAssets.mediaPodcastCover.assetPath,
+      },
     },
     {
       key: "school-admissions",
@@ -930,8 +1458,15 @@ const templatePresetSeeds: readonly LandingPageTemplatePresetSeed[] =
         pdfTitle: "Warranty and care guide",
         description: "Open the latest warranty, care, and support document.",
       },
-      assetRequirements: [pdfAsset, heroAsset],
-      thumbnail: { label: "Warranty", tone: "rose" },
+      assetRequirements: [
+        pdfAsset,
+        withAssetPath(heroAsset, firstPartyImageAssets.retailWarrantyCard),
+      ],
+      thumbnail: {
+        label: "Warranty",
+        tone: "rose",
+        assetPath: firstPartyImageAssets.retailWarrantyCard.assetPath,
+      },
     },
   ];
 
@@ -944,9 +1479,16 @@ function createTemplatePreset(
   template: LandingPageTemplatePresetSeed,
   index: number
 ): LandingPageTemplatePreset {
+  const assignment = templateAssetAssignments[template.key];
+
   return {
     ...template,
+    defaultContent: applyTemplateAssetContent(template, assignment),
+    assetRequirements: template.assetRequirements.map((asset) =>
+      applyTemplateAssetRequirement(asset, assignment)
+    ),
     status: template.status ?? "published",
+    source: "first_party",
     sortPriority: template.sortPriority ?? index + 1,
     flags: template.flags ?? getDefaultTemplateFlags(template.key),
     requiredFields: template.requiredFields ?? getDefaultRequiredFields(template.type),
@@ -959,14 +1501,51 @@ function createTemplatePreset(
       alt: template.thumbnail.alt ?? `${template.label} template thumbnail`,
       assetPath:
         template.thumbnail.assetPath ??
+        assignment?.thumbnail?.assetPath ??
         templateThumbnailAssetPaths[template.category],
     },
     mobilePreview: {
       width: 390,
       height: 844,
       alt: template.mobilePreview?.alt ?? `${template.label} mobile preview`,
-      assetPath: template.mobilePreview?.assetPath,
+      assetPath:
+        template.mobilePreview?.assetPath ??
+        `/assets/landing-page-templates/mobile-previews/${template.key}.png`,
     },
+  };
+}
+
+function applyTemplateAssetRequirement(
+  asset: LandingPageTemplateAssetRequirement,
+  assignment?: TemplateAssetAssignment
+): LandingPageTemplateAssetRequirement {
+  if (asset.assetPath) return asset;
+
+  const assignedAsset = assignment?.assets?.[asset.slot];
+
+  return assignedAsset ? withAssetPath(asset, assignedAsset) : asset;
+}
+
+function applyTemplateAssetContent(
+  template: LandingPageTemplatePresetSeed,
+  assignment?: TemplateAssetAssignment
+): Partial<LandingPageContent> {
+  if (!assignment?.gallery || template.type !== "images") {
+    return template.defaultContent;
+  }
+
+  return {
+    ...template.defaultContent,
+    images: assignment.gallery.map((asset, index) => ({
+      id: `${template.key}-image-${index + 1}`,
+      assetId: `${template.key}-first-party-image-${index + 1}`,
+      previewUrl: asset.assetPath,
+      alt: asset.alt,
+      caption:
+        index === 0
+          ? template.description
+          : `${template.label} supporting image ${index + 1}`,
+    })),
   };
 }
 

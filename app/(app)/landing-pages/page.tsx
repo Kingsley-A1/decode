@@ -1,12 +1,6 @@
 import Link from "next/link";
-import {
-  Eye,
-  FileText,
-  Image as ImageIcon,
-  LayoutTemplate,
-  UploadCloud,
-} from "lucide-react";
-import { LandingPageBuilder } from "@/components/landing-pages/LandingPageBuilder";
+import { Eye, FileText, LayoutTemplate, UploadCloud } from "lucide-react";
+import { LandingPageBuilderIsland } from "@/components/landing-pages/LandingPageBuilderIsland";
 import { PageShell } from "@/components/PageShell";
 
 const pageCapabilities = [
@@ -48,35 +42,7 @@ export default function LandingPagesPage() {
       }
     >
       <div className="space-y-6">
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
-                <ImageIcon className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-xl font-semibold text-slate-950">
-                  Build pages that make dynamic QR codes useful
-                </h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                  Use Pages when the QR destination needs more than a single
-                  redirect: menus, offers, galleries, event details, documents,
-                  audio, video, feedback, and link collections.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <aside className="rounded-xl border border-sky-100 bg-sky-50/80 p-5 shadow-sm">
-            <p className="text-sm font-semibold text-slate-950">
-              Publishing model
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Pages attach to dynamic QR codes, stay editable after publishing,
-              and keep media labels accessible for public rendering.
-            </p>
-          </aside>
-        </section>
+        <LandingPageBuilderIsland />
 
         <section
           aria-label="Landing page capabilities"
@@ -103,8 +69,6 @@ export default function LandingPagesPage() {
             );
           })}
         </section>
-
-        <LandingPageBuilder />
       </div>
     </PageShell>
   );

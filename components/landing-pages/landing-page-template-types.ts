@@ -19,6 +19,7 @@ export type LandingPageTemplateCategory =
   | "feedback";
 
 export type LandingPageTemplateAssetKind = "image" | "pdf" | "audio";
+export type LandingPageTemplateSource = "first_party" | "admin";
 export type LandingPageTemplateStatus = "draft" | "published" | "archived";
 export type LandingPageTemplateFlag = "popular" | "new";
 
@@ -34,6 +35,10 @@ export interface LandingPageTemplateAssetRequirement {
   readonly label: string;
   readonly kind: LandingPageTemplateAssetKind;
   readonly required: boolean;
+  readonly assetPath?: string;
+  readonly alt?: string;
+  readonly width?: number;
+  readonly height?: number;
 }
 
 export interface LandingPageTemplateThumbnail {
@@ -64,6 +69,7 @@ export interface LandingPageTemplatePreset {
   readonly category: LandingPageTemplateCategory;
   readonly industry: string;
   readonly status: LandingPageTemplateStatus;
+  readonly source: LandingPageTemplateSource;
   readonly sortPriority: number;
   readonly flags: readonly LandingPageTemplateFlag[];
   readonly tags: readonly string[];

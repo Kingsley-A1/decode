@@ -4,6 +4,7 @@ import { AdminTable, type AdminTableColumn } from "@/components/admin/AdminTable
 import { Badge } from "@/components/ui";
 import {
   listAdminAssets,
+  listAdminLandingPageTemplates,
   listAdminLandingPages,
   listAdminLinkChecks,
   listAdminQRCodes,
@@ -24,6 +25,7 @@ export type AdminResource =
   | "workspaces"
   | "qr-codes"
   | "landing-pages"
+  | "landing-page-templates"
   | "assets"
   | "scans"
   | "reviews"
@@ -162,6 +164,15 @@ async function getResourcePage(
         secondary: `${row.type} · ${row.workspace.name}`,
         status: row.status,
         metric: row.qrCode?.title ?? "No QR attached",
+        updatedAt: row.updatedAt,
+      }));
+    case "landing-page-templates":
+      return toDisplayPage(await listAdminLandingPageTemplates(query), (row) => ({
+        id: row.id,
+        primary: row.label,
+        secondary: `${row.key} · ${row.category} · ${row.industry}`,
+        status: `${row.source} / ${row.status}`,
+        metric: `${row.usageCount} uses · ${row._count.assets} assets`,
         updatedAt: row.updatedAt,
       }));
     case "assets":

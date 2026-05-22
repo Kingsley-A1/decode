@@ -14,12 +14,14 @@ import type {
   LandingPageType,
   PreviewMode,
 } from "@/components/landing-pages/landing-page-types";
+import type { LandingPageTemplateAssetRequirement } from "@/components/landing-pages/landing-page-template-types";
 
 interface LandingPagePreviewProps {
   readonly type: LandingPageType;
   readonly title: string;
   readonly content: LandingPageContent;
   readonly mode: PreviewMode;
+  readonly templateAssets?: readonly LandingPageTemplateAssetRequirement[];
 }
 
 export function LandingPagePreview({
@@ -27,9 +29,11 @@ export function LandingPagePreview({
   title,
   content,
   mode,
+  templateAssets = [],
 }: LandingPagePreviewProps) {
   return (
     <section
+      data-landing-page-preview={mode}
       aria-label="Landing page preview"
       className={cn(
         "mx-auto overflow-hidden rounded-[28px] border border-slate-200 bg-slate-100 shadow-sm",
@@ -48,7 +52,7 @@ export function LandingPagePreview({
             mode === "mobile" ? "max-w-sm p-5" : "max-w-3xl p-8"
           )}
         >
-          {renderPreviewBody({ type, title, content })}
+          {renderPreviewBody({ type, title, content, templateAssets })}
         </div>
       </div>
     </section>
@@ -59,18 +63,29 @@ function renderPreviewBody({
   type,
   title,
   content,
+  templateAssets,
 }: {
   readonly type: LandingPageType;
   readonly title: string;
   readonly content: LandingPageContent;
+  readonly templateAssets: readonly LandingPageTemplateAssetRequirement[];
 }) {
+  const logoAsset = getTemplateAsset(templateAssets, "logo");
+  const avatarAsset = getTemplateAsset(templateAssets, "avatar");
+  const heroAsset = getTemplateAsset(templateAssets, "hero");
+  const galleryAsset = getTemplateAsset(templateAssets, "gallery");
+
   if (type === "profile") {
     return (
       <PreviewStack>
         <MediaLogo
-          src={content.avatar?.previewUrl}
+          src={content.avatar?.previewUrl || avatarAsset?.assetPath}
           fallback={content.displayName}
-          label={`${content.displayName || title} avatar`}
+          label={
+            content.avatar?.fileName ||
+            avatarAsset?.alt ||
+            `${content.displayName || title} avatar`
+          }
         />
         <PreviewHeader
           eyebrow="Profile"
@@ -87,15 +102,20 @@ function renderPreviewBody({
     return (
       <PreviewStack>
         <MediaLogo
-          src={content.logo?.previewUrl}
+          src={content.logo?.previewUrl || logoAsset?.assetPath}
           fallback={content.businessName}
-          label={`${content.businessName || title} logo`}
+          label={
+            content.logo?.fileName ||
+            logoAsset?.alt ||
+            `${content.businessName || title} logo`
+          }
         />
         <PreviewHeader
           eyebrow="Business"
           title={content.businessName || title}
           subtitle={content.tagline}
         />
+        <HeroImage asset={heroAsset} />
         <PreviewParagraph>{content.description}</PreviewParagraph>
         <div className="grid gap-2">
           {content.phone && (
@@ -137,6 +157,7 @@ function renderPreviewBody({
   if (type === "menu") {
     return (
       <PreviewStack>
+        <HeroImage asset={heroAsset} />
         <PreviewHeader
           eyebrow="Menu"
           title={content.restaurantName || title}
@@ -185,6 +206,7 @@ function renderPreviewBody({
   if (type === "coupon") {
     return (
       <PreviewStack>
+        <HeroImage asset={heroAsset} />
         <PreviewHeader
           eyebrow="Coupon"
           title={content.couponHeadline || title}
@@ -197,7 +219,7 @@ function renderPreviewBody({
           <ContactLine
             icon={<TicketPercent className="h-4 w-4" aria-hidden="true" />}
           >
-            Expires {content.expiresAt}
+            Expires {formatPreviewDate(content.expiresAt)}
           </ContactLine>
         )}
         <PreviewLinks
@@ -220,9 +242,10 @@ function renderPreviewBody({
   if (type === "event") {
     return (
       <PreviewStack>
+        <HeroImage asset={heroAsset} />
         <PreviewHeader eyebrow="Event" title={content.eventName || title} />
         <ContactLine icon={<CalendarDays className="h-4 w-4" aria-hidden="true" />}>
-          Starts {content.startAt}
+          Starts {formatPreviewDate(content.startAt)}
         </ContactLine>
         {content.location && (
           <ContactLine icon={<MapPin className="h-4 w-4" aria-hidden="true" />}>
@@ -299,7 +322,7 @@ function renderPreviewBody({
                 className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
               >
                 <PreviewImageFrame
-                  src={image.previewUrl}
+                  src={image.previewUrl || galleryAsset?.assetPath}
                   alt={image.alt || "Landing page image"}
                 />
                 <figcaption className="p-3 text-sm leading-6 text-slate-600">
@@ -323,6 +346,7 @@ function renderPreviewBody({
   if (type === "video_link") {
     return (
       <PreviewStack>
+        <HeroImage asset={heroAsset} />
         <PreviewHeader
           eyebrow="Video"
           title={content.videoTitle || title}
@@ -341,6 +365,7 @@ function renderPreviewBody({
 
   return (
     <PreviewStack>
+      <HeroImage asset={heroAsset} />
       <PreviewHeader
         eyebrow="Audio"
         title={content.audioTitle || title}
@@ -402,6 +427,25 @@ function PreviewParagraph({ children }: { readonly children?: string }) {
   if (!children) return null;
 
   return <p className="text-base leading-7 text-slate-600">{children}</p>;
+}
+
+function HeroImage({
+  asset,
+}: {
+  readonly asset?: LandingPageTemplateAssetRequirement;
+}) {
+  if (!asset?.assetPath) return null;
+
+  return (
+    <figure className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={asset.assetPath}
+        alt={asset.alt ?? asset.label}
+        className="aspect-video w-full object-cover"
+      />
+    </figure>
+  );
 }
 
 function PreviewLinks({
@@ -524,4 +568,26 @@ function DocumentPanel({
       </span>
     </div>
   );
+}
+
+function getTemplateAsset(
+  assets: readonly LandingPageTemplateAssetRequirement[],
+  slot: LandingPageTemplateAssetRequirement["slot"]
+) {
+  return assets.find((asset) => asset.slot === slot && asset.assetPath);
+}
+
+function formatPreviewDate(value: string): string {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return value;
+  }
 }

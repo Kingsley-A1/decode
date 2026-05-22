@@ -33,6 +33,7 @@ export async function getAdminOverview() {
     qrCodes,
     dynamicQRCodes,
     landingPages,
+    landingPageTemplates,
     assets,
     scans,
     reviews,
@@ -45,6 +46,7 @@ export async function getAdminOverview() {
     prisma.qRCode.count({ where: { deletedAt: null } }),
     prisma.qRCode.count({ where: { deletedAt: null, mode: "dynamic" } }),
     prisma.landingPage.count({ where: { deletedAt: null } }),
+    prisma.landingPageTemplate.count({ where: { deletedAt: null } }),
     prisma.qRCodeAsset.count({ where: { deletedAt: null } }),
     prisma.scanEvent.count(),
     prisma.review.count({ where: { deletedAt: null } }),
@@ -60,6 +62,7 @@ export async function getAdminOverview() {
       qrCodes,
       dynamicQRCodes,
       landingPages,
+      landingPageTemplates,
       assets,
       scans,
       reviews,
@@ -229,6 +232,38 @@ export async function listAdminLandingPages(
       select: landingPageRowSelect,
     }),
     prisma.landingPage.count({ where }),
+  ]);
+
+  return getPageResult(records, total, query.take);
+}
+
+export async function listAdminLandingPageTemplates(
+  query: AdminListQuery
+): Promise<AdminPageResult<LandingPageTemplateRow>> {
+  const where: Prisma.LandingPageTemplateWhereInput = {
+    ...(query.status ? { status: query.status } : { deletedAt: null }),
+    ...(query.q
+      ? {
+          OR: [
+            { key: { contains: query.q } },
+            { label: { contains: query.q } },
+            { description: { contains: query.q } },
+            { category: { contains: query.q } },
+            { industry: { contains: query.q } },
+          ],
+        }
+      : {}),
+  };
+
+  const [records, total] = await Promise.all([
+    prisma.landingPageTemplate.findMany({
+      where,
+      orderBy: [{ sortPriority: "asc" }, { updatedAt: "desc" }],
+      take: query.take,
+      ...getCursor(query.cursor),
+      select: landingPageTemplateRowSelect,
+    }),
+    prisma.landingPageTemplate.count({ where }),
   ]);
 
   return getPageResult(records, total, query.take);
@@ -435,6 +470,32 @@ const landingPageRowSelect = {
   qrCode: { select: { id: true, title: true, slug: true } },
 } satisfies Prisma.LandingPageSelect;
 
+const landingPageTemplateRowSelect = {
+  id: true,
+  key: true,
+  type: true,
+  label: true,
+  category: true,
+  industry: true,
+  status: true,
+  source: true,
+  sortPriority: true,
+  usageCount: true,
+  lastUsedAt: true,
+  publishedAt: true,
+  archivedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+  _count: {
+    select: {
+      assets: true,
+      landingPages: true,
+      usages: true,
+    },
+  },
+} satisfies Prisma.LandingPageTemplateSelect;
+
 const assetRowSelect = {
   id: true,
   workspaceId: true,
@@ -514,6 +575,9 @@ export type QRCodeRow = Prisma.QRCodeGetPayload<{
 }>;
 export type LandingPageRow = Prisma.LandingPageGetPayload<{
   select: typeof landingPageRowSelect;
+}>;
+export type LandingPageTemplateRow = Prisma.LandingPageTemplateGetPayload<{
+  select: typeof landingPageTemplateRowSelect;
 }>;
 export type AssetRow = Prisma.QRCodeAssetGetPayload<{
   select: typeof assetRowSelect;

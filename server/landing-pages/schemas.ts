@@ -42,6 +42,12 @@ const menuSectionSchema = z.object({
 const baseLandingPageRequestSchema = z.object({
   workspaceId: z.string().trim().min(1).optional(),
   qrCodeId: z.string().trim().min(1),
+  templateKey: z
+    .string()
+    .trim()
+    .max(80)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .optional(),
   title: z.string().trim().min(1).max(120),
   status: z
     .enum([

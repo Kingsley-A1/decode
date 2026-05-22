@@ -31,6 +31,12 @@ export const PLATFORM_AUDIT_ACTION = {
   QR_ARCHIVE: "qr.archive",
   QR_RESTORE: "qr.restore",
   WORKSPACE_REVIEW: "workspace.review",
+  TEMPLATE_CREATE: "landing_page_template.create",
+  TEMPLATE_UPDATE: "landing_page_template.update",
+  TEMPLATE_PUBLISH: "landing_page_template.publish",
+  TEMPLATE_ARCHIVE: "landing_page_template.archive",
+  TEMPLATE_RESTORE: "landing_page_template.restore",
+  TEMPLATE_ASSET_UPLOAD: "landing_page_template_asset.upload",
 } as const;
 
 export const PLATFORM_ENTITY_TYPE = {
@@ -39,6 +45,8 @@ export const PLATFORM_ENTITY_TYPE = {
   REVIEW: "review",
   QR_CODE: "qr_code",
   WORKSPACE: "workspace",
+  LANDING_PAGE_TEMPLATE: "landing_page_template",
+  LANDING_PAGE_TEMPLATE_ASSET: "landing_page_template_asset",
 } as const;
 
 export const ADMIN_SESSION_COOKIE = "__Host-decode_admin_session";

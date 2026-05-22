@@ -6,6 +6,7 @@ import {
   History,
   Image,
   LayoutDashboard,
+  LayoutTemplate,
   Link2,
   QrCode,
   Settings,
@@ -56,6 +57,12 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     label: "Landing Pages",
     description: "Published and draft page inventory.",
     icon: FileText,
+  },
+  {
+    href: "/admin/templates",
+    label: "Page Templates",
+    description: "Template catalog, status, usage, and required assets.",
+    icon: LayoutTemplate,
   },
   {
     href: "/admin/assets",

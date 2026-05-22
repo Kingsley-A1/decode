@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { getSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   BriefcaseBusiness,
@@ -85,6 +87,27 @@ interface ReadinessItem {
   readonly done: boolean;
   readonly required: boolean;
 }
+
+interface DynamicQRCodeOption {
+  readonly id: string;
+  readonly title: string;
+  readonly mode: "static" | "dynamic";
+  readonly status: "draft" | "published" | "archived";
+  readonly slug: string | null;
+  readonly destinationUrl: string | null;
+  readonly landingPage?: {
+    readonly id: string;
+    readonly title: string;
+    readonly status: LandingPageStatus;
+  } | null;
+}
+
+type DynamicQRCodeLoadStatus =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "unauthenticated"
+  | "error";
 
 type MutablePartial<T> = {
   -readonly [K in keyof T]?: T[K];
@@ -179,10 +202,23 @@ const thumbnailToneClasses: Record<
   slate: "from-slate-100 via-white to-sky-50 text-slate-700",
 };
 
+const templateSearchSynonyms: Record<string, readonly string[]> = {
+  admissions: ["application", "open day", "prospectus", "school", "education"],
+  audio: ["podcast", "sermon", "music", "guide", "listen", "sound"],
+  church: ["service", "sermon", "giving", "worship", "institution", "ministry"],
+  clinic: ["healthcare", "doctor", "hospital", "appointment", "patient", "care"],
+  menu: ["restaurant", "food", "cafe", "dining", "prices", "specials"],
+  property: ["real estate", "listing", "home", "house", "inspection", "gallery"],
+  warranty: ["product", "manual", "support", "retail", "packaging", "care guide"],
+};
+
 const defaultTemplateKey =
   defaultLandingPageTemplatePresets[0]?.key ?? "personal-profile";
 
 export function LandingPageBuilder() {
+  const [templates, setTemplates] = useState<readonly LandingPageTemplatePreset[]>(
+    defaultLandingPageTemplatePresets
+  );
   const [type, setType] = useState<LandingPageType>("profile");
   const [title, setTitle] = useState("Customer landing page");
   const [qrCodeId, setQrCodeId] = useState("");
@@ -200,23 +236,31 @@ export function LandingPageBuilder() {
     useState<LandingPageTemplatePreset | null>(null);
   const [uploadState, setUploadState] = useState<UploadState | null>(null);
   const [saveState, setSaveState] = useState<UploadState | null>(null);
+  const [dynamicQRCodes, setDynamicQRCodes] = useState<
+    readonly DynamicQRCodeOption[]
+  >([]);
+  const [dynamicQRCodeStatus, setDynamicQRCodeStatus] =
+    useState<DynamicQRCodeLoadStatus>("idle");
+  const [dynamicQRCodeError, setDynamicQRCodeError] = useState<string | null>(
+    null
+  );
   const [notice, setNotice] = useState<string | null>(
     "Choose a template, validate the content, then save a draft or publish. Published pages remain editable."
   );
 
   const selectedTemplate = useMemo(
     () =>
-      defaultLandingPageTemplatePresets.find(
+      templates.find(
         (template) => template.key === selectedPresetKey
       ) ?? defaultLandingPageTemplatePresets[0]!,
-    [selectedPresetKey]
+    [selectedPresetKey, templates]
   );
   const activeTemplate = useMemo(
     () =>
-      defaultLandingPageTemplatePresets.find(
+      templates.find(
         (template) => template.key === activeTemplateKey
       ) ?? defaultLandingPageTemplatePresets[0]!,
-    [activeTemplateKey]
+    [activeTemplateKey, templates]
   );
   const validationErrors = useMemo(
     () => validateContent(type, content),
@@ -237,16 +281,100 @@ export function LandingPageBuilder() {
     (item) => item.required && !item.done
   );
   const readinessMessages = [
+    ...(!title.trim() ? ["Page title is required."] : []),
+    ...(!qrCodeId.trim() ? ["Select a dynamic QR code before saving."] : []),
+    ...(dynamicQRCodeStatus === "unauthenticated"
+      ? ["Sign in to save landing pages."]
+      : []),
     ...validationErrors,
+    ...missingRequiredFields.map((item) => `${item.label} is required.`),
     ...missingRequiredAssets.map((item) => `${item.label} is required.`),
   ];
   const canSave =
+    dynamicQRCodeStatus !== "unauthenticated" &&
     validationErrors.length === 0 &&
     missingRequiredFields.length === 0 &&
     missingRequiredAssets.length === 0 &&
     Boolean(title.trim()) &&
     Boolean(qrCodeId.trim()) &&
     status !== "archived";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchJson<
+      ApiResponse<{
+        readonly templates: readonly LandingPageTemplatePreset[];
+        readonly source: string;
+      }>
+    >("/api/landing-page-templates")
+      .then((response) => {
+        if (!isMounted || !response.ok || !response.data) return;
+        if (!isTemplatePresetArray(response.data.templates)) return;
+        if (response.data.templates.length === 0) return;
+
+        setTemplates(response.data.templates);
+      })
+      .catch(() => {
+        // The static catalog remains available when the template backend is offline.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    setDynamicQRCodeStatus("loading");
+    setDynamicQRCodeError(null);
+
+    getSession()
+      .then((session) => {
+        if (!isMounted) return null;
+
+        if (!session?.user) {
+          setDynamicQRCodes([]);
+          setDynamicQRCodeStatus("unauthenticated");
+          return null;
+        }
+
+        return fetchDynamicQRCodes();
+      })
+      .then((response) => {
+        if (!response) return;
+        if (!isMounted) return;
+
+        setDynamicQRCodes(
+          response.qrCodes.filter(
+            (qrCode) =>
+              qrCode.mode === "dynamic" && qrCode.status !== "archived"
+          )
+        );
+        setDynamicQRCodeStatus("ready");
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Could not load dynamic QR codes.";
+
+        setDynamicQRCodes([]);
+        setDynamicQRCodeError(message);
+        setDynamicQRCodeStatus(
+          message.toLowerCase().includes("sign in")
+            ? "unauthenticated"
+            : "error"
+        );
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleFieldChange = (key: keyof LandingPageContent, value: string) => {
     setHasEditedContent(true);
@@ -379,7 +507,9 @@ export function LandingPageBuilder() {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          method === "POST" ? { ...payload, qrCodeId } : payload
+          method === "POST"
+            ? { ...payload, qrCodeId, templateKey: activeTemplate.key }
+            : payload
         ),
       });
 
@@ -395,14 +525,10 @@ export function LandingPageBuilder() {
           : "Landing page saved."
       );
     } catch (error) {
-      if (!landingPageId) {
-        setLandingPageId(`preview-page-${Date.now()}`);
-      }
-      setStatus(nextStatus);
       setNotice(
         error instanceof Error
-          ? `${error.message} Changes are preserved locally in preview mode.`
-          : "Changes are preserved locally in preview mode."
+          ? `${error.message} Your edits are still on this page and have not been published.`
+          : "Could not save landing page. Your edits are still on this page and have not been published."
       );
     } finally {
       setSaveState(null);
@@ -411,131 +537,161 @@ export function LandingPageBuilder() {
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-950">
-                Landing-page builder
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Build editable public pages for dynamic QR codes with clear
-                content validation, media upload controls, and launch preview.
+      <TemplateExplorer
+        templates={templates}
+        selectedPresetKey={selectedTemplate.key}
+        activeTemplateKey={activeTemplate.key}
+        onSelectPreset={setSelectedPresetKey}
+        onUseTemplate={handleUseTemplate}
+      />
+
+      <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)]">
+        <div className="min-w-0 space-y-5">
+          <section className="grid min-w-0 gap-4">
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-slate-950">
+                    Build and attach page
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Edit the selected template, attach it to a dynamic QR code,
+                    then save a draft or publish it.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={status === "published" ? "success" : "neutral"}>
+                    {status}
+                  </Badge>
+                  <Badge variant="info">{activeTemplate.label}</Badge>
+                </div>
+              </div>
+
+              {notice && (
+                <Alert className="mt-4" variant="info" title="Builder status">
+                  {notice}
+                </Alert>
+              )}
+
+              <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-3">
+                <Input
+                  label="Page title"
+                  value={title}
+                  onChange={(event) => {
+                    setHasEditedContent(true);
+                    setHasEditedTitle(true);
+                    setTitle(event.target.value);
+                  }}
+                  placeholder="Campaign landing page"
+                  containerClassName="md:col-span-2"
+                />
+                <Select
+                  label="Status"
+                  value={status}
+                  onChange={(event) =>
+                    setStatus(event.target.value as LandingPageStatus)
+                  }
+                >
+                  {statusOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </Select>
+                <DynamicQRCodeSelector
+                  qrCodes={dynamicQRCodes}
+                  selectedQRCodeId={qrCodeId}
+                  loadStatus={dynamicQRCodeStatus}
+                  loadError={dynamicQRCodeError}
+                  landingPageId={landingPageId}
+                  onChange={setQrCodeId}
+                />
+                <Input
+                  label="Landing page ID"
+                  value={landingPageId}
+                  onChange={(event) => setLandingPageId(event.target.value)}
+                  placeholder="Leave empty to create"
+                  hint="Existing published pages can be edited."
+                />
+              </div>
+            </div>
+
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-sm font-semibold text-slate-950">
+                Save checklist
               </p>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                <ChecklistItem done={Boolean(title.trim())}>
+                  Page title set
+                </ChecklistItem>
+                <ChecklistItem done={Boolean(qrCodeId.trim())}>
+                  Dynamic QR selected
+                </ChecklistItem>
+                <ChecklistItem done={status !== "archived"}>
+                  Page remains editable
+                </ChecklistItem>
+              </ul>
+              <ReadinessChecklist
+                title="Required fields"
+                items={requiredFieldStatuses}
+              />
+              <ReadinessChecklist
+                title="Required assets"
+                items={requiredAssetStatuses}
+                emptyLabel="No assets required for this template."
+              />
+              {dynamicQRCodeStatus === "unauthenticated" && (
+                <Alert
+                  className="mt-4"
+                  variant="warning"
+                  title="Sign in before saving"
+                >
+                  <div className="space-y-3">
+                    <p>
+                      Landing pages can only be saved or published after you
+                      sign in and attach a dynamic QR code.
+                    </p>
+                    <Link
+                      href="/me"
+                      className="inline-flex min-h-11 items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                    >
+                      Sign in to save
+                    </Link>
+                  </div>
+                </Alert>
+              )}
+              {readinessMessages.length > 0 && (
+                <Alert
+                  className="mt-4"
+                  variant="warning"
+                  title="Missing requirements"
+                >
+                  {readinessMessages.join(" ")}
+                </Alert>
+              )}
+              <div className="mt-4 grid gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => handleSave("draft")}
+                  disabled={!canSave || Boolean(saveState)}
+                  isLoading={saveState?.slot === "draft"}
+                  leftIcon={<Save className="h-4 w-4" aria-hidden="true" />}
+                >
+                  Save draft
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => handleSave("published")}
+                  disabled={!canSave || Boolean(saveState)}
+                  isLoading={saveState?.slot === "published"}
+                  leftIcon={<Rocket className="h-4 w-4" aria-hidden="true" />}
+                >
+                  Publish changes
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={status === "published" ? "success" : "neutral"}>
-                {status}
-              </Badge>
-              <Badge variant="info">{activeTemplate.label}</Badge>
-            </div>
-          </div>
+          </section>
 
-          {notice && (
-            <Alert className="mt-4" variant="info" title="Builder status">
-              {notice}
-            </Alert>
-          )}
-
-          <div className="mt-5 grid gap-4 md:grid-cols-3">
-            <Input
-              label="Page title"
-              value={title}
-              onChange={(event) => {
-                setHasEditedContent(true);
-                setHasEditedTitle(true);
-                setTitle(event.target.value);
-              }}
-              placeholder="Campaign landing page"
-              containerClassName="md:col-span-2"
-            />
-            <Select
-              label="Status"
-              value={status}
-              onChange={(event) =>
-                setStatus(event.target.value as LandingPageStatus)
-              }
-            >
-              {statusOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </Select>
-            <Input
-              label="Dynamic QR code ID"
-              value={qrCodeId}
-              onChange={(event) => setQrCodeId(event.target.value)}
-              placeholder="Dynamic QR ID"
-              hint="Landing pages attach to dynamic QR codes."
-              containerClassName="md:col-span-2"
-            />
-            <Input
-              label="Landing page ID"
-              value={landingPageId}
-              onChange={(event) => setLandingPageId(event.target.value)}
-              placeholder="Leave empty to create"
-              hint="Existing published pages can be edited."
-            />
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-semibold text-slate-950">Save checklist</p>
-          <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-            <ChecklistItem done={Boolean(title.trim())}>Page title set</ChecklistItem>
-            <ChecklistItem done={Boolean(qrCodeId.trim())}>
-              Dynamic QR selected
-            </ChecklistItem>
-            <ChecklistItem done={status !== "archived"}>
-              Page remains editable
-            </ChecklistItem>
-          </ul>
-          <ReadinessChecklist
-            title="Required fields"
-            items={requiredFieldStatuses}
-          />
-          <ReadinessChecklist
-            title="Required assets"
-            items={requiredAssetStatuses}
-            emptyLabel="No assets required for this template."
-          />
-          {readinessMessages.length > 0 && (
-            <Alert className="mt-4" variant="warning" title="Missing requirements">
-              {readinessMessages.join(" ")}
-            </Alert>
-          )}
-          <div className="mt-4 grid gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => handleSave("draft")}
-              disabled={!canSave || Boolean(saveState)}
-              isLoading={saveState?.slot === "draft"}
-              leftIcon={<Save className="h-4 w-4" aria-hidden="true" />}
-            >
-              Save draft
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => handleSave("published")}
-              disabled={!canSave || Boolean(saveState)}
-              isLoading={saveState?.slot === "published"}
-              leftIcon={<Rocket className="h-4 w-4" aria-hidden="true" />}
-            >
-              Publish changes
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)]">
-        <div className="space-y-5">
-          <TemplatePicker
-            selectedPresetKey={selectedTemplate.key}
-            activeTemplateKey={activeTemplate.key}
-            onSelectPreset={setSelectedPresetKey}
-            onUseTemplate={handleUseTemplate}
-          />
           <div className="xl:hidden">
             <PreviewPanel
               heading="Mobile preview"
@@ -544,6 +700,7 @@ export function LandingPageBuilder() {
               title={title}
               content={content}
               mode="mobile"
+              templateAssets={activeTemplate.assetRequirements}
             />
           </div>
           <ContentEditor
@@ -564,6 +721,7 @@ export function LandingPageBuilder() {
             title={title}
             content={content}
             mode={previewMode}
+            templateAssets={activeTemplate.assetRequirements}
             modeControl={
               <SegmentedControl
                 value={previewMode}
@@ -597,6 +755,7 @@ function PreviewPanel({
   title,
   content,
   mode,
+  templateAssets,
   modeControl,
 }: {
   readonly heading: string;
@@ -605,6 +764,7 @@ function PreviewPanel({
   readonly title: string;
   readonly content: LandingPageContent;
   readonly mode: PreviewMode;
+  readonly templateAssets?: LandingPageTemplatePreset["assetRequirements"];
   readonly modeControl?: React.ReactNode;
 }) {
   return (
@@ -616,7 +776,13 @@ function PreviewPanel({
         </div>
         {modeControl && <div className="w-full sm:w-64">{modeControl}</div>}
       </div>
-      <LandingPagePreview type={type} title={title} content={content} mode={mode} />
+      <LandingPagePreview
+        type={type}
+        title={title}
+        content={content}
+        mode={mode}
+        templateAssets={templateAssets}
+      />
     </div>
   );
 }
@@ -716,12 +882,124 @@ function TemplateSwitchDialog({
   );
 }
 
-function TemplatePicker({
+function DynamicQRCodeSelector({
+  qrCodes,
+  selectedQRCodeId,
+  loadStatus,
+  loadError,
+  landingPageId,
+  onChange,
+}: {
+  readonly qrCodes: readonly DynamicQRCodeOption[];
+  readonly selectedQRCodeId: string;
+  readonly loadStatus: DynamicQRCodeLoadStatus;
+  readonly loadError: string | null;
+  readonly landingPageId: string;
+  readonly onChange: (qrCodeId: string) => void;
+}) {
+  const selectedQRCodeLoaded = qrCodes.some(
+    (qrCode) => qrCode.id === selectedQRCodeId
+  );
+  const hint = getDynamicQRCodeSelectorHint({
+    count: qrCodes.length,
+    loadStatus,
+  });
+
+  return (
+    <div className="min-w-0 space-y-3 md:col-span-2">
+      <Select
+        label="Dynamic QR code"
+        value={selectedQRCodeId}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={loadStatus === "loading" || loadStatus === "unauthenticated"}
+        hint={hint}
+        error={loadStatus === "error" ? loadError ?? undefined : undefined}
+      >
+        <option value="">Select a dynamic QR code</option>
+        {selectedQRCodeId && !selectedQRCodeLoaded && (
+          <option value={selectedQRCodeId}>
+            Selected dynamic QR ({selectedQRCodeId})
+          </option>
+        )}
+        {qrCodes.map((qrCode) => {
+          const attachedElsewhere = Boolean(
+            qrCode.landingPage?.id && qrCode.landingPage.id !== landingPageId
+          );
+
+          return (
+            <option
+              key={qrCode.id}
+              value={qrCode.id}
+              disabled={attachedElsewhere}
+            >
+              {formatDynamicQRCodeOptionLabel(qrCode, attachedElsewhere)}
+            </option>
+          );
+        })}
+      </Select>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href="/generate?mode=dynamic"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Create dynamic QR
+        </Link>
+        {loadStatus === "unauthenticated" && (
+          <Link
+            href="/me"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+          >
+            Sign in
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function getDynamicQRCodeSelectorHint({
+  count,
+  loadStatus,
+}: {
+  readonly count: number;
+  readonly loadStatus: DynamicQRCodeLoadStatus;
+}) {
+  if (loadStatus === "loading") return "Loading saved dynamic QR codes.";
+  if (loadStatus === "unauthenticated") {
+    return "Sign in to load and attach dynamic QR codes.";
+  }
+  if (loadStatus === "error") {
+    return "Refresh the page or create a new dynamic QR code.";
+  }
+  if (count === 0) {
+    return "Create a dynamic QR code before publishing a landing page.";
+  }
+
+  return "Only dynamic QR codes without another landing page can be selected.";
+}
+
+function formatDynamicQRCodeOptionLabel(
+  qrCode: DynamicQRCodeOption,
+  attachedElsewhere: boolean
+) {
+  const suffix = attachedElsewhere
+    ? ` - attached to ${qrCode.landingPage?.title ?? "another landing page"}`
+    : qrCode.slug
+      ? ` - /${qrCode.slug}`
+      : "";
+
+  return `${qrCode.title}${suffix}`;
+}
+
+function TemplateExplorer({
+  templates,
   selectedPresetKey,
   activeTemplateKey,
   onSelectPreset,
   onUseTemplate,
 }: {
+  readonly templates: readonly LandingPageTemplatePreset[];
   readonly selectedPresetKey: string;
   readonly activeTemplateKey: string;
   readonly onSelectPreset: (key: string) => void;
@@ -733,37 +1011,34 @@ function TemplatePicker({
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<TemplateCategoryFilter, number>([
-      ["all", defaultLandingPageTemplatePresets.length],
+      ["all", templates.length],
     ]);
 
-    for (const template of defaultLandingPageTemplatePresets) {
+    for (const template of templates) {
       counts.set(template.category, (counts.get(template.category) ?? 0) + 1);
     }
 
     return counts;
-  }, []);
+  }, [templates]);
 
   const pageTypeOptions = useMemo(() => {
     const uniqueTypes = Array.from(
-      new Set(defaultLandingPageTemplatePresets.map((template) => template.type))
+      new Set(templates.map((template) => template.type))
     );
 
     return uniqueTypes.map((value) => ({
       value,
       label: landingPageTypeLabels[value],
     }));
-  }, []);
+  }, [templates]);
 
   const filteredTemplates = useMemo(
-    () =>
-      defaultLandingPageTemplatePresets.filter((template) =>
-        matchesTemplateFilter({ template, query: debouncedQuery, filters })
-      ),
-    [debouncedQuery, filters]
+    () => getRankedTemplateMatches({ templates, query: debouncedQuery, filters }),
+    [debouncedQuery, filters, templates]
   );
 
   const selectedTemplate =
-    defaultLandingPageTemplatePresets.find(
+    templates.find(
       (template) => template.key === selectedPresetKey
     ) ??
     filteredTemplates[0] ??
@@ -798,9 +1073,9 @@ function TemplatePicker({
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-950">
             Choose a template
           </h2>
@@ -809,52 +1084,55 @@ function TemplatePicker({
             into the builder.
           </p>
         </div>
-        <Badge variant="info">{defaultLandingPageTemplatePresets.length} presets</Badge>
+        <Badge variant="info">{templates.length} presets</Badge>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="mt-4 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
+          <div className="sticky top-16 z-20 -mx-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/85 sm:-mx-3 sm:p-3">
           <Input
             label="Search templates"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search school, restaurant, hotel, coupon, event, PDF"
+            placeholder="Search church, clinic, menu, admissions, warranty, property, audio"
             leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
           />
 
-          <div
-            className="flex gap-2 overflow-x-auto pb-1"
-            role="toolbar"
-            aria-label="Template categories"
-          >
-            {templateCategoryOptions
-              .filter((option) => (categoryCounts.get(option.value) ?? 0) > 0)
-              .map((option) => {
-                const isSelected = filters.category === option.value;
+          <div className="mt-4 min-w-0 overflow-x-auto pb-1">
+            <div
+              className="flex min-w-max gap-2"
+              role="toolbar"
+              aria-label="Template categories"
+            >
+              {templateCategoryOptions
+                .filter((option) => (categoryCounts.get(option.value) ?? 0) > 0)
+                .map((option) => {
+                  const isSelected = filters.category === option.value;
 
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => handleFilterChange("category", option.value)}
-                    aria-pressed={isSelected}
-                    className={cn(
-                      "inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition-colors",
-                      isSelected
-                        ? "border-sky-300 bg-sky-50 text-sky-900"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50"
-                    )}
-                  >
-                    {option.label}
-                    <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-200">
-                      {categoryCounts.get(option.value)}
-                    </span>
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handleFilterChange("category", option.value)}
+                      aria-pressed={isSelected}
+                      className={cn(
+                        "inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition-colors",
+                        isSelected
+                          ? "border-sky-300 bg-sky-50 text-sky-900"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50"
+                      )}
+                    >
+                      {option.label}
+                      <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-200">
+                        {categoryCounts.get(option.value)}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-3">
             <Select
               label="Page type"
               value={filters.pageType}
@@ -905,7 +1183,7 @@ function TemplatePicker({
             </Select>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-600" aria-live="polite">
               {filteredTemplates.length} template
               {filteredTemplates.length === 1 ? "" : "s"} found
@@ -923,6 +1201,7 @@ function TemplatePicker({
               onRemove={handleRemoveFilter}
             />
           )}
+          </div>
 
           {filteredTemplates.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
@@ -930,7 +1209,7 @@ function TemplatePicker({
               coupon, event, PDF, clinic, or property.
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
               {filteredTemplates.map((template) => (
                 <TemplateCard
                   key={template.key}
@@ -948,6 +1227,7 @@ function TemplatePicker({
         <SelectedTemplatePanel
           template={selectedTemplate}
           onUseTemplate={() => onUseTemplate(selectedTemplate)}
+          className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)] lg:self-start lg:overflow-y-auto"
         />
       </div>
     </section>
@@ -968,14 +1248,14 @@ function TemplateCard({
   readonly onUseTemplate: () => void;
 }) {
   const Icon = templateIcons[template.type];
-  const categoryLabel =
-    templateCategoryOptions.find((item) => item.value === template.category)
-      ?.label ?? template.category;
+  const assetBadges = getTemplateAssetBadges(template);
 
   return (
     <article
+      data-template-card
+      data-template-key={template.key}
       className={cn(
-        "flex min-h-[20rem] flex-col rounded-lg border p-3 transition-colors",
+        "flex min-w-0 flex-col rounded-lg border p-3 transition-colors",
         isSelected
           ? "border-sky-400 bg-sky-50 text-sky-950 shadow-sm"
           : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50"
@@ -985,11 +1265,12 @@ function TemplateCard({
         type="button"
         onClick={onSelect}
         aria-pressed={isSelected}
-        className="flex flex-1 flex-col rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+        className="flex min-w-0 flex-1 flex-col rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
       >
         <span
+          data-template-thumbnail
           className={cn(
-            "relative flex aspect-[8/5] w-full items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br ring-1 ring-inset ring-slate-200",
+            "relative flex aspect-[8/5] w-full min-w-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br ring-1 ring-inset ring-slate-200",
             thumbnailToneClasses[template.thumbnail.tone]
           )}
           role="img"
@@ -1000,7 +1281,8 @@ function TemplateCard({
               src={template.thumbnail.assetPath}
               alt=""
               fill
-              sizes="(min-width: 1536px) 240px, (min-width: 640px) 50vw, 100vw"
+              priority={isSelected}
+              sizes="(min-width: 1280px) 260px, (min-width: 768px) 45vw, 92vw"
               className="object-cover"
             />
           ) : (
@@ -1009,13 +1291,16 @@ function TemplateCard({
             </span>
           )}
         </span>
-        <span className="mt-3 flex min-w-0 items-start justify-between gap-2">
+        <span className="mt-2.5 flex min-w-0 items-start justify-between gap-2">
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-slate-950">
+            <span
+              data-template-label
+              className="block text-sm font-semibold leading-5 text-slate-950"
+            >
               {template.label}
             </span>
-            <span className="mt-1 block text-xs font-medium text-slate-700">
-              {categoryLabel} / {template.industry}
+            <span className="mt-0.5 block text-xs text-slate-600">
+              {landingPageTypeLabels[template.type]}
             </span>
           </span>
           {isActiveTemplate && (
@@ -1024,29 +1309,40 @@ function TemplateCard({
             </span>
           )}
         </span>
-        <span className="mt-2 line-clamp-2 block text-sm leading-6 text-slate-600">
+        <span className="mt-1.5 line-clamp-2 block text-xs leading-5 text-slate-600">
           {template.description}
         </span>
-        <span className="mt-3 block rounded-lg bg-white/75 p-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
-          Best for: {template.recommendedFor}
+        <span className="mt-2 flex flex-wrap gap-1.5">
+          {assetBadges.slice(0, 3).map((badge) => (
+            <span
+              key={`${template.key}-asset-${badge}`}
+              className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200"
+            >
+              {badge}
+            </span>
+          ))}
+          {assetBadges.length > 3 && (
+            <span className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
+              +{assetBadges.length - 3}
+            </span>
+          )}
         </span>
       </button>
 
-      <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
-        {template.assetRequirements.slice(0, 2).map((asset) => (
-          <span
-            key={`${template.key}-${asset.slot}`}
-            className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200"
-          >
-            {asset.label}
-          </span>
-        ))}
-        <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
-          {landingPageTypeLabels[template.type]}
-        </span>
-      </div>
+      {template.flags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {template.flags.map((flag) => (
+            <span
+              key={`${template.key}-flag-${flag}`}
+              className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 ring-1 ring-slate-200"
+            >
+              {flag}
+            </span>
+          ))}
+        </div>
+      )}
       <Button
-        className="mt-3 w-full"
+        className="mt-2 w-full"
         variant={isSelected ? "primary" : "secondary"}
         size="sm"
         onClick={onUseTemplate}
@@ -1061,99 +1357,196 @@ function TemplateCard({
 function SelectedTemplatePanel({
   template,
   onUseTemplate,
+  className,
 }: {
   readonly template: LandingPageTemplatePreset;
   readonly onUseTemplate: () => void;
+  readonly className?: string;
 }) {
   const Icon = templateIcons[template.type];
+  const requiredAssets = template.assetRequirements.filter((asset) => asset.required);
+  const optionalAssets = template.assetRequirements.filter((asset) => !asset.required);
+  const firstPartyAssetCount = template.assetRequirements.filter(
+    (asset) => asset.assetPath
+  ).length;
 
   return (
-    <aside className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <div className="flex items-start gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-slate-200">
-          <Icon className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-slate-950">
-            {template.label}
-          </p>
-          <p className="mt-1 text-sm leading-6 text-slate-600">
-            {template.description}
-          </p>
-        </div>
-      </div>
+    <aside
+      className={cn(
+        "min-w-0 rounded-xl border border-sky-200 bg-sky-50/60 p-4",
+        className
+      )}
+      aria-label={`Selected template: ${template.label}`}
+    >
+      <div className="flex flex-col gap-4">
+        {template.mobilePreview.assetPath && (
+          <figure className="max-h-80 overflow-hidden rounded-lg border border-sky-100 bg-white shadow-sm">
+            <div className="relative aspect-[390/844] w-full">
+              <Image
+                src={template.mobilePreview.assetPath}
+                alt={template.mobilePreview.alt}
+                fill
+                priority
+                sizes="(min-width: 1024px) 320px, 92vw"
+                className="object-cover"
+              />
+            </div>
+          </figure>
+        )}
 
-      <dl className="mt-4 space-y-3 text-sm">
-        <div>
-          <dt className="font-semibold text-slate-900">Page type</dt>
-          <dd className="mt-1 leading-6 text-slate-600">
-            {landingPageTypeLabels[template.type]}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-semibold text-slate-900">Best for</dt>
-          <dd className="mt-1 leading-6 text-slate-600">
-            {template.recommendedFor}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-semibold text-slate-900">Required media</dt>
-          <dd className="mt-2 flex flex-wrap gap-2">
-            {template.assetRequirements.length > 0 ? (
-              template.assetRequirements.map((asset) => (
-                <Badge
-                  key={`${template.key}-${asset.slot}`}
-                  variant={asset.required ? "warning" : "neutral"}
-                >
-                  {asset.label}
-                </Badge>
-              ))
-            ) : (
-              <Badge>No media required</Badge>
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-semibold text-slate-900">Required fields</dt>
-          <dd className="mt-2 flex flex-wrap gap-2">
-            {template.requiredFields.map((field) => (
-              <Badge key={`${template.key}-${field}`} variant="neutral">
-                {field}
-              </Badge>
-            ))}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-semibold text-slate-900">Accessibility</dt>
-          <dd className="mt-1 leading-6 text-slate-600">
-            {template.accessibilityNotes}
-          </dd>
-        </div>
-      </dl>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {template.tags.slice(0, 6).map((tag) => (
-          <span
-            key={`${template.key}-${tag}`}
-            className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200"
-          >
-            {tag}
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-slate-200">
+            <Icon className="h-5 w-5" aria-hidden="true" />
           </span>
-        ))}
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-slate-950">
+              {template.label}
+            </p>
+            <p className="mt-0.5 text-sm leading-5 text-slate-600">
+              {template.description}
+            </p>
+          </div>
+        </div>
+
+        <dl className="grid min-w-0 gap-1.5 text-sm">
+          <div>
+            <dt className="inline font-semibold text-slate-700">Type: </dt>
+            <dd className="inline text-slate-600">
+              {landingPageTypeLabels[template.type]}
+            </dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="inline font-semibold text-slate-700">Best for: </dt>
+            <dd className="inline text-slate-600">{template.recommendedFor}</dd>
+          </div>
+          {template.assetRequirements.length > 0 && (
+            <div>
+              <dt className="inline font-semibold text-slate-700">Media: </dt>
+              <dd className="inline text-slate-600">
+                {template.assetRequirements.map((a) => a.label).join(", ")}
+              </dd>
+            </div>
+          )}
+          <div>
+            <dt className="inline font-semibold text-slate-700">Assets: </dt>
+            <dd className="inline text-slate-600">
+              {firstPartyAssetCount > 0
+                ? `${firstPartyAssetCount} first-party asset${
+                    firstPartyAssetCount === 1 ? "" : "s"
+                  } wired`
+                : "No first-party asset required"}
+            </dd>
+          </div>
+        </dl>
+
+        <TemplateBadgeGroup
+          title="Required fields"
+          items={template.requiredFields}
+          variant="info"
+        />
+        <TemplateBadgeGroup
+          title="Required assets"
+          items={requiredAssets.map((asset) => asset.label)}
+          variant="warning"
+        />
+        <TemplateBadgeGroup
+          title="Optional assets"
+          items={optionalAssets.map((asset) => asset.label)}
+        />
+
+        <p className="rounded-lg bg-white/80 p-3 text-xs leading-5 text-slate-600 ring-1 ring-sky-100">
+          {template.accessibilityNotes}
+        </p>
+
       </div>
 
-      <Button
-        className="mt-5 w-full"
-        variant="primary"
-        onClick={onUseTemplate}
-      >
-        Use template
-      </Button>
+      {template.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {template.tags.slice(0, 8).map((tag) => (
+            <span
+              key={`${template.key}-${tag}`}
+              className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-500 ring-1 ring-slate-200"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 border-t border-sky-200 bg-sky-50/95 p-4 backdrop-blur">
+        <Button className="w-full" variant="primary" onClick={onUseTemplate}>
+          Use template
+        </Button>
+      </div>
     </aside>
   );
 }
 
-function matchesTemplateFilter({
+function TemplateBadgeGroup({
+  title,
+  items,
+  variant = "neutral",
+}: {
+  readonly title: string;
+  readonly items: readonly string[];
+  readonly variant?: "neutral" | "info" | "success" | "warning" | "danger";
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase text-slate-500">{title}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {items.map((item) => (
+          <Badge key={`${title}-${item}`} variant={variant}>
+            {item}
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function getTemplateAssetBadges(template: LandingPageTemplatePreset) {
+  const labels = new Set<string>();
+
+  labels.add(landingPageTypeLabels[template.type]);
+
+  for (const asset of template.assetRequirements) {
+    labels.add(asset.required ? asset.label : `${asset.label} optional`);
+  }
+
+  if (template.assetRequirements.some((asset) => asset.assetPath)) {
+    labels.add("First-party assets");
+  }
+
+  return [...labels];
+}
+
+function getRankedTemplateMatches({
+  templates,
+  query,
+  filters,
+}: {
+  readonly templates: readonly LandingPageTemplatePreset[];
+  readonly query: string;
+  readonly filters: TemplateFilters;
+}) {
+  return templates
+    .map((template) => ({
+      template,
+      score: getTemplateMatchScore({ template, query, filters }),
+    }))
+    .filter((item) => item.score >= 0)
+    .sort(
+      (first, second) =>
+        second.score - first.score ||
+        first.template.sortPriority - second.template.sortPriority
+    )
+    .map((item) => item.template);
+}
+
+function getTemplateMatchScore({
   template,
   query,
   filters,
@@ -1163,41 +1556,84 @@ function matchesTemplateFilter({
   readonly filters: TemplateFilters;
 }) {
   if (filters.category !== "all" && template.category !== filters.category) {
-    return false;
+    return -1;
   }
   if (filters.pageType !== "all" && template.type !== filters.pageType) {
-    return false;
+    return -1;
   }
   if (
     filters.assetKind !== "all" &&
     !template.assetRequirements.some((asset) => asset.kind === filters.assetKind)
   ) {
-    return false;
+    return -1;
   }
   if (filters.flag !== "all" && !template.flags.includes(filters.flag)) {
-    return false;
+    return -1;
   }
 
   const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return true;
+  if (!normalizedQuery) return 0;
 
-  return [
+  const searchTerms = getTemplateSearchTerms(normalizedQuery);
+  const label = template.label.toLowerCase();
+  const category = template.category.replace("_", " ").toLowerCase();
+  const tags = template.tags.join(" ").toLowerCase();
+  const assetLabels = template.assetRequirements
+    .map((asset) => `${asset.label} ${asset.kind}`)
+    .join(" ")
+    .toLowerCase();
+  const fullText = [
     template.key,
     template.label,
     template.description,
-    template.category,
+    category,
     template.industry,
     template.type,
     template.recommendedFor,
     template.thumbnail.label,
     template.thumbnail.alt,
+    assetLabels,
     ...template.requiredFields,
     ...template.optionalFields,
     ...template.tags,
   ]
     .join(" ")
-    .toLowerCase()
-    .includes(normalizedQuery);
+    .toLowerCase();
+
+  let score = 0;
+
+  for (const term of searchTerms) {
+    if (label === term) score += 140;
+    if (label.includes(term)) score += 90;
+    if (tags.includes(term)) score += 70;
+    if (category.includes(term)) score += 60;
+    if (assetLabels.includes(term)) score += 45;
+    if (fullText.includes(term)) score += 20;
+  }
+
+  return score > 0 ? score : -1;
+}
+
+function getTemplateSearchTerms(query: string) {
+  const terms = new Set<string>();
+  const addTerm = (term: string) => {
+    const normalized = term.trim().toLowerCase();
+    if (normalized) terms.add(normalized);
+  };
+
+  addTerm(query);
+  query.split(/\s+/).forEach(addTerm);
+
+  for (const [term, synonyms] of Object.entries(templateSearchSynonyms)) {
+    const matchesCanonical = query.includes(term);
+    const matchesSynonym = synonyms.some((synonym) => query.includes(synonym));
+
+    if (!matchesCanonical && !matchesSynonym) continue;
+    addTerm(term);
+    synonyms.forEach(addTerm);
+  }
+
+  return [...terms];
 }
 
 function ActiveTemplateFilterChips({
@@ -2216,7 +2652,7 @@ function getRequiredAssetStatuses(
   return template.assetRequirements.map((asset) => ({
     id: `${template.key}-${asset.slot}`,
     label: asset.required ? asset.label : `${asset.label} (optional)`,
-    done: isAssetRequirementComplete(asset.slot, template.type, content),
+    done: isAssetRequirementComplete(asset, template.type, content),
     required: asset.required,
   }));
 }
@@ -2252,10 +2688,14 @@ function isRequiredFieldComplete(
 }
 
 function isAssetRequirementComplete(
-  slot: LandingPageTemplatePreset["assetRequirements"][number]["slot"],
+  asset: LandingPageTemplatePreset["assetRequirements"][number],
   type: LandingPageType,
   content: LandingPageContent
 ) {
+  if (asset.assetPath) return true;
+
+  const { slot } = asset;
+
   if (slot === "avatar") {
     return Boolean(
       content.avatar?.assetId || (type === "business" && content.logo?.assetId)
@@ -2283,6 +2723,42 @@ function toSentenceLabel(value: string) {
     .replace(/[_-]+/g, " ")
     .trim()
     .replace(/^./, (character) => character.toUpperCase());
+}
+
+function isTemplatePresetArray(
+  value: unknown
+): value is readonly LandingPageTemplatePreset[] {
+  return Array.isArray(value) && value.every(isTemplatePreset);
+}
+
+function isTemplatePreset(value: unknown): value is LandingPageTemplatePreset {
+  if (!value || typeof value !== "object") return false;
+
+  const template = value as Partial<LandingPageTemplatePreset>;
+
+  return Boolean(
+    template.key &&
+      template.type &&
+      template.label &&
+      template.defaultTitle &&
+      template.defaultContent &&
+      Array.isArray(template.tags) &&
+      Array.isArray(template.requiredFields) &&
+      Array.isArray(template.assetRequirements)
+  );
+}
+
+function isDynamicQRCodeOption(value: unknown): value is DynamicQRCodeOption {
+  if (!value || typeof value !== "object") return false;
+
+  const qrCode = value as Partial<DynamicQRCodeOption>;
+
+  return Boolean(
+    typeof qrCode.id === "string" &&
+      typeof qrCode.title === "string" &&
+      qrCode.mode === "dynamic" &&
+      ["draft", "published", "archived"].includes(String(qrCode.status))
+  );
 }
 
 function applyUploadedAsset(
@@ -2568,6 +3044,26 @@ async function uploadLandingPageAsset(
   }
 
   return { assetId: confirm.data?.asset.id ?? presign.data.asset.id };
+}
+
+async function fetchDynamicQRCodes(): Promise<{
+  readonly qrCodes: readonly DynamicQRCodeOption[];
+}> {
+  const response = await fetchJson<
+    ApiResponse<{ readonly qrCodes: readonly unknown[] }>
+  >("/api/qr-codes?take=100");
+
+  if (!response.ok || !response.data) {
+    throw new Error(response.error?.message ?? "Could not load dynamic QR codes.");
+  }
+
+  const qrCodes = Array.isArray(response.data.qrCodes)
+    ? response.data.qrCodes
+    : [];
+
+  return {
+    qrCodes: qrCodes.filter(isDynamicQRCodeOption),
+  };
 }
 
 async function fetchJson<TData>(
