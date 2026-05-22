@@ -5,10 +5,10 @@ import {
   Activity,
   ArrowRight,
   FileText,
+  Link2,
   MessageSquareQuote,
   QrCode,
   ScanLine,
-  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import { auth } from "@/auth";
@@ -27,17 +27,44 @@ interface AccountKpi {
   readonly description: string;
 }
 
-export default async function MePage() {
+interface MePageProps {
+  readonly searchParams?: Promise<{
+    readonly intent?: string | string[];
+  }>;
+}
+
+export default async function MePage({ searchParams }: MePageProps) {
+  const params = await searchParams;
+  const authIntent = params?.intent === "signup" ? "signup" : "login";
   const session = await getSafeSession();
 
   if (!session?.user?.id) {
     return (
       <PageShell
         eyebrow="Me"
-        title="Your Decode account"
-        description="Sign in once with OAuth to create your account, default workspace, and private workspace data."
+        title={
+          authIntent === "signup"
+            ? "Create your Decode account"
+            : "Log in to Decode"
+        }
+        description={
+          authIntent === "signup"
+            ? "Create an account with OAuth to save QR codes, landing pages, and workspace data."
+            : "Log in with your OAuth account to return to your Decode workspace."
+        }
       >
-        <OAuthSignInPanel />
+        <OAuthSignInPanel
+          title={
+            authIntent === "signup"
+              ? "Sign up with OAuth"
+              : "Log in with OAuth"
+          }
+          description={
+            authIntent === "signup"
+              ? "Use Google or GitHub to create your Decode workspace."
+              : "Use the provider linked to your Decode account."
+          }
+        />
         <section className="grid gap-4 md:grid-cols-3">
           {[
             "Saved QR codes and dynamic destinations",
@@ -287,11 +314,11 @@ function getAccountKpis(data: Awaited<ReturnType<typeof getAccountData>>) {
       description: "Open reviews",
     },
     {
-      label: "Link safety",
-      value: "Verify",
-      href: "/verify",
-      icon: ShieldCheck,
-      description: "Check URL",
+      label: "Links",
+      value: "Soon",
+      href: "/links",
+      icon: Link2,
+      description: "View status",
     },
   ] satisfies readonly AccountKpi[];
 }

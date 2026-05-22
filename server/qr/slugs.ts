@@ -24,6 +24,7 @@ const RESERVED_DYNAMIC_SLUGS = new Set([
   "pricing",
   "r",
   "review",
+  "s",
   "scan",
   "settings",
   "static",

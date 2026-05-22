@@ -6,6 +6,7 @@ interface QRPreviewPanelProps {
   isLoading?: boolean;
   action?: ReactNode;
   className?: string;
+  previewClassName?: string;
 }
 
 export function QRPreviewPanel({
@@ -13,6 +14,7 @@ export function QRPreviewPanel({
   isLoading = false,
   action,
   className,
+  previewClassName,
 }: QRPreviewPanelProps) {
   return (
     <section
@@ -25,7 +27,8 @@ export function QRPreviewPanel({
       <div
         className={cn(
           "relative mx-auto flex aspect-square w-full max-w-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white p-5 shadow-[0_20px_60px_rgba(0,122,255,0.12)]",
-          isLoading && "animate-pulse"
+          isLoading && "animate-pulse",
+          previewClassName
         )}
       >
         {children}

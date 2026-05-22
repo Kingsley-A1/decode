@@ -1,17 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
+import { getSession } from "next-auth/react";
 import {
   AlertTriangle,
   Check,
   Contact as ContactIcon,
   Copy,
   Download,
-  Facebook,
   FileDown,
-  Instagram,
   Link as LinkIcon,
-  Linkedin,
   Mail,
   MessageCircle,
   Palette,
@@ -22,10 +26,16 @@ import {
   UploadCloud,
   Wifi,
   X,
-  Youtube,
-  type LucideIcon,
 } from "lucide-react";
+import {
+  FaFacebookF,
+  FaInstagram,
+  FaLinkedinIn,
+  FaWhatsapp,
+  FaYoutube,
+} from "react-icons/fa";
 import { useQRCode, type QROptions } from "@/hooks/useQRCode";
+import { OAuthSignInPanel } from "@/components/auth/OAuthSignInPanel";
 import { PageHeader } from "./PageHeader";
 import {
   Alert,
@@ -96,6 +106,7 @@ type ScanabilityState = "ready" | "needs-attention" | "blocked";
 
 interface QRGeneratorProps {
   showHeader?: boolean;
+  initialMode?: QRMode;
 }
 
 interface FormState {
@@ -155,9 +166,11 @@ interface LogoChoiceOption {
   value: LogoChoiceValue;
   label: string;
   description: string;
-  icon: LucideIcon;
+  icon: ComponentType<{ className?: string }>;
   color: string;
+  iconColor?: string;
   initials: string;
+  logoSvg?: string;
   qrTypes?: readonly QRType[];
   ariaLabel?: string;
 }
@@ -166,6 +179,18 @@ interface ApiResponse<TData> {
   ok: boolean;
   data?: TData;
   error?: { message: string };
+}
+
+interface QRGeneratorAuthDraft {
+  readonly version: 1;
+  readonly currentStep: WorkflowStep;
+  readonly mode: QRMode;
+  readonly type: QRType;
+  readonly form: FormState;
+  readonly design: DesignState;
+  readonly selectedPreset: DesignPreset;
+  readonly logoUrl: string;
+  readonly logoChoice: LogoChoiceValue;
 }
 
 const workflowSteps = [
@@ -343,7 +368,7 @@ const designPresetOptions: {
   {
     value: "coupon",
     label: "Coupon",
-    description: "Promotional badge styling for offers and flyers.",
+    description: "Promotional soft-plate styling for offers and flyers.",
   },
   {
     value: "custom",
@@ -429,6 +454,105 @@ const uploadedLogoChoice: LogoChoiceOption = {
   ariaLabel: "Use uploaded logo",
 };
 
+type BrandLogoKey =
+  | "facebook"
+  | "instagram"
+  | "linkedin"
+  | "youtube"
+  | "whatsapp";
+type UtilityLogoKey = "email" | "link" | "phone" | "sms" | "vcard" | "wifi";
+
+const brandLogoSvgByKey: Record<BrandLogoKey, string> = {
+  facebook: [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#1877F2" fill-opacity="0.1"/>`,
+    `<path fill="#1877F2" d="M72 46h12V28H70c-16 0-26 10-26 27v10H32v18h12v37h20V83h16l3-18H64V55c0-6 3-9 8-9Z"/>`,
+    `</svg>`,
+  ].join(""),
+  instagram: [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
+    `<defs><linearGradient id="ig" x1="24" y1="104" x2="104" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#F58529"/><stop offset=".45" stop-color="#DD2A7B"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs>`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
+    `<rect x="29" y="29" width="70" height="70" rx="20" fill="none" stroke="url(#ig)" stroke-width="10"/>`,
+    `<circle cx="64" cy="64" r="16" fill="none" stroke="url(#ig)" stroke-width="10"/>`,
+    `<circle cx="84" cy="44" r="6" fill="#DD2A7B"/>`,
+    `</svg>`,
+  ].join(""),
+  linkedin: [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#0A66C2" fill-opacity="0.1"/>`,
+    `<rect x="34" y="54" width="16" height="43" rx="4" fill="#0A66C2"/>`,
+    `<circle cx="42" cy="38" r="9" fill="#0A66C2"/>`,
+    `<path fill="#0A66C2" d="M60 54h15v6c3-5 8-8 17-8 13 0 22 9 22 28v17H98V82c0-10-4-15-11-15-8 0-11 6-11 15v15H60V54Z"/>`,
+    `</svg>`,
+  ].join(""),
+  youtube: [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FF0000" fill-opacity="0.1"/>`,
+    `<path fill="#FF0000" d="M101 43c-1-7-5-12-12-13-7-1-18-2-25-2s-18 1-25 2c-7 1-11 6-12 13-1 6-1 15-1 21s0 15 1 21c1 7 5 12 12 13 7 1 18 2 25 2s18-1 25-2c7-1 11-6 12-13 1-6 1-15 1-21s0-15-1-21Z"/>`,
+    `<path fill="#FFFFFF" d="M56 78V50l27 14-27 14Z"/>`,
+    `</svg>`,
+  ].join(""),
+  whatsapp: [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#25D366" fill-opacity="0.1"/>`,
+    `<path fill="#25D366" d="M31 101l5-19a39 39 0 1 1 15 13l-20 6Zm22-21c6 4 13 6 20 4 14-3 23-16 20-30S77 31 63 34 40 50 43 64c1 5 3 9 6 13l-3 10 7-7Z"/>`,
+    `<path fill="#25D366" d="M56 47c2-1 4-1 5 1l4 9c1 2 0 4-2 5l-2 1c2 5 6 9 11 11l2-2c1-2 3-2 5-1l8 4c2 1 2 3 1 5-2 4-6 7-10 7-10-1-26-13-30-27-2-5 2-11 8-13Z"/>`,
+    `</svg>`,
+  ].join(""),
+};
+
+function createBrandLogoSvg(key: BrandLogoKey): string {
+  return brandLogoSvgByKey[key];
+}
+
+const utilityLogoSvgByKey: Record<UtilityLogoKey, string> = {
+  email: createUtilityLogoSvg({
+    color: "#F59E0B",
+    path: `<path d="M31 42h66v44H31V42Zm6 8 27 20 27-20M37 80l19-16m35 16L72 64" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`,
+  }),
+  link: createUtilityLogoSvg({
+    color: "#7C3AED",
+    path: `<path d="M52 76 42 86c-9 9-23-5-14-14l17-17c6-6 15-6 21-1m10-2 10-10c9-9 23 5 14 14L83 73c-6 6-15 6-21 1m-9-10h22" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`,
+  }),
+  phone: createUtilityLogoSvg({
+    color: "#0F766E",
+    path: `<path d="M43 29 32 40c-4 4 3 24 21 42s38 25 42 21l11-11-17-18-10 8c-8-4-15-11-20-20l8-10L43 29Z" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`,
+  }),
+  sms: createUtilityLogoSvg({
+    color: "#2563EB",
+    path: `<path d="M29 38h70a9 9 0 0 1 9 9v32a9 9 0 0 1-9 9H57l-23 15V88h-5a9 9 0 0 1-9-9V47a9 9 0 0 1 9-9Z" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M43 63h42M43 76h26" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>`,
+  }),
+  vcard: createUtilityLogoSvg({
+    color: "#007AFF",
+    path: `<rect x="28" y="37" width="72" height="54" rx="10" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="51" cy="61" r="9" fill="currentColor"/><path d="M38 80c4-9 22-9 26 0m15-19h12m-12 16h12" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>`,
+  }),
+  wifi: createUtilityLogoSvg({
+    color: "#0284C7",
+    path: `<path d="M31 55c19-17 47-17 66 0M45 70c11-10 27-10 38 0M58 84c4-4 8-4 12 0" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><circle cx="64" cy="98" r="5" fill="currentColor"/>`,
+  }),
+};
+
+function createUtilityLogoSvg({
+  color,
+  path,
+}: {
+  readonly color: string;
+  readonly path: string;
+}): string {
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" style="color:${color}">`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="${color}" fill-opacity="0.1"/>`,
+    path,
+    `</svg>`,
+  ].join("");
+}
+
 const logoPresetOptions: readonly LogoChoiceOption[] = [
   {
     value: "link",
@@ -437,15 +561,18 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     icon: LinkIcon,
     color: "#7C3AED",
     initials: "URL",
+    logoSvg: utilityLogoSvgByKey.link,
     qrTypes: ["url"],
   },
   {
     value: "instagram",
     label: "IG",
     description: "Social profile icon for Instagram destinations.",
-    icon: Instagram,
-    color: "#C13584",
+    icon: FaInstagram,
+    color: "#E1306C",
+    iconColor: "#C13584",
     initials: "IG",
+    logoSvg: createBrandLogoSvg("instagram"),
     qrTypes: ["url"],
     ariaLabel: "Use Instagram logo",
   },
@@ -453,9 +580,11 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     value: "facebook",
     label: "FB",
     description: "Social profile icon for Facebook destinations.",
-    icon: Facebook,
+    icon: FaFacebookF,
     color: "#1877F2",
+    iconColor: "#1877F2",
     initials: "FB",
+    logoSvg: createBrandLogoSvg("facebook"),
     qrTypes: ["url"],
     ariaLabel: "Use Facebook logo",
   },
@@ -463,9 +592,11 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     value: "youtube",
     label: "YT",
     description: "Video channel icon for YouTube destinations.",
-    icon: Youtube,
-    color: "#DC2626",
+    icon: FaYoutube,
+    color: "#FF0000",
+    iconColor: "#FF0000",
     initials: "YT",
+    logoSvg: createBrandLogoSvg("youtube"),
     qrTypes: ["url"],
     ariaLabel: "Use YouTube logo",
   },
@@ -473,9 +604,11 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     value: "linkedin",
     label: "IN",
     description: "Professional profile icon for LinkedIn destinations.",
-    icon: Linkedin,
+    icon: FaLinkedinIn,
     color: "#0A66C2",
+    iconColor: "#0A66C2",
     initials: "IN",
+    logoSvg: createBrandLogoSvg("linkedin"),
     qrTypes: ["url"],
     ariaLabel: "Use LinkedIn logo",
   },
@@ -486,6 +619,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     icon: Mail,
     color: "#F59E0B",
     initials: "@",
+    logoSvg: utilityLogoSvgByKey.email,
     qrTypes: ["email"],
   },
   {
@@ -495,6 +629,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     icon: Phone,
     color: "#0F766E",
     initials: "TEL",
+    logoSvg: utilityLogoSvgByKey.phone,
     qrTypes: ["phone"],
   },
   {
@@ -504,15 +639,18 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     icon: MessageCircle,
     color: "#2563EB",
     initials: "SMS",
+    logoSvg: utilityLogoSvgByKey.sms,
     qrTypes: ["sms"],
   },
   {
     value: "whatsapp",
     label: "WA",
     description: "Chat icon for WhatsApp QR codes.",
-    icon: MessageCircle,
-    color: "#22C55E",
+    icon: FaWhatsapp,
+    color: "#25D366",
+    iconColor: "#16A34A",
     initials: "WA",
+    logoSvg: createBrandLogoSvg("whatsapp"),
     qrTypes: ["whatsapp"],
     ariaLabel: "Use WhatsApp logo",
   },
@@ -523,6 +661,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     icon: Wifi,
     color: "#0284C7",
     initials: "WiFi",
+    logoSvg: utilityLogoSvgByKey.wifi,
     qrTypes: ["wifi"],
   },
   {
@@ -532,6 +671,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     icon: ContactIcon,
     color: "#007AFF",
     initials: "VC",
+    logoSvg: utilityLogoSvgByKey.vcard,
     qrTypes: ["vcard"],
   },
 ];
@@ -551,26 +691,26 @@ const frameOptions: {
   {
     value: "scan-me",
     label: "Scan me",
-    description: "Clear CTA for broad use.",
+    description: "Small CTA chip below the QR.",
     bestFor: "Posters and flyers",
   },
   {
     value: "classic",
     label: "Classic",
-    description: "Balanced label and border.",
+    description: "Thin border with a compact title.",
     bestFor: "Business material",
   },
   {
     value: "ticket",
     label: "Ticket",
-    description: "Dashed event-style frame.",
+    description: "Light dashed frame for event material.",
     bestFor: "Events and coupons",
   },
   {
     value: "badge",
-    label: "Badge",
-    description: "High-contrast brand plate.",
-    bestFor: "Premium signage",
+    label: "Soft plate",
+    description: "Subtle label plate without heavy fill.",
+    bestFor: "Cards and counters",
   },
   {
     value: "minimal",
@@ -625,9 +765,14 @@ const initialDesignState: DesignState = {
   frameStyle: "none",
 };
 
-export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
+const qrGeneratorAuthDraftStorageKey = "decode:qr-generator:auth-draft:v1";
+
+export function QRGenerator({
+  showHeader = true,
+  initialMode = "static",
+}: QRGeneratorProps) {
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("content");
-  const [mode, setMode] = useState<QRMode>("static");
+  const [mode, setMode] = useState<QRMode>(initialMode);
   const [type, setType] = useState<QRType>("url");
   const [form, setForm] = useState<FormState>(initialFormState);
   const [design, setDesign] = useState<DesignState>(initialDesignState);
@@ -638,7 +783,12 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
   const [publishStatus, setPublishStatus] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [authPromptVisible, setAuthPromptVisible] = useState(false);
+  const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(false);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const builderPanelRef = useRef<HTMLElement>(null);
   const builderTopRef = useRef<HTMLDivElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousStepRef = useRef(currentStep);
@@ -720,9 +870,26 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
   } = useQRCode(mobileQrOptions);
 
   useEffect(() => {
+    const draft = readQRGeneratorAuthDraft();
+    if (!draft) return;
+
+    setCurrentStep(draft.currentStep);
+    setMode(draft.mode);
+    setType(draft.type);
+    setForm(draft.form);
+    setDesign(draft.design);
+    setSelectedPreset(draft.selectedPreset);
+    setLogoUrl(draft.logoUrl);
+    setLogoChoice(draft.logoChoice);
+    setDraftNotice("Restored your QR draft after sign-in.");
+    window.localStorage.removeItem(qrGeneratorAuthDraftStorageKey);
+  }, []);
+
+  useEffect(() => {
     if (previousStepRef.current === currentStep) return;
 
     previousStepRef.current = currentStep;
+    builderPanelRef.current?.scrollTo({ top: 0 });
     builderTopRef.current?.scrollIntoView({ block: "start" });
     window.requestAnimationFrame(() => {
       stepHeadingRef.current?.focus({ preventScroll: true });
@@ -731,6 +898,28 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
 
   const goToStep = (nextStep: WorkflowStep) => {
     setCurrentStep(nextStep);
+  };
+
+  const persistAuthDraft = () => {
+    if (typeof window === "undefined") return;
+
+    const draft: QRGeneratorAuthDraft = {
+      version: 1,
+      currentStep,
+      mode,
+      type,
+      form,
+      design,
+      selectedPreset,
+      logoUrl,
+      logoChoice,
+    };
+
+    window.localStorage.setItem(
+      qrGeneratorAuthDraftStorageKey,
+      JSON.stringify(draft)
+    );
+    setDraftNotice("Your QR draft is saved in this browser before sign-in.");
   };
 
   const handleFormChange = (key: keyof FormState, value: string | boolean) => {
@@ -836,6 +1025,49 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
     goToStep("design");
   };
 
+  const handleDownloadSelected = async (format: ExportFormat) => {
+    if (!isReady) return;
+
+    setIsCheckingAuth(true);
+    setPublishError(null);
+
+    try {
+      const session = await getSession();
+
+      if (!session?.user) {
+        persistAuthDraft();
+        setAuthPromptVisible(true);
+        setAuthPromptMessage(
+          `Sign in to download the ${format.toUpperCase()} export. Your current QR draft is saved in this browser.`
+        );
+        return;
+      }
+
+      setAuthPromptVisible(false);
+      setAuthPromptMessage(null);
+
+      if (format === "png") {
+        await download("png");
+        return;
+      }
+
+      if (format === "svg") {
+        await download("svg");
+        return;
+      }
+
+      await downloadPdf(form.title || "Decode QR Code");
+    } catch {
+      persistAuthDraft();
+      setAuthPromptVisible(true);
+      setAuthPromptMessage(
+        "We could not confirm your sign-in state. Sign in again to continue the download."
+      );
+    } finally {
+      setIsCheckingAuth(false);
+    }
+  };
+
   const handlePublishDynamic = async () => {
     if (mode !== "dynamic" || type !== "url" || !validation.isValid) return;
 
@@ -868,6 +1100,15 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
       }>;
 
       if (!result.ok) {
+        if (response.status === 401) {
+          persistAuthDraft();
+          setAuthPromptVisible(true);
+          setAuthPromptMessage(
+            "Sign in to publish this dynamic QR. Your current QR draft is saved in this browser."
+          );
+          return;
+        }
+
         throw new Error(result.error?.message ?? "Could not publish QR code.");
       }
 
@@ -894,13 +1135,6 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
         />
       )}
 
-      <div ref={builderTopRef} className="scroll-mt-24">
-        <ProgressStepper
-          steps={workflowSteps}
-          currentStep={Math.max(stepIndex, 0)}
-        />
-      </div>
-
       <MobilePreviewTray
         title={`${mode === "dynamic" ? "Dynamic" : "Static"} / ${getTypeLabel(type)}`}
         summary={payload?.summary ?? "Complete content to preview the payload."}
@@ -918,8 +1152,25 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
         data-testid="mobile-preview-tray"
       />
 
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
-        <section className="min-w-0 space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      {draftNotice && (
+        <Alert variant="success" title="Draft preserved">
+          {draftNotice}
+        </Alert>
+      )}
+
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-start">
+        <section
+          ref={builderPanelRef}
+          className="min-w-0 space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:max-h-[calc(100dvh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-4"
+          data-testid="qr-builder-panel"
+        >
+          <div ref={builderTopRef} className="min-w-0 scroll-mt-28">
+            <ProgressStepper
+              steps={workflowSteps}
+              currentStep={Math.max(stepIndex, 0)}
+            />
+          </div>
+
           {currentStep === "content" && (
             <ContentStep
               headingRef={stepHeadingRef}
@@ -969,53 +1220,66 @@ export function QRGenerator({ showHeader = true }: QRGeneratorProps) {
               publishStatus={publishStatus}
               publishError={publishError}
               isPublishing={isPublishing}
+              authPromptVisible={authPromptVisible}
+              authPromptMessage={authPromptMessage}
+              isCheckingAuth={isCheckingAuth}
               onBack={() => goToStep("design")}
               onCopyPayload={handleCopyPayload}
-              onDownloadPng={() => download("png")}
-              onDownloadSvg={() => download("svg")}
-              onDownloadPdf={() => downloadPdf(form.title || "Decode QR Code")}
+              onDownloadSelected={(format) => void handleDownloadSelected(format)}
               onPublishDynamic={handlePublishDynamic}
+              onBeforeSignIn={persistAuthDraft}
             />
           )}
         </section>
 
-        <aside className="hidden space-y-4 xl:sticky xl:top-24 xl:block xl:self-start">
-          <QRPreviewPanel isLoading={!isReady}>
-            <QRFrame
-              key={design.frameStyle}
-              frameStyle={design.frameStyle}
-              title={form.title}
+        <aside className="hidden xl:block xl:w-[390px] xl:self-start">
+          <div
+            className="space-y-3 xl:fixed xl:top-28 xl:z-30 xl:w-[390px] xl:max-w-[calc(100vw-2rem)]"
+            style={{
+              right: "max(2rem, calc((100vw - 80rem) / 2 + 2rem))",
+            }}
+          >
+            <QRPreviewPanel
+              isLoading={!isReady}
+              className="p-3"
+              previewClassName="max-w-[280px] p-4 shadow-[0_12px_36px_rgba(15,23,42,0.08)]"
             >
-              <div
-                ref={qrRef}
-                className="w-full overflow-hidden rounded-lg [&_canvas]:!h-auto [&_canvas]:!w-full"
-              />
-            </QRFrame>
-            {logoUrl && (
-              <IconButton
-                onClick={handleRemoveLogo}
-                aria-label="Remove QR logo"
-                variant="danger"
-                className="absolute right-8 top-8 h-9 w-9 rounded-full"
+              <QRFrame
+                key={design.frameStyle}
+                frameStyle={design.frameStyle}
+                title={form.title}
               >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </IconButton>
-            )}
-          </QRPreviewPanel>
+                <div
+                  ref={qrRef}
+                  className="w-full overflow-hidden rounded-lg [&_canvas]:!h-auto [&_canvas]:!w-full"
+                />
+              </QRFrame>
+              {logoUrl && (
+                <IconButton
+                  onClick={handleRemoveLogo}
+                  aria-label="Remove QR logo"
+                  variant="danger"
+                  className="absolute right-6 top-6 h-9 w-9 rounded-full"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </IconButton>
+              )}
+            </QRPreviewPanel>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={mode === "dynamic" ? "info" : "neutral"}>
-                {mode === "dynamic" ? "Dynamic" : "Static"}
-              </Badge>
-              <Badge variant="neutral">{getTypeLabel(type)}</Badge>
-              <Badge variant={getScanabilityBadgeVariant(scanability.state)}>
-                {scanability.label}
-              </Badge>
+            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={mode === "dynamic" ? "info" : "neutral"}>
+                  {mode === "dynamic" ? "Dynamic" : "Static"}
+                </Badge>
+                <Badge variant="neutral">{getTypeLabel(type)}</Badge>
+                <Badge variant={getScanabilityBadgeVariant(scanability.state)}>
+                  {scanability.label}
+                </Badge>
+              </div>
+              <p className="mt-3 break-all text-sm leading-6 text-slate-600">
+                {payload?.summary ?? "Complete the content step to preview payload."}
+              </p>
             </div>
-            <p className="mt-3 break-all text-sm leading-6 text-slate-600">
-              {payload?.summary ?? "Complete the content step to preview payload."}
-            </p>
           </div>
         </aside>
       </div>
@@ -1555,6 +1819,8 @@ function DesignStep({
         label="Logo icon"
         size="icon"
         desktopColumns={4}
+        data-testid="logo-choice-picker"
+        railTestId="logo-choice-rail"
         renderPreview={(option) => <LogoChoicePreview option={option} />}
         getDescription={(option) => (
           <>
@@ -1720,9 +1986,9 @@ function LogoChoicePreview({
         "mx-auto flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm",
         isNone
           ? "border-slate-200 bg-white text-slate-600"
-          : "border-transparent text-white",
+          : "border-slate-200 bg-white",
       ].join(" ")}
-      style={isNone ? undefined : { backgroundColor: option.color }}
+      style={isNone ? undefined : { color: option.iconColor ?? option.color }}
       aria-hidden="true"
     >
       <Icon className="h-5 w-5" />
@@ -1802,12 +2068,14 @@ function ExportStep({
   publishStatus,
   publishError,
   isPublishing,
+  authPromptVisible,
+  authPromptMessage,
+  isCheckingAuth,
   onBack,
   onCopyPayload,
-  onDownloadPng,
-  onDownloadSvg,
-  onDownloadPdf,
+  onDownloadSelected,
   onPublishDynamic,
+  onBeforeSignIn,
 }: {
   readonly headingRef: React.RefObject<HTMLHeadingElement | null>;
   readonly mode: QRMode;
@@ -1821,30 +2089,34 @@ function ExportStep({
   readonly publishStatus: string | null;
   readonly publishError: string | null;
   readonly isPublishing: boolean;
+  readonly authPromptVisible: boolean;
+  readonly authPromptMessage: string | null;
+  readonly isCheckingAuth: boolean;
   readonly onBack: () => void;
   readonly onCopyPayload: () => void;
-  readonly onDownloadPng: () => void;
-  readonly onDownloadSvg: () => void;
-  readonly onDownloadPdf: () => void;
+  readonly onDownloadSelected: (format: ExportFormat) => void;
   readonly onPublishDynamic: () => void;
+  readonly onBeforeSignIn: () => void;
 }) {
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const authPromptRef = useRef<HTMLDivElement>(null);
   const selectedExport =
     exportFormatOptions.find((option) => option.value === exportFormat) ??
     exportFormatOptions[0];
   const handleDownloadSelected = () => {
-    if (exportFormat === "png") {
-      onDownloadPng();
-      return;
-    }
-
-    if (exportFormat === "svg") {
-      onDownloadSvg();
-      return;
-    }
-
-    onDownloadPdf();
+    onDownloadSelected(exportFormat);
   };
+
+  useEffect(() => {
+    if (!authPromptVisible) return;
+
+    window.requestAnimationFrame(() => {
+      authPromptRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+    });
+  }, [authPromptVisible, authPromptMessage]);
 
   return (
     <div className="space-y-5">
@@ -1935,6 +2207,20 @@ function ExportStep({
       )}
       {publishStatus && <Alert variant="success">{publishStatus}</Alert>}
       {publishError && <Alert variant="danger">{publishError}</Alert>}
+      {authPromptVisible && (
+        <div ref={authPromptRef}>
+          <OAuthSignInPanel
+            callbackUrl="/generate"
+            title="Sign in to finish export"
+            description={
+              authPromptMessage ??
+              "Sign in with Google or GitHub to download or publish from this QR workspace."
+            }
+            className="border-sky-200 bg-sky-50/50"
+            onBeforeSignIn={onBeforeSignIn}
+          />
+        </div>
+      )}
 
       <BuilderActionBar
         desktop={
@@ -1945,7 +2231,8 @@ function ExportStep({
             <Button
               variant="primary"
               onClick={handleDownloadSelected}
-              disabled={!isReady}
+              disabled={!isReady || isCheckingAuth}
+              isLoading={isCheckingAuth}
               leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
             >
               Download {selectedExport.label}
@@ -1961,7 +2248,8 @@ function ExportStep({
             <Button
               variant="primary"
               onClick={handleDownloadSelected}
-              disabled={!isReady}
+              disabled={!isReady || isCheckingAuth}
+              isLoading={isCheckingAuth}
               className="w-full"
               leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
             >
@@ -2019,7 +2307,7 @@ function FramePicker({
 
 function FrameThumbnail({ frameStyle }: { readonly frameStyle: FrameStyle }) {
   return (
-    <div className="flex h-28 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50 p-2 sm:h-32 sm:p-3">
+    <div className="flex h-24 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-white p-2 sm:h-28">
       <QRFrame frameStyle={frameStyle} title="Scan me" isThumbnail>
         <MiniQRCode />
       </QRFrame>
@@ -2059,21 +2347,18 @@ function QRFrame({
   const displayTitle = getShortFrameTitle(safeTitle);
   const qrSlotClass = isThumbnail
     ? "mx-auto w-14"
-    : "mx-auto w-[76%] max-w-[236px]";
-  const compactQrSlotClass = isThumbnail
-    ? "mx-auto w-14"
-    : "mx-auto w-[72%] max-w-[224px]";
+    : "mx-auto w-[84%] max-w-[208px]";
   const frameWidthClass = isThumbnail
-    ? "w-full max-w-[152px]"
-    : "w-full max-w-[292px]";
+    ? "w-full max-w-[124px]"
+    : "w-full max-w-[248px]";
 
   if (frameStyle === "none") {
     return (
       <div
         className={
           isThumbnail
-            ? "mx-auto w-16 rounded-lg bg-white p-1 shadow-sm ring-1 ring-slate-100"
-            : "w-full"
+            ? "mx-auto w-16 rounded-md bg-white p-1 ring-1 ring-slate-100"
+            : "mx-auto w-full max-w-[232px]"
         }
       >
         {children}
@@ -2084,19 +2369,19 @@ function QRFrame({
   if (frameStyle === "scan-me") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto overflow-hidden rounded-[22px] border-2 border-sky-700 bg-white text-center shadow-sm`}
+        className={`${frameWidthClass} mx-auto rounded-xl border border-slate-200 bg-white text-center`}
       >
-        <div className={isThumbnail ? "px-3 pt-2" : "px-5 pt-5"}>
+        <div className={isThumbnail ? "px-3 pt-2" : "px-4 pt-4"}>
           <div className={qrSlotClass}>{children}</div>
         </div>
         <p
           className={
             isThumbnail
-              ? "mt-1 bg-sky-700 px-2 py-1 text-[8px] font-bold uppercase !text-white"
-              : "mt-4 bg-sky-700 px-4 py-2 text-xs font-bold uppercase tracking-normal !text-white"
+              ? "mx-auto my-1 inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[7px] font-semibold uppercase text-sky-700"
+              : "mx-auto my-2.5 inline-flex rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-sky-700"
           }
         >
-          SCAN ME
+          Scan me
         </p>
       </div>
     );
@@ -2105,19 +2390,19 @@ function QRFrame({
   if (frameStyle === "classic") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-2xl border border-slate-300 bg-white text-center shadow-sm`}
+        className={`${frameWidthClass} mx-auto rounded-xl border border-slate-200 bg-white text-center`}
       >
         <p
           title={safeTitle}
           className={
             isThumbnail
-              ? "truncate border-b border-slate-200 px-3 py-1 text-[8px] font-semibold text-slate-700"
-              : "truncate border-b border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-800"
+              ? "truncate border-b border-slate-100 px-3 py-1 text-[7px] font-semibold text-slate-600"
+              : "truncate border-b border-slate-100 px-5 py-2 text-xs font-semibold text-slate-700"
           }
         >
           {displayTitle}
         </p>
-        <div className={isThumbnail ? "p-2" : "p-5"}>
+        <div className={isThumbnail ? "p-2" : "p-4"}>
           <div className={qrSlotClass}>{children}</div>
         </div>
       </div>
@@ -2127,35 +2412,19 @@ function QRFrame({
   if (frameStyle === "ticket") {
     return (
       <div
-        className={`${frameWidthClass} relative mx-auto rounded-[24px] border border-dashed border-sky-500 bg-sky-50 text-center shadow-sm`}
+        className={`${frameWidthClass} mx-auto rounded-xl border border-dashed border-sky-300 bg-sky-50/30 text-center`}
       >
-        <span
-          className={
-            isThumbnail
-              ? "absolute -left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-sky-300 bg-white"
-              : "absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border border-sky-300 bg-white"
-          }
-          aria-hidden="true"
-        />
-        <span
-          className={
-            isThumbnail
-              ? "absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-sky-300 bg-white"
-              : "absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border border-sky-300 bg-white"
-          }
-          aria-hidden="true"
-        />
-        <div className={isThumbnail ? "px-3 pt-2" : "px-5 pt-5"}>
-          <div className={compactQrSlotClass}>{children}</div>
+        <div className={isThumbnail ? "px-3 pt-2" : "px-4 pt-4"}>
+          <div className={qrSlotClass}>{children}</div>
         </div>
         <p
           className={
             isThumbnail
-              ? "mt-1 border-t border-dashed border-sky-300 px-3 py-1 text-[8px] font-bold uppercase text-sky-900"
-              : "mt-4 border-t border-dashed border-sky-300 px-5 py-2.5 text-xs font-bold uppercase tracking-normal text-sky-900"
+              ? "mt-1 border-t border-dashed border-sky-200 px-3 py-1 text-[7px] font-bold uppercase text-sky-800"
+              : "mt-4 border-t border-dashed border-sky-200 px-5 py-2 text-[11px] font-bold uppercase tracking-normal text-sky-800"
           }
         >
-          TICKET
+          Ticket
         </p>
       </div>
     );
@@ -2164,21 +2433,19 @@ function QRFrame({
   if (frameStyle === "badge") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-[28px] bg-slate-950 text-center shadow-sm ring-1 ring-slate-900`}
+        className={`${frameWidthClass} mx-auto rounded-xl border border-slate-200 bg-white text-center`}
       >
         <div className={isThumbnail ? "p-2 pb-1" : "p-4 pb-2"}>
-          <div className="rounded-[18px] bg-white p-2 shadow-inner">
-            <div className={isThumbnail ? "mx-auto w-14" : "mx-auto w-[78%]"}>
-              {children}
-            </div>
+          <div className="rounded-lg bg-slate-50/80 p-2 ring-1 ring-slate-100">
+            <div className={qrSlotClass}>{children}</div>
           </div>
         </div>
         <p
           title={safeTitle}
           className={
             isThumbnail
-              ? "truncate px-3 pb-2 text-[8px] font-bold !text-white"
-              : "truncate px-5 pb-4 text-sm font-bold !text-white"
+              ? "truncate px-3 pb-2 text-[7px] font-semibold text-slate-700"
+              : "truncate px-4 pb-3 text-xs font-semibold text-slate-700"
           }
         >
           {displayTitle}
@@ -2189,18 +2456,18 @@ function QRFrame({
 
   return (
     <div
-      className={`${frameWidthClass} mx-auto rounded-2xl border border-slate-200 bg-white text-center shadow-sm`}
+      className={`${frameWidthClass} mx-auto rounded-xl border border-slate-200 bg-white text-center`}
     >
       <p
         className={
           isThumbnail
-            ? "px-3 pt-2 text-[8px] font-bold uppercase text-sky-800"
-            : "px-5 pt-4 text-xs font-bold uppercase tracking-normal text-sky-800"
+            ? "px-3 pt-2 text-[7px] font-bold uppercase text-sky-700"
+            : "px-5 pt-4 text-[11px] font-bold uppercase tracking-normal text-sky-700"
         }
       >
-        SCAN
+        Scan
       </p>
-      <div className={isThumbnail ? "p-2 pt-1" : "p-5 pt-3"}>
+      <div className={isThumbnail ? "p-2 pt-1" : "p-4 pt-2"}>
         <div className={qrSlotClass}>{children}</div>
       </div>
     </div>
@@ -2494,12 +2761,16 @@ function getLogoChoiceOptions(
 }
 
 function createLogoPresetDataUrl(option: LogoChoiceOption): string {
+  if (option.logoSvg) {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(option.logoSvg)}`;
+  }
+
   const safeText = option.initials.replace(/[<>&]/g, "");
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
-    `<rect width="128" height="128" rx="28" fill="${option.color}"/>`,
-    `<circle cx="64" cy="64" r="44" fill="rgba(255,255,255,0.12)"/>`,
-    `<text x="64" y="72" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${safeText.length > 2 ? 26 : 34}" font-weight="700" fill="#FFFFFF">${safeText}</text>`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
+    `<rect x="8" y="8" width="112" height="112" rx="28" fill="${option.color}" fill-opacity="0.1"/>`,
+    `<text x="64" y="75" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${safeText.length > 2 ? 26 : 34}" font-weight="700" fill="${option.color}">${safeText}</text>`,
     `</svg>`,
   ].join("");
 
@@ -2523,6 +2794,71 @@ function getApiDesign(design: DesignState, hasLogo: boolean) {
     errorCorrectionLevel: design.errorCorrectionLevel,
     size: design.size,
   };
+}
+
+function readQRGeneratorAuthDraft(): QRGeneratorAuthDraft | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const rawDraft = window.localStorage.getItem(qrGeneratorAuthDraftStorageKey);
+    if (!rawDraft) return null;
+
+    const draft = JSON.parse(rawDraft) as unknown;
+    if (!isRecord(draft) || draft.version !== 1) return null;
+
+    const form = isRecord(draft.form)
+      ? ({ ...initialFormState, ...draft.form } as FormState)
+      : initialFormState;
+    const design = isRecord(draft.design)
+      ? ({ ...initialDesignState, ...draft.design } as DesignState)
+      : initialDesignState;
+
+    return {
+      version: 1,
+      currentStep: isWorkflowStep(draft.currentStep)
+        ? draft.currentStep
+        : "export",
+      mode: isQRMode(draft.mode) ? draft.mode : "static",
+      type: isQRType(draft.type) ? draft.type : "url",
+      form,
+      design,
+      selectedPreset: isDesignPreset(draft.selectedPreset)
+        ? draft.selectedPreset
+        : "custom",
+      logoUrl: typeof draft.logoUrl === "string" ? draft.logoUrl : "",
+      logoChoice: isLogoChoiceValue(draft.logoChoice)
+        ? draft.logoChoice
+        : "none",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isWorkflowStep(value: unknown): value is WorkflowStep {
+  return value === "content" || value === "design" || value === "export";
+}
+
+function isQRMode(value: unknown): value is QRMode {
+  return value === "static" || value === "dynamic";
+}
+
+function isQRType(value: unknown): value is QRType {
+  return typeOptions.some((option) => option.value === value);
+}
+
+function isDesignPreset(value: unknown): value is DesignPreset {
+  return designPresetOptions.some((option) => option.value === value);
+}
+
+function isLogoChoiceValue(value: unknown): value is LogoChoiceValue {
+  if (value === "none" || value === "upload") return true;
+
+  return logoPresetOptions.some((option) => option.value === value);
 }
 
 function getCornerSquareType(cornerStyle: CornerStyle): QROptions["cornersSquareType"] {

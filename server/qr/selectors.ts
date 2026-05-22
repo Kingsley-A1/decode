@@ -15,6 +15,13 @@ export const qrCodeDashboardSelect = {
   archivedAt: true,
   createdAt: true,
   updatedAt: true,
+  landingPage: {
+    select: {
+      id: true,
+      title: true,
+      status: true,
+    },
+  },
 } satisfies Prisma.QRCodeSelect;
 
 export const qrCodeOwnershipSelect = {

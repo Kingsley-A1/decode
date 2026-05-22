@@ -46,7 +46,7 @@ const sizeClasses = {
   sm: "min-h-11 min-w-24 px-3 py-2",
   icon: "min-h-[86px] min-w-[88px] max-w-[96px] px-2 py-2",
   md: "min-h-16 min-w-[180px] px-3 py-3",
-  lg: "min-h-[188px] min-w-[164px] max-w-[164px] p-2 sm:min-h-64 sm:min-w-0 sm:max-w-none sm:p-3",
+  lg: "min-h-[148px] min-w-[156px] max-w-[156px] p-2 sm:min-h-[184px] sm:min-w-0 sm:max-w-none sm:p-3",
 };
 
 const desktopColumnClasses = {

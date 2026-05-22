@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Menu, Plus, X } from "lucide-react";
+import { Menu, Plus, UserRound, X } from "lucide-react";
+import { getSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 import {
@@ -12,11 +13,44 @@ import {
   primaryNavItems,
 } from "@/components/navigation";
 
+type HeaderAuthState =
+  | "checking"
+  | "authenticated"
+  | "registered"
+  | "new";
+
+const knownUserStorageKey = "decode:auth:known-user:v1";
+
 export function NavBar() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [authState, setAuthState] = useState<HeaderAuthState>("checking");
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getSession()
+      .then((session) => {
+        if (!isMounted) return;
+
+        if (session) {
+          rememberKnownUser();
+          setAuthState("authenticated");
+          return;
+        }
+
+        setAuthState(getSignedOutAuthState());
+      })
+      .catch(() => {
+        if (isMounted) setAuthState(getSignedOutAuthState());
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -101,6 +135,36 @@ export function NavBar() {
         </nav>
 
         <div className="flex min-w-0 items-center justify-end gap-2 xl:min-w-44">
+          {authState === "authenticated" ? (
+            <Link
+              href="/me"
+              aria-label="Open profile"
+              title="Profile"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-800"
+            >
+              <UserRound className="h-5 w-5" aria-hidden="true" />
+            </Link>
+          ) : authState === "registered" ? (
+            <Link
+              href="/me?intent=login"
+              className="inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-800"
+            >
+              Login
+            </Link>
+          ) : authState === "new" ? (
+            <Link
+              href="/me?intent=signup"
+              className="inline-flex min-h-11 items-center rounded-lg bg-sky-700 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-sky-700/20 transition-colors hover:bg-sky-800"
+            >
+              Sign up
+            </Link>
+          ) : (
+            <span
+              className="hidden h-11 w-20 rounded-lg bg-slate-100 md:inline-block"
+              aria-hidden="true"
+            />
+          )}
+
           <Link
             href="/generate"
             aria-label="New QR"
@@ -109,6 +173,7 @@ export function NavBar() {
             }
             className={cn(
               "inline-flex h-11 w-11 items-center justify-center rounded-lg shadow-sm transition-colors sm:hidden",
+              authState !== "authenticated" && "hidden",
               isActivePath(pathname, "/generate")
                 ? "border border-sky-200 bg-sky-100 text-sky-900"
                 : "bg-sky-700 text-white shadow-sky-700/20 hover:bg-sky-800"
@@ -195,6 +260,37 @@ export function NavBar() {
             </nav>
 
             <div className="mt-auto border-t border-slate-200 p-4">
+              {authState === "authenticated" ? (
+                <Link
+                  href="/me"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="mb-2 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-sky-300 hover:text-sky-800"
+                >
+                  <UserRound className="h-4 w-4" aria-hidden="true" />
+                  Profile
+                </Link>
+              ) : authState === "registered" ? (
+                <Link
+                  href="/me?intent=login"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="mb-2 inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-sky-300 hover:text-sky-800"
+                >
+                  Login
+                </Link>
+              ) : authState === "new" ? (
+                <Link
+                  href="/me?intent=signup"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="mb-2 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-sky-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-800"
+                >
+                  Sign up
+                </Link>
+              ) : (
+                <span
+                  className="mb-2 block h-12 w-full rounded-lg bg-slate-100"
+                  aria-hidden="true"
+                />
+              )}
               <Link
                 href="/generate"
                 onClick={() => setIsMenuOpen(false)}
@@ -209,4 +305,24 @@ export function NavBar() {
       )}
     </header>
   );
+}
+
+function getSignedOutAuthState(): HeaderAuthState {
+  return hasKnownUserMarker() ? "registered" : "new";
+}
+
+function hasKnownUserMarker(): boolean {
+  try {
+    return window.localStorage.getItem(knownUserStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function rememberKnownUser(): void {
+  try {
+    window.localStorage.setItem(knownUserStorageKey, "true");
+  } catch {
+    // Storage can be unavailable in hardened browsers. The session state still wins.
+  }
 }

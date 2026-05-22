@@ -59,6 +59,7 @@ describe("dynamic QR service", () => {
       createdAt,
       updatedAt: createdAt,
       payload,
+      landingPage: null,
     };
     const findFirst = vi.fn(async () => record);
     const update = vi.fn(async (args: Prisma.QRCodeUpdateArgs) => {

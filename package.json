@@ -11,8 +11,9 @@
     "typecheck": "tsc --noEmit",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
+    "seed:landing-page-templates": "node scripts/seed-landing-page-templates.mjs",
     "smoke:e2e": "playwright test",
-    "lhci": "lhci autorun",
+    "lhci": "lhci autorun && node scripts/lighthouse-public-renderer.mjs",
     "release:check": "npm run ci && npm run smoke:e2e && npm run lhci",
     "ci": "npm run lint && npm run typecheck && npm run test && npm run prisma:validate && npm run build"
   },
@@ -36,6 +37,7 @@
     "qrcode": "^1.5.4",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "react-icons": "^5.6.0",
     "server-only": "^0.0.1",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.4.0",
