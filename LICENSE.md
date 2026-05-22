@@ -6,7 +6,7 @@ Effective Date: December 7, 2025
 
 1. Ownership and Rights
 
-- This software, including all source code, documentation, assets, scripts, and related materials in this repository ("DECODE"), is the exclusive, proprietary property of the DECODE Team.
+- This software, including all source code, documentation, assets, scripts, and related materials in this repository ("DECODE"), is the exclusive, proprietary property of the King Tech Foundation. 
 - All intellectual property rights are reserved. No rights, title, or interest in any part of the project are transferred or granted to any third party by virtue of access to this repository.
 
 2. Permitted Use

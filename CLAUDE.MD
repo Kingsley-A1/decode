@@ -33,9 +33,9 @@ When the user writes `#XSE`, switch to Excellence, Speed, and Efficiency mode: c
 
 ## Required First Pass
 
-Before implementation that changes code or configuration, perform a quick repository pass:
+Before implementation, perform a quick repository pass:
 
-- Check `git status --short` when git metadata is available.
+- Check `git status --short`.
 - Inspect the relevant files before editing them.
 - Use `rg` or `rg --files` for search.
 - Identify whether the change affects frontend, backend, API contracts, database schema, auth, storage, or deployment.
@@ -47,7 +47,7 @@ If the task is a code review, lead with findings ordered by severity and include
 
 Decode should be built to SWE-Bench Verified expectations: understand the bug or feature, make the smallest correct production change, preserve existing behavior, add focused tests for risk, and verify with real commands.
 
-Default quality gates for implementation changes:
+Default quality gates:
 
 - `npm run lint`
 - `npm run build`
@@ -204,11 +204,11 @@ Documentation should be operational, not decorative.
 
 ## Handoff Report
 
-Every completed implementation task should report:
+Every completed task should report:
 
 - Files changed.
 - What was implemented.
 - Verification commands run and their result.
 - Known limitations or follow-up work.
 
-Avoid ending with only vague "let me know" language. Provide the next concrete engineering step when useful.
+Do not end with vague "let me know" language. Provide the next concrete engineering step when useful.
