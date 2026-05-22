@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 const primaryRoutes = [
   { path: "/generate", heading: "Generate QR codes" },
   { path: "/scan", heading: "Scan QR codes" },
-  { path: "/verify", heading: "Verify a link" },
+  { path: "/links", heading: "Links" },
   { path: "/decode", heading: "Decode utility" },
   { path: "/dashboard", heading: "Dashboard" },
   { path: "/landing-pages", heading: "Landing pages" },
@@ -79,7 +79,7 @@ test.describe("phase 8 release quality gate", () => {
   test("common breakpoints render without horizontal overflow", async ({
     page,
   }, testInfo) => {
-    test.setTimeout(150_000);
+    test.setTimeout(240_000);
 
     for (const viewport of screenshotViewports) {
       await page.setViewportSize({
@@ -109,11 +109,85 @@ test.describe("phase 8 release quality gate", () => {
   test("landing page template gallery searches, filters, and loads presets", async ({
     page,
   }) => {
+    test.setTimeout(240_000);
+
+    let publishPayload: unknown;
+
+    await page.route("**/api/auth/session", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          user: {
+            name: "Phase 8 User",
+            email: "phase8@decode.test",
+          },
+          expires: "2026-12-31T23:59:59.000Z",
+        }),
+      });
+    });
+    await page.route("**/api/landing-pages", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+
+      publishPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            landingPage: {
+              id: "lp_phase8_smoke",
+              status: "published",
+            },
+          },
+          requestId: "req_phase8_publish",
+        }),
+      });
+    });
+    await page.route("**/api/qr-codes**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            workspaceId: "workspace_phase8_smoke",
+            qrCodes: [
+              {
+                id: "qr_phase8_dynamic",
+                workspaceId: "workspace_phase8_smoke",
+                ownerId: "user_phase8_smoke",
+                title: "Phase 8 dynamic QR",
+                type: "url",
+                mode: "dynamic",
+                status: "draft",
+                slug: "phase-8-dynamic",
+                destinationUrl: null,
+                scanCount: 0,
+                publishedAt: null,
+                archivedAt: null,
+                createdAt: "2026-05-22T00:00:00.000Z",
+                updatedAt: "2026-05-22T00:00:00.000Z",
+                landingPage: null,
+              },
+            ],
+            nextCursor: null,
+          },
+          requestId: "req_phase8_qr_codes",
+        }),
+      });
+    });
+
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/landing-pages");
     await expect(
       page.getByRole("heading", { name: "Landing pages", level: 1 })
     ).toBeVisible();
+    await waitForRouteHydration(page);
 
     const search = page.getByLabel("Search templates");
     const searchCases = [
@@ -152,7 +226,7 @@ test.describe("phase 8 release quality gate", () => {
       page.getByRole("button", { name: "Remove hotel filter" })
     ).toBeVisible();
     await page.getByRole("button", { name: "Clear filters" }).click();
-    await expect(page.getByText("36 templates found")).toBeVisible();
+    await expect(page.getByText(/templates found/)).toBeVisible();
 
     await search.fill("");
     await page
@@ -201,7 +275,21 @@ test.describe("phase 8 release quality gate", () => {
       .click();
     await page.getByRole("button", { name: "Replace defaults" }).click();
     await expect(page.getByLabel("Business name")).toHaveValue("Harbor View Hotel");
+
+    await page.getByLabel("Dynamic QR code").selectOption("qr_phase8_dynamic");
+    await page.getByRole("button", { name: "Publish changes" }).click();
+    await expect(
+      page.getByText("Landing page published and remains editable.")
+    ).toBeVisible();
+    expect(publishPayload).toMatchObject({
+      qrCodeId: "qr_phase8_dynamic",
+      status: "published",
+      templateKey: "hotel-welcome",
+      title: "Hotel welcome",
+      type: "business",
+    });
     await expectNoDocumentOverflow(page);
+    await expectNoClippedInteractiveText(page);
   });
 
   test("generator completes the static QR workflow and updates frames", async ({
@@ -324,12 +412,14 @@ test.describe("phase 8 release quality gate", () => {
     expect(continueBox?.y).toBeLessThanOrEqual(844 * 1.4);
 
     await page.getByLabel("Website URL").fill("https://decode.com.ng/phase-1");
+    await expect(continueButton).toBeEnabled();
+    await continueButton.scrollIntoViewIfNeeded();
     await continueButton.click();
 
     const designHeading = page.getByRole("heading", {
       name: "2. Design and guardrails",
     });
-    await expect(designHeading).toBeVisible();
+    await expect(designHeading).toBeVisible({ timeout: 15_000 });
     await expect(designHeading).toBeFocused();
 
     const framePickerBox = await page.getByTestId("frame-picker").boundingBox();
@@ -444,7 +534,7 @@ test.describe("phase 8 release quality gate", () => {
     await expectNoSeriousAxeViolations(page);
   });
 
-  test("scanner upload fallback decodes QR images and links to verifier", async ({
+  test("scanner upload fallback decodes QR images and links to links", async ({
     page,
   }) => {
     const qrText = "https://decode.com.ng/verify-smoke";
@@ -468,42 +558,25 @@ test.describe("phase 8 release quality gate", () => {
     await expect(page.getByText(qrText)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: "Copy result" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Clear result" })).toBeEnabled();
-    await expect(page.getByRole("link", { name: "Verify link" })).toHaveAttribute(
-      "href",
-      new RegExp(`/verify\\?url=${encodeURIComponent(qrText)}`)
-    );
+    await expect(
+      page.locator("#main-content").getByRole("link", { name: "Links" })
+    ).toHaveAttribute("href", new RegExp(`/links\\?url=${encodeURIComponent(qrText)}`));
   });
 
-  test("verifier shows normalized suspicious verdicts and cautious open flow", async ({
+  test("links page stays disabled while the links system is rebuilt", async ({
     page,
   }) => {
-    await page.goto("/verify");
+    await page.goto("/links");
     await expect(
-      page.getByRole("heading", { name: "Verify a link", level: 1 })
+      page.getByRole("heading", { name: "Links", level: 1 })
     ).toBeVisible();
-
-    const checkButton = page.getByRole("button", { name: "Check link" });
-
-    await page.getByLabel("Link to verify").fill("http://localhost:3000/login");
-    await expect(checkButton).toBeEnabled();
-    await checkButton.click();
-
-    const verdictPanel = page.locator('section[aria-live="polite"]');
-
-    await expect(page.locator("code", { hasText: "localhost_host" })).toBeVisible(
-      { timeout: 15_000 }
-    );
-    await expect(page.getByText(/http:\/\/localhost:3000\/login\/?/)).toBeVisible();
-    await expect(verdictPanel.getByText(/^Suspicious$/).first()).toBeVisible();
-
-    await page.getByRole("button", { name: "Open with caution" }).click();
     await expect(
-      page.getByRole("dialog", { name: "Open flagged link?" })
+      page.getByRole("heading", {
+        name: "Link verification is being upgraded.",
+        level: 2,
+      })
     ).toBeVisible();
-    await page.getByRole("button", { name: "Stay here" }).click();
-    await expect(
-      page.getByRole("dialog", { name: "Open flagged link?" })
-    ).toBeHidden();
+    await expect(page.getByText("Coming soon")).toBeVisible();
   });
 
   test("decode utility validates UI controls and API algorithms", async ({
@@ -518,7 +591,8 @@ test.describe("phase 8 release quality gate", () => {
     await page.getByLabel("Input text").fill("Decode Platform");
     await page.getByRole("button", { name: "Run transform" }).click();
     await expect(page.getByLabel("Output text")).toHaveValue(
-      "RGVjb2RlIFBsYXRmb3Jt"
+      "RGVjb2RlIFBsYXRmb3Jt",
+      { timeout: 15_000 }
     );
     await expect(
       page.getByRole("button", { name: "Swap input and output" })

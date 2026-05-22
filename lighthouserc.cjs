@@ -7,7 +7,7 @@ module.exports = {
       url: [
         `${baseUrl}/generate`,
         `${baseUrl}/scan`,
-        `${baseUrl}/verify`,
+        `${baseUrl}/links`,
         `${baseUrl}/decode`,
         `${baseUrl}/dashboard`,
         `${baseUrl}/landing-pages`,
