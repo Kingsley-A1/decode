@@ -26,6 +26,8 @@ model User {
   uploadedAssets     QRCodeAsset[]     @relation("AssetUploader")
   auditLogs          AuditLog[]        @relation("AuditActor")
   reviews            Review[]          @relation("ReviewAuthor")
+  templateUsages     LandingPageTemplateUsage[] @relation("TemplateUsageActor")
+  shortLinks         ShortLink[]       @relation("ShortLinkOwner")
 
   @@index([defaultWorkspaceId])
   @@index([deletedAt])
@@ -82,8 +84,10 @@ model Workspace {
   qrCodes         QRCode[]
   assets          QRCodeAsset[]
   landingPages    LandingPage[]
+  templateUsages  LandingPageTemplateUsage[]
   scanEvents      ScanEvent[]
   auditLogs       AuditLog[]
+  shortLinks      ShortLink[]
 
   @@index([ownerId, deletedAt])
   @@index([deletedAt, updatedAt])
@@ -167,6 +171,7 @@ model LandingPage {
   id          String        @id @default(cuid())
   workspaceId String
   qrCodeId    String?       @unique
+  templateId  String?
   type        String
   title       String
   status      String
@@ -177,10 +182,13 @@ model LandingPage {
   deletedAt   DateTime?
   workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   qrCode      QRCode?       @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+  template    LandingPageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   assets      QRCodeAsset[]
+  templateUsages LandingPageTemplateUsage[]
 
   @@index([workspaceId, deletedAt, updatedAt])
   @@index([workspaceId, status, updatedAt])
+  @@index([templateId])
 }
 
 model ScanEvent {
@@ -205,18 +213,66 @@ model ScanEvent {
 }
 
 model LinkCheck {
-  id            String   @id @default(cuid())
-  normalizedUrl String   @unique
-  verdict       String
-  confidence    Int
-  reasons       Json
-  checkedAt     DateTime @default(now())
-  expiresAt     DateTime
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String    @id @default(cuid())
+  normalizedUrl   String    @unique
+  verdict         String
+  confidence      Int
+  reasons         Json
+  evidence        Json?
+  probeSummary    Json?
+  safeBrowsingTtl DateTime?
+  checkedAt       DateTime  @default(now())
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([expiresAt])
   @@index([verdict, checkedAt])
+  @@index([normalizedUrl, expiresAt])
+}
+
+model ShortLink {
+  id              String          @id @default(cuid())
+  workspaceId     String?
+  ownerId         String?
+  slug            String          @unique
+  destinationUrl  String
+  normalizedUrl   String
+  status          String          @default("active")
+  verdictAtCreate String
+  lastVerdict     String?
+  lastVerifiedAt  DateTime?
+  scanCount       Int             @default(0)
+  expiresAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+  workspace       Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  owner           User?           @relation("ShortLinkOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  scans           ShortLinkScan[]
+
+  @@index([workspaceId, deletedAt, updatedAt])
+  @@index([ownerId, updatedAt])
+  @@index([status, expiresAt])
+  @@index([normalizedUrl])
+}
+
+model ShortLinkScan {
+  id              String    @id @default(cuid())
+  shortLinkId     String
+  scannedAt       DateTime  @default(now())
+  deviceClass     String?
+  browser         String?
+  operatingSystem String?
+  referrer        String?
+  country         String?
+  region          String?
+  ipHash          String?
+  userAgentHash   String?
+  shortLink       ShortLink @relation(fields: [shortLinkId], references: [id], onDelete: Cascade)
+
+  @@index([shortLinkId, scannedAt])
+  @@index([scannedAt])
 }
 
 model Review {
@@ -270,9 +326,120 @@ model AdminUser {
   sessions          AdminSession[]
   authEvents        AdminAuthEvent[]
   platformAuditLogs PlatformAuditLog[] @relation("PlatformAuditActor")
+  createdLandingPageTemplates LandingPageTemplate[] @relation("TemplateCreator")
+  updatedLandingPageTemplates LandingPageTemplate[] @relation("TemplateUpdater")
+  uploadedLandingPageTemplateAssets LandingPageTemplateUploadedAsset[] @relation("TemplateAssetUploader")
 
   @@index([role, status])
   @@index([status, createdAt])
+}
+
+model LandingPageTemplate {
+  id                   String                     @id @default(cuid())
+  key                  String                     @unique
+  type                 String
+  label                String
+  description          String
+  category             String
+  industry             String
+  status               String                     @default("draft")
+  source               String                     @default("admin")
+  sortPriority         Int                        @default(1000)
+  flags                Json
+  tags                 Json
+  recommendedFor       String
+  requiredFields       Json
+  optionalFields       Json
+  defaultTitle         String
+  defaultContent       Json
+  thumbnail            Json
+  mobilePreview        Json
+  accessibilityNotes   String
+  usageCount           Int                        @default(0)
+  lastUsedAt           DateTime?
+  publishedAt          DateTime?
+  archivedAt           DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  deletedAt            DateTime?
+  createdByAdminUserId String?
+  updatedByAdminUserId String?
+  createdBy            AdminUser?                 @relation("TemplateCreator", fields: [createdByAdminUserId], references: [id], onDelete: SetNull)
+  updatedBy            AdminUser?                 @relation("TemplateUpdater", fields: [updatedByAdminUserId], references: [id], onDelete: SetNull)
+  assets               LandingPageTemplateAsset[]
+  landingPages         LandingPage[]
+  usages               LandingPageTemplateUsage[]
+
+  @@index([status, sortPriority, updatedAt])
+  @@index([category, status])
+  @@index([type, status])
+  @@index([source, status])
+  @@index([deletedAt, updatedAt])
+  @@index([createdByAdminUserId, createdAt])
+  @@index([updatedByAdminUserId, updatedAt])
+}
+
+model LandingPageTemplateAsset {
+  id         String              @id @default(cuid())
+  templateId String
+  uploadedAssetId String?
+  slot       String
+  label      String
+  kind       String
+  required   Boolean             @default(false)
+  assetPath  String?
+  alt        String?
+  width      Int?
+  height     Int?
+  sortOrder  Int                 @default(0)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  template   LandingPageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  uploadedAsset LandingPageTemplateUploadedAsset? @relation(fields: [uploadedAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([templateId, slot])
+  @@index([templateId, sortOrder])
+  @@index([uploadedAssetId])
+  @@index([kind, required])
+}
+
+model LandingPageTemplateUploadedAsset {
+  id                  String                     @id @default(cuid())
+  uploaderAdminUserId String?
+  bucket              String
+  key                 String                     @unique
+  publicUrl           String?
+  contentType         String
+  fileSizeBytes       Int
+  checksum            String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  deletedAt           DateTime?
+  uploaderAdminUser   AdminUser?                 @relation("TemplateAssetUploader", fields: [uploaderAdminUserId], references: [id], onDelete: SetNull)
+  templateAssets      LandingPageTemplateAsset[]
+
+  @@index([uploaderAdminUserId, createdAt])
+  @@index([deletedAt, createdAt])
+}
+
+model LandingPageTemplateUsage {
+  id            String               @id @default(cuid())
+  templateId    String
+  workspaceId   String?
+  landingPageId String?
+  actorUserId   String?
+  context       String               @default("landing_page_create")
+  usedAt        DateTime             @default(now())
+  createdAt     DateTime             @default(now())
+  template      LandingPageTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  workspace     Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  landingPage   LandingPage?         @relation(fields: [landingPageId], references: [id], onDelete: SetNull)
+  actor         User?                @relation("TemplateUsageActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([templateId, usedAt])
+  @@index([workspaceId, usedAt])
+  @@index([landingPageId, usedAt])
+  @@index([actorUserId, usedAt])
 }
 
 model AdminSession {
