@@ -102,4 +102,37 @@ describe("landing page schemas", () => {
       "asset_two",
     ]);
   });
+
+  it("accepts trusted first-party template image paths without asset attachment", () => {
+    const content = parseLandingPageContent(LANDING_PAGE_TYPE.IMAGES, {
+      title: "Gallery",
+      images: [
+        {
+          assetPath:
+            "/assets/landing-page-templates/hotel/hotel-guest-room.webp",
+          alt: "Hotel room",
+          caption: "Guest room",
+        },
+      ],
+    });
+
+    expect(content).toMatchObject({
+      images: [
+        {
+          assetPath:
+            "/assets/landing-page-templates/hotel/hotel-guest-room.webp",
+        },
+      ],
+    });
+    expect(getLandingPageContentAssetIds(LANDING_PAGE_TYPE.IMAGES, content)).toEqual([]);
+  });
+
+  it("rejects arbitrary local media paths in landing page content", () => {
+    expect(() =>
+      parseLandingPageContent(LANDING_PAGE_TYPE.IMAGES, {
+        title: "Gallery",
+        images: [{ assetPath: "/uploads/unsafe.webp", alt: "Unsafe" }],
+      })
+    ).toThrow("Only first-party landing-page template assets");
+  });
 });

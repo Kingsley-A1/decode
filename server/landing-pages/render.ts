@@ -106,7 +106,11 @@ function renderProfile(
   const title = getFirstString(content, ["displayName", "name"]) ?? fallbackTitle;
 
   return [
-    getIdentityImageHtml(content.avatarAssetId, title, "avatar"),
+    getIdentityImageHtml(
+      getFirstValue(content, ["avatarAssetId", "avatarAssetPath"]),
+      title,
+      "avatar"
+    ),
     renderHeader(title, getFirstString(content, ["headline", "role"])),
     renderHeroMedia(content, title),
     renderParagraph(getFirstValue(content, ["bio", "description"])),
@@ -124,7 +128,11 @@ function renderBusiness(
   const contactLinks = buildContactLinks(content, title);
 
   return [
-    getIdentityImageHtml(content.logoAssetId, title, "avatar"),
+    getIdentityImageHtml(
+      getFirstValue(content, ["logoAssetId", "logoAssetPath"]),
+      title,
+      "avatar"
+    ),
     renderHeader(title, getFirstString(content, ["tagline", "category"])),
     renderHeroMedia(content, title),
     renderParagraph(getFirstValue(content, ["description", "summary"])),
@@ -255,6 +263,9 @@ function renderPdf(
   const title = getFirstString(content, ["title", "pdfTitle"]) ?? fallbackTitle;
   const pdfAssetId =
     getString(content.pdfAssetId) ?? getString(getRecord(content.pdf).assetId);
+  const pdfSource =
+    getAllowedMediaSource(getFirstValue(content, ["pdfAssetPath"])) ??
+    (pdfAssetId ? getAssetUrl(pdfAssetId) : undefined);
 
   return [
     renderHeader(title, undefined),
@@ -262,8 +273,8 @@ function renderPdf(
     renderParagraph(content.description),
     renderRawLinks(
       [
-        pdfAssetId
-          ? getOptionalLink("Open PDF document", getAssetUrl(pdfAssetId), `Open ${title} PDF`)
+        pdfSource
+          ? getOptionalLink("Open PDF document", pdfSource, `Open ${title} PDF`)
           : "",
       ].filter(Boolean),
       `${title} document actions`
@@ -315,17 +326,20 @@ function renderAudioLink(
   const title = getFirstString(content, ["title", "audioTitle"]) ?? fallbackTitle;
   const audioAssetId =
     getString(content.audioAssetId) ?? getString(getRecord(content.audio).assetId);
+  const audioSource =
+    getAllowedMediaSource(getFirstValue(content, ["audioAssetPath"])) ??
+    (audioAssetId ? getAssetUrl(audioAssetId) : undefined);
 
   return [
     renderHeader(title, undefined),
     renderHeroMedia(content, title),
     renderParagraph(content.description),
-    audioAssetId
+    audioSource
       ? [
           '<section class="media-panel" aria-labelledby="audio-heading">',
           '<h2 id="audio-heading" class="section-title">Audio</h2>',
-          `<audio controls preload="metadata" src="${getAssetUrl(
-            audioAssetId
+          `<audio controls preload="metadata" src="${escapeAttribute(
+            audioSource
           )}" aria-label="${escapeAttribute(title)} audio"></audio>`,
           "</section>",
         ].join("")
@@ -674,9 +688,10 @@ function getIdentityImageHtml(
 ): string {
   const id = getString(assetId);
   if (!id) return "";
+  const source = getAllowedMediaSource(id) ?? getAssetUrl(id);
 
   return renderImageElement({
-    src: getAssetUrl(id),
+    src: source,
     alt,
     className,
     loading: "eager",

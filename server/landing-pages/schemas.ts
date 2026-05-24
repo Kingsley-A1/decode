@@ -10,6 +10,13 @@ import { normalizeHttpUrl } from "@/server/qr/payload";
 const assetIdSchema = z.string().trim().min(1).max(128);
 const boundedTextSchema = z.string().trim().max(500);
 const shortTextSchema = z.string().trim().max(160);
+const trustedTemplateAssetPathSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^\/assets\/landing-page-templates\/[a-z0-9/_-]+\.(?:png|jpe?g|webp|svg|pdf|mp3|m4a|wav|webm)$/i,
+    "Only first-party landing-page template assets can be referenced by path."
+  );
 const httpUrlSchema = z
   .string()
   .trim()
@@ -22,11 +29,24 @@ const linkSchema = z.object({
   url: httpUrlSchema,
 });
 
-const imageReferenceSchema = z.object({
-  assetId: assetIdSchema,
-  alt: shortTextSchema.optional(),
-  caption: boundedTextSchema.optional(),
-});
+const firstPartyMediaFields = {
+  heroAssetPath: trustedTemplateAssetPathSchema.optional(),
+  heroAlt: shortTextSchema.optional(),
+  heroWidth: z.number().int().positive().optional(),
+  heroHeight: z.number().int().positive().optional(),
+} as const;
+
+const imageReferenceSchema = z
+  .object({
+    assetId: assetIdSchema.optional(),
+    assetPath: trustedTemplateAssetPathSchema.optional(),
+    alt: shortTextSchema.optional(),
+    caption: boundedTextSchema.optional(),
+  })
+  .refine((value) => value.assetId || value.assetPath, {
+    path: ["assetId"],
+    message: "Provide an uploaded asset ID or trusted template asset path.",
+  });
 
 const menuItemSchema = z.object({
   name: shortTextSchema.min(1),
@@ -85,28 +105,34 @@ export const landingPageContentSchemas = {
     headline: shortTextSchema.optional(),
     bio: z.string().trim().max(1000).optional(),
     avatarAssetId: assetIdSchema.optional(),
+    avatarAssetPath: trustedTemplateAssetPathSchema.optional(),
     links: z.array(linkSchema).max(20).default([]),
+    ...firstPartyMediaFields,
   }),
   [LANDING_PAGE_TYPE.BUSINESS]: z.object({
     businessName: shortTextSchema.min(1),
     tagline: shortTextSchema.optional(),
     description: z.string().trim().max(1200).optional(),
     logoAssetId: assetIdSchema.optional(),
+    logoAssetPath: trustedTemplateAssetPathSchema.optional(),
     phone: z.string().trim().max(40).optional(),
     email: z.string().trim().email().max(254).optional(),
     website: httpUrlSchema.optional(),
     address: boundedTextSchema.optional(),
     links: z.array(linkSchema).max(20).default([]),
+    ...firstPartyMediaFields,
   }),
   [LANDING_PAGE_TYPE.LINKS]: z.object({
     heading: shortTextSchema.min(1),
     description: boundedTextSchema.optional(),
     links: z.array(linkSchema).min(1).max(40),
+    ...firstPartyMediaFields,
   }),
   [LANDING_PAGE_TYPE.MENU]: z.object({
     restaurantName: shortTextSchema.min(1),
     description: boundedTextSchema.optional(),
     sections: z.array(menuSectionSchema).min(1).max(20),
+    ...firstPartyMediaFields,
   }),
   [LANDING_PAGE_TYPE.COUPON]: z.object({
     headline: shortTextSchema.min(1),
@@ -114,6 +140,7 @@ export const landingPageContentSchemas = {
     details: z.string().trim().max(1200).optional(),
     expiresAt: z.string().trim().datetime().optional(),
     redemptionUrl: httpUrlSchema.optional(),
+    ...firstPartyMediaFields,
   }),
   [LANDING_PAGE_TYPE.EVENT]: z.object({
     name: shortTextSchema.min(1),
@@ -122,33 +149,46 @@ export const landingPageContentSchemas = {
     location: boundedTextSchema.optional(),
     description: z.string().trim().max(1200).optional(),
     registrationUrl: httpUrlSchema.optional(),
+    ...firstPartyMediaFields,
   }),
   [LANDING_PAGE_TYPE.FEEDBACK]: z.object({
     heading: shortTextSchema.min(1),
     description: boundedTextSchema.optional(),
     formUrl: httpUrlSchema,
+    ...firstPartyMediaFields,
   }),
-  [LANDING_PAGE_TYPE.PDF]: z.object({
-    title: shortTextSchema.min(1),
-    description: boundedTextSchema.optional(),
-    pdfAssetId: assetIdSchema,
-  }),
+  [LANDING_PAGE_TYPE.PDF]: z
+    .object({
+      title: shortTextSchema.min(1),
+      description: boundedTextSchema.optional(),
+      pdfAssetId: assetIdSchema.optional(),
+      pdfAssetPath: trustedTemplateAssetPathSchema.optional(),
+      ...firstPartyMediaFields,
+    })
+    .refine((value) => value.pdfAssetId || value.pdfAssetPath, {
+      path: ["pdfAssetId"],
+      message: "Provide an uploaded PDF asset ID or trusted template PDF path.",
+    }),
   [LANDING_PAGE_TYPE.IMAGES]: z.object({
     title: shortTextSchema.min(1),
     description: boundedTextSchema.optional(),
     images: z.array(imageReferenceSchema).min(1).max(40),
+    ...firstPartyMediaFields,
   }),
   [LANDING_PAGE_TYPE.VIDEO_LINK]: z.object({
     title: shortTextSchema.min(1),
     description: boundedTextSchema.optional(),
     videoUrl: httpUrlSchema,
+    ...firstPartyMediaFields,
   }),
   [LANDING_PAGE_TYPE.AUDIO_LINK]: z.object({
     title: shortTextSchema.min(1),
     description: boundedTextSchema.optional(),
     audioUrl: httpUrlSchema.optional(),
     audioAssetId: assetIdSchema.optional(),
-  }).refine((value) => value.audioUrl || value.audioAssetId, {
+    audioAssetPath: trustedTemplateAssetPathSchema.optional(),
+    ...firstPartyMediaFields,
+  }).refine((value) => value.audioUrl || value.audioAssetId || value.audioAssetPath, {
     path: ["audioUrl"],
     message: "Provide an audio URL or an uploaded audio asset.",
   }),
