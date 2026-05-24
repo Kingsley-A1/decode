@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   BookOpen,
+  CreditCard,
   FileCode2,
   FileText,
   HelpCircle,
@@ -59,6 +60,12 @@ export const primaryNavItems: readonly NavigationItem[] = [
     label: "Links",
     description: "Link safety system coming soon.",
   },
+  {
+    href: "/pricing",
+    icon: CreditCard,
+    label: "Pricing",
+    description: "Compare Decode plans and manual payment options.",
+  },
 ] as const;
 
 export const appNavSections: readonly NavigationSection[] = [
@@ -98,6 +105,12 @@ export const appNavSections: readonly NavigationSection[] = [
   {
     title: "Company",
     items: [
+      {
+        href: "/pricing",
+        icon: CreditCard,
+        label: "Pricing",
+        description: "Compare Decode plans and manual payment options.",
+      },
       {
         href: "/docs",
         icon: BookOpen,
@@ -146,6 +159,7 @@ export const menuNavItems: readonly NavigationItem[] = [
   primaryNavItems[2],
   primaryNavItems[3],
   primaryNavItems[4],
+  primaryNavItems[5],
   {
     href: "/decode",
     icon: FileCode2,
