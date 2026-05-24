@@ -23,11 +23,15 @@ import {
 import { renderQRCode } from "@/server/qr/render";
 import {
   qrDesignSchema,
+  type ArchiveQRCodeRequest,
   type CreateQRCodeRequest,
   type RenderQRCodeRequest,
   type UpdateQRCodeDestinationRequest,
 } from "@/server/qr/schemas";
-import { qrCodeDashboardSelect } from "@/server/qr/selectors";
+import {
+  qrCodeDashboardSelect,
+  type QRCodeDashboardRecord,
+} from "@/server/qr/selectors";
 import {
   getDynamicQRCodeRedirectUrl,
   isReservedDynamicSlug,
@@ -67,11 +71,23 @@ export interface UpdateDynamicQRCodeDestinationInput {
   readonly userId: string;
 }
 
+export interface ArchiveQRCodeInput {
+  readonly qrCodeId: string;
+  readonly request: ArchiveQRCodeRequest;
+  readonly userId: string;
+}
+
 export interface UpdateDynamicQRCodeDestinationInWorkspaceInput {
   readonly qrCodeId: string;
   readonly workspaceId: string;
   readonly userId: string;
   readonly destinationUrl: string;
+}
+
+export interface ArchiveQRCodeInWorkspaceInput {
+  readonly qrCodeId: string;
+  readonly workspaceId: string;
+  readonly userId: string;
 }
 
 const dynamicQRCodeDestinationSelect = {
@@ -104,6 +120,27 @@ export interface DynamicDestinationClient {
     ) => Promise<TResult>
   ): Promise<TResult>;
 }
+
+export interface ArchiveQRCodeTransactionClient {
+  readonly qRCode: {
+    findFirst(
+      args: Prisma.QRCodeFindFirstArgs
+    ): Promise<QRCodeDashboardRecord | null>;
+    update(args: Prisma.QRCodeUpdateArgs): Promise<QRCodeDashboardRecord>;
+  };
+  readonly auditLog: {
+    create(args: Prisma.AuditLogCreateArgs): Promise<unknown>;
+  };
+}
+
+export interface ArchiveQRCodeClient {
+  $transaction<TResult>(
+    callback: (
+      transaction: ArchiveQRCodeTransactionClient
+    ) => Promise<TResult>
+  ): Promise<TResult>;
+}
+
 
 const GENERATED_DYNAMIC_SLUG_ATTEMPTS = 5;
 
@@ -205,6 +242,23 @@ export async function updateDynamicQRCodeDestination({
   });
 }
 
+export async function archiveQRCode({
+  qrCodeId,
+  request,
+  userId,
+}: ArchiveQRCodeInput) {
+  const workspaceId = await resolveWritableWorkspaceId({
+    userId,
+    workspaceId: request.workspaceId,
+  });
+
+  return archiveQRCodeInWorkspace({
+    qrCodeId,
+    workspaceId,
+    userId,
+  });
+}
+
 export async function updateDynamicQRCodeDestinationInWorkspace(
   input: UpdateDynamicQRCodeDestinationInWorkspaceInput,
   client: DynamicDestinationClient = getDynamicDestinationClient()
@@ -269,6 +323,57 @@ export async function updateDynamicQRCodeDestinationInWorkspace(
   });
 }
 
+export async function archiveQRCodeInWorkspace(
+  input: ArchiveQRCodeInWorkspaceInput,
+  client: ArchiveQRCodeClient = getArchiveQRCodeClient()
+) {
+  return client.$transaction(async (transaction) => {
+    const qrCode = await transaction.qRCode.findFirst({
+      where: {
+        id: input.qrCodeId,
+        workspaceId: input.workspaceId,
+        deletedAt: null,
+        workspace: { deletedAt: null },
+      },
+      select: qrCodeDashboardSelect,
+    });
+
+    if (!qrCode) {
+      throw new QRCodeNotFoundError("QR code was not found in this workspace.");
+    }
+
+    if (qrCode.status === QR_CODE_STATUS.ARCHIVED) {
+      return getQRCodeSummary(qrCode);
+    }
+
+    const archivedAt = new Date();
+    const updatedQRCode = await transaction.qRCode.update({
+      where: { id: qrCode.id },
+      data: {
+        status: QR_CODE_STATUS.ARCHIVED,
+        archivedAt,
+      },
+      select: qrCodeDashboardSelect,
+    });
+
+    await transaction.auditLog.create({
+      data: {
+        workspaceId: input.workspaceId,
+        actorUserId: input.userId,
+        action: AUDIT_ACTION.ARCHIVE,
+        entityType: AUDIT_ENTITY_TYPE.QR_CODE,
+        entityId: qrCode.id,
+        metadata: {
+          previousStatus: qrCode.status,
+          slug: qrCode.slug,
+        },
+      },
+    });
+
+    return getQRCodeSummary(updatedQRCode);
+  });
+}
+
 function getDynamicDestinationClient(): DynamicDestinationClient {
   return {
     $transaction: (callback) =>
@@ -276,6 +381,15 @@ function getDynamicDestinationClient(): DynamicDestinationClient {
         callback(
           transaction as unknown as DynamicDestinationTransactionClient
         )
+      ),
+  };
+}
+
+function getArchiveQRCodeClient(): ArchiveQRCodeClient {
+  return {
+    $transaction: (callback) =>
+      prisma.$transaction((transaction) =>
+        callback(transaction as unknown as ArchiveQRCodeTransactionClient)
       ),
   };
 }
@@ -348,7 +462,9 @@ async function createQRCodeRecord({
   }
 }
 
-function getQRCodeSummary(record: DynamicQRCodeDestinationRecord) {
+function getQRCodeSummary(
+  record: QRCodeDashboardRecord | DynamicQRCodeDestinationRecord
+) {
   return {
     id: record.id,
     workspaceId: record.workspaceId,
@@ -364,6 +480,7 @@ function getQRCodeSummary(record: DynamicQRCodeDestinationRecord) {
     archivedAt: record.archivedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+    landingPage: record.landingPage,
   };
 }
 

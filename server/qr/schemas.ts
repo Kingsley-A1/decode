@@ -204,6 +204,10 @@ export const updateQRCodeDestinationRequestSchema = z.object({
   destinationUrl: z.string().trim().min(1).max(2048),
 });
 
+export const archiveQRCodeRequestSchema = z.object({
+  workspaceId: z.string().trim().min(1).optional(),
+});
+
 export const qrDesignSchema = baseCreateQRCodeSchema.shape.design;
 
 export type CreateQRCodeRequest = z.infer<typeof createQRCodeRequestSchema>;
@@ -212,3 +216,4 @@ export type RenderQRCodeRequest = z.infer<typeof renderQRCodeRequestSchema>;
 export type UpdateQRCodeDestinationRequest = z.infer<
   typeof updateQRCodeDestinationRequestSchema
 >;
+export type ArchiveQRCodeRequest = z.infer<typeof archiveQRCodeRequestSchema>;

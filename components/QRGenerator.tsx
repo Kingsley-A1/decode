@@ -150,6 +150,16 @@ interface PayloadResult {
   value: string;
   destinationUrl?: string;
   summary: string;
+  requiresPublish?: boolean;
+  isStale?: boolean;
+}
+
+interface PublishedDynamicPayload {
+  readonly qrCodeId: string;
+  readonly slug: string | null;
+  readonly payloadValue: string;
+  readonly destinationUrl: string;
+  readonly signature: string;
 }
 
 interface ScanabilityResult {
@@ -177,6 +187,10 @@ interface ApiResponse<TData> {
   ok: boolean;
   data?: TData;
   error?: { message: string };
+}
+
+interface RenderSavedQRCodeResponse {
+  readonly downloadUrl: string;
 }
 
 interface QRGeneratorAuthDraft {
@@ -782,6 +796,8 @@ export function QRGenerator({
   const [publishStatus, setPublishStatus] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishedDynamicPayload, setPublishedDynamicPayload] =
+    useState<PublishedDynamicPayload | null>(null);
   const [authPromptVisible, setAuthPromptVisible] = useState(false);
   const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(false);
@@ -796,9 +812,25 @@ export function QRGenerator({
     () => validateContent({ type, mode, form }),
     [type, mode, form]
   );
+  const dynamicPublishSignature = useMemo(
+    () =>
+      getDynamicPublishSignature({
+        form,
+        design,
+        hasLogo: Boolean(logoUrl),
+      }),
+    [form, design, logoUrl]
+  );
   const payload = useMemo(
-    () => buildPayload({ type, mode, form }),
-    [type, mode, form]
+    () =>
+      buildPayload({
+        type,
+        mode,
+        form,
+        publishedDynamicPayload,
+        dynamicPublishSignature,
+      }),
+    [type, mode, form, publishedDynamicPayload, dynamicPublishSignature]
   );
   const renderableDesign = useMemo(
     () => ({
@@ -894,6 +926,13 @@ export function QRGenerator({
       stepHeadingRef.current?.focus({ preventScroll: true });
     });
   }, [currentStep]);
+
+  useEffect(() => {
+    if (!publishedDynamicPayload || !dynamicPublishSignature) return;
+    if (publishedDynamicPayload.signature === dynamicPublishSignature) return;
+
+    setPublishStatus(null);
+  }, [publishedDynamicPayload, dynamicPublishSignature]);
 
   const goToStep = (nextStep: WorkflowStep) => {
     setCurrentStep(nextStep);
@@ -1014,7 +1053,10 @@ export function QRGenerator({
   };
 
   const handleCopyPayload = async () => {
-    if (!payload?.value) return;
+    if (!payload?.value) {
+      setPublishError("Publish to assign public link before copying the dynamic QR payload.");
+      return;
+    }
 
     await navigator.clipboard.writeText(payload.value);
     setCopied(true);
@@ -1028,6 +1070,12 @@ export function QRGenerator({
 
   const handleDownloadSelected = async (format: ExportFormat) => {
     if (!isReady) return;
+
+    if (!payload?.value) {
+      setPublishError("Publish to assign public link before downloading this dynamic QR.");
+      setPublishStatus(null);
+      return;
+    }
 
     setIsCheckingAuth(true);
     setPublishError(null);
@@ -1047,6 +1095,19 @@ export function QRGenerator({
       setAuthPromptVisible(false);
       setAuthPromptMessage(null);
 
+      if (mode === "dynamic") {
+        if (!publishedDynamicPayload?.qrCodeId) {
+          throw new Error("Publish this dynamic QR before downloading it.");
+        }
+
+        await downloadSavedDynamicQRCode({
+          qrCodeId: publishedDynamicPayload.qrCodeId,
+          format,
+        });
+        setPublishStatus(`Download ready for ${format.toUpperCase()} export.`);
+        return;
+      }
+
       if (format === "png") {
         await download("png");
         return;
@@ -1058,15 +1119,55 @@ export function QRGenerator({
       }
 
       await downloadPdf(form.title || "Decode QR Code");
-    } catch {
-      persistAuthDraft();
-      setAuthPromptVisible(true);
-      setAuthPromptMessage(
-        "We could not confirm your sign-in state. Sign in again to continue the download."
-      );
+    } catch (error) {
+      if (error instanceof Error && error.message.toLowerCase().includes("sign in")) {
+        persistAuthDraft();
+        setAuthPromptVisible(true);
+        setAuthPromptMessage(
+          "We could not confirm your sign-in state. Sign in again to continue the download."
+        );
+      } else {
+        setPublishError(
+          error instanceof Error ? error.message : "Could not download QR code."
+        );
+      }
     } finally {
       setIsCheckingAuth(false);
     }
+  };
+
+  const downloadSavedDynamicQRCode = async ({
+    qrCodeId,
+    format,
+  }: {
+    readonly qrCodeId: string;
+    readonly format: ExportFormat;
+  }) => {
+    const response = await fetch(
+      `/api/qr-codes/${encodeURIComponent(qrCodeId)}/render`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format }),
+      }
+    );
+    const result = (await response.json()) as ApiResponse<RenderSavedQRCodeResponse>;
+
+    if (!result.ok) {
+      throw new Error(result.error?.message ?? "Could not render QR code export.");
+    }
+
+    if (!result.data?.downloadUrl) {
+      throw new Error("The rendered QR export did not include a download URL.");
+    }
+
+    const link = document.createElement("a");
+    link.href = result.data.downloadUrl;
+    link.rel = "noopener noreferrer";
+    link.download = `${form.title || "Decode QR Code"}.${format}`;
+    document.body.append(link);
+    link.click();
+    link.remove();
   };
 
   const handlePublishDynamic = async () => {
@@ -1096,7 +1197,16 @@ export function QRGenerator({
         }),
       });
       const result = (await response.json()) as ApiResponse<{
-        qrCode: { id: string; slug: string | null };
+        qrCode: {
+          id: string;
+          slug: string | null;
+          redirectUrl?: string | null;
+          destinationUrl?: string | null;
+        };
+        payload: {
+          value: string;
+          destinationUrl?: string;
+        };
       }>;
 
       if (!result.ok) {
@@ -1112,11 +1222,24 @@ export function QRGenerator({
         throw new Error(result.error?.message ?? "Could not publish QR code.");
       }
 
-      setPublishStatus(
-        result.data?.qrCode.slug
-          ? `Published dynamic QR: /r/${result.data.qrCode.slug}`
-          : "Dynamic QR published."
-      );
+      const qrCodeId = result.data?.qrCode.id;
+      const payloadValue = result.data?.payload.value;
+      const destinationUrl = result.data?.payload.destinationUrl;
+
+      if (!qrCodeId || !payloadValue || !destinationUrl || !dynamicPublishSignature) {
+        throw new Error("Published QR response did not include a public payload.");
+      }
+
+      setPublishedDynamicPayload({
+        qrCodeId,
+        slug: result.data?.qrCode.slug ?? null,
+        payloadValue,
+        destinationUrl,
+        signature: dynamicPublishSignature,
+      });
+      setAuthPromptVisible(false);
+      setAuthPromptMessage(null);
+      setPublishStatus(`Published dynamic QR: ${payloadValue}`);
     } catch (error) {
       setPublishError(
         error instanceof Error ? error.message : "Could not publish QR code."
@@ -2039,6 +2162,7 @@ function ExportStep({
   const selectedExport =
     exportFormatOptions.find((option) => option.value === exportFormat) ??
     exportFormatOptions[0];
+  const canUsePayload = Boolean(payload?.value);
   const handleDownloadSelected = () => {
     onDownloadSelected(exportFormat);
   };
@@ -2105,7 +2229,7 @@ function ExportStep({
           <Button
             variant="secondary"
             onClick={onCopyPayload}
-            disabled={!payload}
+            disabled={!canUsePayload}
             leftIcon={
               copied ? (
                 <Check className="h-4 w-4" aria-hidden="true" />
@@ -2132,7 +2256,12 @@ function ExportStep({
 
       {mode === "dynamic" && (
         <Alert variant="info" title="Dynamic destination">
-          Destination: {form.url || "Add a destination URL"}; public QR link is assigned after publish.
+          {payload?.isStale
+            ? "Destination or design changed after publish. Publish again before downloading or copying the updated dynamic QR."
+            : payload?.requiresPublish
+              ? "Publish to assign public link before copying or downloading this dynamic QR."
+              : "This dynamic QR has a server-assigned public link."}{" "}
+          Destination: {form.url || "Add a destination URL"}.
         </Alert>
       )}
       {mode === "dynamic" && scanability.blocksPublish && (
@@ -2166,7 +2295,7 @@ function ExportStep({
             <Button
               variant="primary"
               onClick={handleDownloadSelected}
-              disabled={!isReady || isCheckingAuth}
+              disabled={!isReady || isCheckingAuth || !canUsePayload}
               isLoading={isCheckingAuth}
               leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
             >
@@ -2183,7 +2312,7 @@ function ExportStep({
             <Button
               variant="primary"
               onClick={handleDownloadSelected}
-              disabled={!isReady || isCheckingAuth}
+              disabled={!isReady || isCheckingAuth || !canUsePayload}
               isLoading={isCheckingAuth}
               className="w-full"
               leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
@@ -2480,18 +2609,39 @@ function buildPayload({
   type,
   mode,
   form,
+  publishedDynamicPayload,
+  dynamicPublishSignature,
 }: {
   readonly type: QRType;
   readonly mode: QRMode;
   readonly form: FormState;
+  readonly publishedDynamicPayload?: PublishedDynamicPayload | null;
+  readonly dynamicPublishSignature?: string | null;
 }): PayloadResult | null {
   try {
     if (mode === "dynamic") {
-      const redirectUrl = getDynamicRedirectUrl();
+      const destinationUrl = normalizeHttpUrl(form.url);
+      const hasCurrentPublishedPayload =
+        publishedDynamicPayload &&
+        dynamicPublishSignature &&
+        publishedDynamicPayload.signature === dynamicPublishSignature;
+
+      if (hasCurrentPublishedPayload) {
+        return {
+          value: publishedDynamicPayload.payloadValue,
+          destinationUrl,
+          summary: `${publishedDynamicPayload.payloadValue} -> ${destinationUrl}`,
+        };
+      }
+
       return {
-        value: redirectUrl,
-        destinationUrl: normalizeHttpUrl(form.url),
-        summary: `${redirectUrl} -> ${normalizeHttpUrl(form.url)}`,
+        value: "",
+        destinationUrl,
+        summary: publishedDynamicPayload
+          ? `Publish again to update public link -> ${destinationUrl}`
+          : `Publish to assign public link -> ${destinationUrl}`,
+        requiresPublish: true,
+        isStale: Boolean(publishedDynamicPayload),
       };
     }
 
@@ -2832,11 +2982,23 @@ function normalizePhone(value: string): string {
   return value.replace(/[^\d+]/g, "");
 }
 
-function getDynamicRedirectUrl(): string {
-  const origin =
-    typeof window === "undefined" ? "https://decode.local" : window.location.origin;
-
-  return `${origin}/r/assigned-after-publish`;
+function getDynamicPublishSignature({
+  form,
+  design,
+  hasLogo,
+}: {
+  readonly form: FormState;
+  readonly design: DesignState;
+  readonly hasLogo: boolean;
+}): string | null {
+  try {
+    return JSON.stringify({
+      destinationUrl: normalizeHttpUrl(form.url),
+      design: getApiDesign(design, hasLogo),
+    });
+  } catch {
+    return null;
+  }
 }
 
 function normalizeHexDraft(value: string): string {

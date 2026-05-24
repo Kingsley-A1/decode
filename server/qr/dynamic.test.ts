@@ -7,8 +7,11 @@ import {
   QR_CODE_TYPE,
 } from "@/server/qr/constants";
 import {
+  archiveQRCodeInWorkspace,
   prepareQRCode,
   updateDynamicQRCodeDestinationInWorkspace,
+  type ArchiveQRCodeClient,
+  type ArchiveQRCodeTransactionClient,
   type DynamicDestinationClient,
   type DynamicDestinationTransactionClient,
 } from "@/server/qr/service";
@@ -140,5 +143,71 @@ describe("dynamic QR service", () => {
         },
       },
     });
+  });
+
+  it("archives QR codes and writes an audit log", async () => {
+    const createdAt = new Date("2026-05-18T00:00:00.000Z");
+    const archivedAt = new Date("2026-05-18T01:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(archivedAt);
+
+    const record = {
+      id: "qr_archive",
+      workspaceId: "workspace_123",
+      ownerId: "user_123",
+      title: "Archive me",
+      type: QR_CODE_TYPE.URL,
+      mode: QR_CODE_MODE.DYNAMIC,
+      status: QR_CODE_STATUS.PUBLISHED,
+      slug: "archive-me",
+      destinationUrl: "https://old.example/",
+      scanCount: 0,
+      publishedAt: createdAt,
+      archivedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+      landingPage: null,
+    };
+    const findFirst = vi.fn(async () => record);
+    const update = vi.fn(async (args: Prisma.QRCodeUpdateArgs) => ({
+      ...record,
+      ...(args.data as Prisma.QRCodeUncheckedUpdateInput),
+      updatedAt: archivedAt,
+    }));
+    const create = vi.fn(async (args: Prisma.AuditLogCreateArgs) => args);
+    const client: ArchiveQRCodeClient = {
+      $transaction: async (callback) =>
+        callback({
+          qRCode: { findFirst, update },
+          auditLog: { create },
+        } as ArchiveQRCodeTransactionClient),
+    };
+
+    const result = await archiveQRCodeInWorkspace(
+      {
+        qrCodeId: "qr_archive",
+        workspaceId: "workspace_123",
+        userId: "user_123",
+      },
+      client
+    );
+
+    expect(result.status).toBe(QR_CODE_STATUS.ARCHIVED);
+    expect(result.archivedAt).toEqual(archivedAt);
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        workspaceId: "workspace_123",
+        actorUserId: "user_123",
+        action: AUDIT_ACTION.ARCHIVE,
+        entityType: AUDIT_ENTITY_TYPE.QR_CODE,
+        entityId: "qr_archive",
+        metadata: {
+          previousStatus: QR_CODE_STATUS.PUBLISHED,
+          slug: "archive-me",
+        },
+      },
+    });
+
+    vi.useRealTimers();
   });
 });

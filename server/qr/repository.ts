@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/server/db/prisma";
 import {
   qrCodeDashboardSelect,
+  qrCodeDetailSelect,
   qrCodeOwnershipSelect,
   qrCodeRenderSelect,
 } from "@/server/qr/selectors";
@@ -30,6 +31,21 @@ export function getWorkspaceQRCode({
       workspace: { deletedAt: null },
     },
     select: qrCodeDashboardSelect,
+  });
+}
+
+export function getWorkspaceQRCodeDetail({
+  workspaceId,
+  qrCodeId,
+}: WorkspaceQRCodeInput) {
+  return prisma.qRCode.findFirst({
+    where: {
+      id: qrCodeId,
+      workspaceId,
+      deletedAt: null,
+      workspace: { deletedAt: null },
+    },
+    select: qrCodeDetailSelect,
   });
 }
 

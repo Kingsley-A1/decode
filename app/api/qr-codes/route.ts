@@ -11,6 +11,7 @@ import {
   QRCodePayloadError,
   QRCodeStateError,
 } from "@/server/qr/errors";
+import { toQRCodeListItem } from "@/server/qr/dto";
 import { createQRCode } from "@/server/qr/service";
 import { listWorkspaceQRCodes } from "@/server/qr/repository";
 import { createQRCodeRequestSchema } from "@/server/qr/schemas";
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
     return apiSuccess({
       data: {
         workspaceId,
-        qrCodes,
+        qrCodes: qrCodes.map(toQRCodeListItem),
         nextCursor:
           qrCodes.length < take ? null : (qrCodes[qrCodes.length - 1]?.id ?? null),
       },
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
 
     return apiSuccess({
       data: {
-        qrCode: result.qrCode,
+        qrCode: result.qrCode ? toQRCodeListItem(result.qrCode) : null,
         payload: {
           type: result.payload.type,
           value: result.payload.value,

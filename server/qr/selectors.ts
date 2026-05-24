@@ -24,6 +24,12 @@ export const qrCodeDashboardSelect = {
   },
 } satisfies Prisma.QRCodeSelect;
 
+export const qrCodeDetailSelect = {
+  ...qrCodeDashboardSelect,
+  payload: true,
+  designConfig: true,
+} satisfies Prisma.QRCodeSelect;
+
 export const qrCodeOwnershipSelect = {
   id: true,
   workspaceId: true,
@@ -32,6 +38,14 @@ export const qrCodeOwnershipSelect = {
   status: true,
   deletedAt: true,
 } satisfies Prisma.QRCodeSelect;
+
+export type QRCodeDashboardRecord = Prisma.QRCodeGetPayload<{
+  select: typeof qrCodeDashboardSelect;
+}>;
+
+export type QRCodeDetailRecord = Prisma.QRCodeGetPayload<{
+  select: typeof qrCodeDetailSelect;
+}>;
 
 export const qrCodeRenderSelect = {
   id: true,
