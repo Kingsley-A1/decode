@@ -1,3 +1,5 @@
+import { getPublicAppBaseUrl } from "@/server/config/public-url";
+
 export const DYNAMIC_SLUG_PATTERN =
   /^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$/;
 
@@ -46,12 +48,12 @@ export function isValidDynamicSlug(value: string): boolean {
   return DYNAMIC_SLUG_PATTERN.test(slug) && !isReservedDynamicSlug(slug);
 }
 
-export function getDynamicQRCodeRedirectUrl(slug: string): string {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.APP_URL ??
-    process.env.NEXTAUTH_URL ??
-    "http://localhost:3000";
-
-  return new URL(`/r/${normalizeDynamicSlug(slug)}`, baseUrl).toString();
+export function getDynamicQRCodeRedirectUrl(
+  slug: string,
+  baseUrl?: string
+): string {
+  return new URL(
+    `/r/${normalizeDynamicSlug(slug)}`,
+    getPublicAppBaseUrl(baseUrl)
+  ).toString();
 }

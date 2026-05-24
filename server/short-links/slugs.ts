@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
+import { getPublicAppBaseUrl } from "@/server/config/public-url";
 
 // Short-link slug minting. The exported constants and helpers are the
 // canonical home for slug rules so the API layer and any future bulk
@@ -169,16 +170,9 @@ export async function mintShortLinkSlug(
 /** Produces the published short URL for a slug, using NEXT_PUBLIC_APP_URL
  *  (or its fallbacks) as the base. Mirrors `getDynamicQRCodeRedirectUrl`. */
 export function getShortLinkUrl(slug: string, baseUrl?: string): string {
-  const root =
-    baseUrl ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.APP_URL ??
-    process.env.NEXTAUTH_URL ??
-    "http://localhost:3000";
-
   return new URL(
     `${SHORT_LINK_BASE_PREFIX}${normalizeShortLinkSlug(slug)}`,
-    root
+    getPublicAppBaseUrl(baseUrl)
   ).toString();
 }
 

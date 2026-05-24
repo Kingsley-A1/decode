@@ -8,10 +8,10 @@ import {
 
 describe("dynamic QR slugs", () => {
   it("normalizes slugs for stable redirect URLs", () => {
-    process.env.APP_URL = "https://decode.example";
-
     expect(normalizeDynamicSlug(" Spring-Campaign ")).toBe("spring-campaign");
-    expect(getDynamicQRCodeRedirectUrl("Spring-Campaign")).toBe(
+    expect(
+      getDynamicQRCodeRedirectUrl("Spring-Campaign", "https://decode.example")
+    ).toBe(
       "https://decode.example/r/spring-campaign"
     );
   });
