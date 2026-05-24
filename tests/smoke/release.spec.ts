@@ -106,7 +106,7 @@ test.describe("phase 8 release quality gate", () => {
     }
   });
 
-  test("landing page template gallery searches, filters, and loads presets", async ({
+  test("landing page template gallery searches and loads presets", async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -215,24 +215,14 @@ test.describe("phase 8 release quality gate", () => {
       await expectNoDocumentOverflow(page);
     }
 
-    await search.fill("hotel");
-    await page.getByLabel("Page type").selectOption("links");
+    await search.fill("room directory");
     await expect(
       page.getByRole("button", {
         name: /^Room directory template thumbnail/,
       })
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Remove hotel filter" })
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Clear filters" }).click();
-    await expect(page.getByText(/templates found/)).toBeVisible();
 
-    await search.fill("");
-    await page
-      .getByRole("toolbar", { name: "Template categories" })
-      .getByRole("button", { name: /^School\s+\d+$/ })
-      .click();
+    await search.fill("school");
     await page
       .getByRole("button", { name: /^School admissions template thumbnail/ })
       .click();
@@ -249,7 +239,6 @@ test.describe("phase 8 release quality gate", () => {
     await expect(page.getByText("Logo (optional)").first()).toBeVisible();
 
     await page.getByLabel("Business name").fill("Edited Academy");
-    await page.getByRole("button", { name: "Clear filters" }).click();
     await search.fill("hotel");
     await page
       .getByRole("button", { name: "Use Hotel welcome template" })
@@ -300,11 +289,14 @@ test.describe("phase 8 release quality gate", () => {
       page.getByRole("heading", { name: "Generate QR codes", level: 1 })
     ).toBeVisible();
 
+    const behaviorGroup = page.getByRole("group", { name: "QR behavior" });
     await expect(
-      page.getByRole("group", { name: "QR behavior" }).getByRole("button", {
-        name: /static/i,
-      })
+      behaviorGroup.getByRole("button", { name: /static/i })
     ).toHaveAttribute("aria-pressed", "true");
+    await behaviorGroup.getByRole("button", { name: /dynamic/i }).click();
+    await expect(page.getByLabel("Dynamic slug")).toHaveCount(0);
+    await expect(page.getByLabel("Destination URL")).toBeVisible();
+    await behaviorGroup.getByRole("button", { name: /static/i }).click();
     await expect(page.getByLabel("QR preview")).toBeVisible();
     const initialPreviewBox = await page.getByLabel("QR preview").boundingBox();
 
@@ -507,7 +499,7 @@ test.describe("phase 8 release quality gate", () => {
       mimeType: "image/svg+xml",
       buffer: logoBuffer,
     });
-    await expect(page.getByLabel("Error correction")).toHaveValue("H");
+    await expect(page.getByLabel("Error correction")).toHaveCount(0);
     await expect(
       page.getByLabel("Scanability meter").getByText("Ready").first()
     ).toBeVisible();
