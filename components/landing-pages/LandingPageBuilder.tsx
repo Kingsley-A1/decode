@@ -45,6 +45,7 @@ import {
   Alert,
   Badge,
   Button,
+  Dialog,
   FileUpload,
   Input,
   SegmentedControl,
@@ -211,6 +212,8 @@ export function LandingPageBuilder() {
   const [notice, setNotice] = useState<string | null>(
     "Choose a template, validate the content, then save a draft or publish. Published pages remain editable."
   );
+  const builderSectionRef = useRef<HTMLDivElement>(null);
+  const builderHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const selectedTemplate = useMemo(
     () =>
@@ -379,6 +382,10 @@ export function LandingPageBuilder() {
         ? `${preset.label} template loaded with shared fields preserved. Review the required checklist before publishing.`
         : `${preset.label} template loaded. Edit the content, attach a dynamic QR code, then save or publish.`
     );
+    window.requestAnimationFrame(() => {
+      builderSectionRef.current?.scrollIntoView({ block: "start" });
+      builderHeadingRef.current?.focus({ preventScroll: true });
+    });
   };
 
   const handleUseTemplate = (preset: LandingPageTemplatePreset) => {
@@ -457,7 +464,7 @@ export function LandingPageBuilder() {
       title,
       status: nextStatus,
       type,
-      content: buildApiContent(type, content),
+      content: buildApiContent(type, content, activeTemplate.assetRequirements),
     };
 
     try {
@@ -512,10 +519,17 @@ export function LandingPageBuilder() {
       <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)]">
         <div className="min-w-0 space-y-5">
           <section className="grid min-w-0 gap-4">
-            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div
+              ref={builderSectionRef}
+              className="min-w-0 scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+            >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-slate-950">
+                  <h2
+                    ref={builderHeadingRef}
+                    tabIndex={-1}
+                    className="text-lg font-semibold text-slate-950 focus:outline-none"
+                  >
                     Build and attach page
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-slate-600">
@@ -764,85 +778,25 @@ function TemplateSwitchDialog({
   readonly onPreserve: () => void;
   readonly onReplace: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    dialogRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onCancel();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusableElements = Array.from(
-        dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        ) ?? []
-      ).filter((element) => !element.hasAttribute("disabled"));
-
-      if (focusableElements.length === 0) return;
-
-      const firstElement = focusableElements.at(0);
-      const lastElement = focusableElements.at(-1);
-      if (!firstElement || !lastElement) return;
-
-      if (event.shiftKey && document.activeElement === firstElement) {
-        event.preventDefault();
-        lastElement.focus();
-      } else if (!event.shiftKey && document.activeElement === lastElement) {
-        event.preventDefault();
-        firstElement.focus();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel]);
-
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="template-switch-title"
-        aria-describedby="template-switch-description"
-        tabIndex={-1}
-        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl focus:outline-none"
-      >
-        <p className="text-xs font-bold uppercase text-sky-700">
-          Template switch
-        </p>
-        <h2
-          id="template-switch-title"
-          className="mt-2 text-xl font-semibold text-slate-950"
-        >
-          Keep your edited content?
-        </h2>
-        <p
-          id="template-switch-description"
-          className="mt-3 text-sm leading-6 text-slate-600"
-        >
-          You have edited the active {currentTemplate.label} page. Switching to
-          {` ${nextTemplate.label} `}can keep shared fields like links,
-          contact details, and uploaded assets, or replace the page with the
-          new template defaults.
-        </p>
-        <div className="mt-5 grid gap-2 sm:grid-cols-3">
-          <Button variant="primary" onClick={onPreserve}>
-            Keep shared fields
-          </Button>
-          <Button variant="danger" onClick={onReplace}>
-            Replace defaults
-          </Button>
-          <Button variant="secondary" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
+    <Dialog
+      open
+      title="Keep your edited content?"
+      description={`You have edited the active ${currentTemplate.label} page. Switching to ${nextTemplate.label} can keep shared fields like links, contact details, and uploaded assets, or replace the page with the new template defaults.`}
+      onClose={onCancel}
+    >
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Button variant="primary" onClick={onPreserve}>
+          Keep shared fields
+        </Button>
+        <Button variant="danger" onClick={onReplace}>
+          Replace defaults
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
       </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -2461,14 +2415,56 @@ function isTemplatePreset(value: unknown): value is LandingPageTemplatePreset {
   const template = value as Partial<LandingPageTemplatePreset>;
 
   return Boolean(
-    template.key &&
-      template.type &&
-      template.label &&
-      template.defaultTitle &&
-      template.defaultContent &&
+    typeof template.key === "string" &&
+      isLandingPageType(template.type) &&
+      typeof template.label === "string" &&
+      typeof template.description === "string" &&
+      typeof template.defaultTitle === "string" &&
+      isRecord(template.defaultContent) &&
       Array.isArray(template.tags) &&
+      template.tags.every((tag) => typeof tag === "string") &&
       Array.isArray(template.requiredFields) &&
-      Array.isArray(template.assetRequirements)
+      template.requiredFields.every((field) => typeof field === "string") &&
+      Array.isArray(template.optionalFields) &&
+      template.optionalFields.every((field) => typeof field === "string") &&
+      Array.isArray(template.assetRequirements) &&
+      template.assetRequirements.every(isTemplateAssetRequirement) &&
+      isRecord(template.thumbnail) &&
+      typeof template.thumbnail.label === "string" &&
+      typeof template.thumbnail.alt === "string" &&
+      isRecord(template.mobilePreview) &&
+      typeof template.mobilePreview.alt === "string"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isTemplateAssetRequirement(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.slot === "string" &&
+    typeof value.label === "string" &&
+    typeof value.kind === "string" &&
+    typeof value.required === "boolean"
+  );
+}
+
+function isLandingPageType(value: unknown): value is LandingPageType {
+  return (
+    value === "profile" ||
+    value === "business" ||
+    value === "links" ||
+    value === "menu" ||
+    value === "coupon" ||
+    value === "event" ||
+    value === "feedback" ||
+    value === "pdf" ||
+    value === "images" ||
+    value === "video_link" ||
+    value === "audio_link"
   );
 }
 
@@ -2561,14 +2557,26 @@ function validateContent(
   return errors;
 }
 
-function buildApiContent(type: LandingPageType, content: LandingPageContent) {
+function buildApiContent(
+  type: LandingPageType,
+  content: LandingPageContent,
+  templateAssets: LandingPageTemplatePreset["assetRequirements"] = []
+) {
+  const templateMedia = getFirstPartyTemplateMediaFields(templateAssets);
+
   if (type === "profile") {
     return {
       displayName: content.displayName,
       headline: content.headline,
       bio: content.bio,
-      avatarAssetId: content.avatar?.assetId,
+      ...getApiMediaAssetFields({
+        asset: content.avatar,
+        assetIdKey: "avatarAssetId",
+        assetPathKey: "avatarAssetPath",
+        fallbackAssetPath: getFirstPartyTemplateAssetPath(templateAssets, "avatar"),
+      }),
       links: buildLinks(content.links),
+      ...templateMedia,
     };
   }
 
@@ -2577,12 +2585,18 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
       businessName: content.businessName,
       tagline: content.tagline,
       description: content.description,
-      logoAssetId: content.logo?.assetId,
+      ...getApiMediaAssetFields({
+        asset: content.logo,
+        assetIdKey: "logoAssetId",
+        assetPathKey: "logoAssetPath",
+        fallbackAssetPath: getFirstPartyTemplateAssetPath(templateAssets, "logo"),
+      }),
       phone: content.phone,
       email: content.email,
       website: content.website,
       address: content.address,
       links: buildLinks(content.links),
+      ...templateMedia,
     };
   }
 
@@ -2591,6 +2605,7 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
       heading: content.heading,
       description: content.description,
       links: buildLinks(content.links),
+      ...templateMedia,
     };
   }
 
@@ -2606,6 +2621,7 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
           price: item.price || undefined,
         })),
       })),
+      ...templateMedia,
     };
   }
 
@@ -2616,6 +2632,7 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
       details: content.couponDetails,
       expiresAt: toIsoDateTime(content.expiresAt),
       redemptionUrl: content.redemptionUrl || undefined,
+      ...templateMedia,
     };
   }
 
@@ -2627,6 +2644,7 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
       location: content.location,
       description: content.description,
       registrationUrl: content.registrationUrl || undefined,
+      ...templateMedia,
     };
   }
 
@@ -2635,6 +2653,7 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
       heading: content.heading,
       description: content.description,
       formUrl: content.formUrl,
+      ...templateMedia,
     };
   }
 
@@ -2642,7 +2661,15 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
     return {
       title: content.pdfTitle,
       description: content.description,
-      pdfAssetId: content.pdf?.assetId,
+      ...getApiMediaAssetFields({
+        asset: content.pdf,
+        assetIdKey: "pdfAssetId",
+        assetPathKey: "pdfAssetPath",
+        fallbackAssetPath:
+          getFirstPartyTemplateAssetPath(templateAssets, "pdf") ??
+          getFirstPartyTemplateAssetPath(templateAssets, "document"),
+      }),
+      ...templateMedia,
     };
   }
 
@@ -2650,11 +2677,8 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
     return {
       title: content.heading,
       description: content.description,
-      images: content.images.map((image) => ({
-        assetId: image.assetId,
-        alt: image.alt,
-        caption: image.caption,
-      })),
+      images: content.images.map(getApiImageReference),
+      ...templateMedia,
     };
   }
 
@@ -2663,6 +2687,7 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
       title: content.videoTitle,
       description: content.description,
       videoUrl: content.videoUrl,
+      ...templateMedia,
     };
   }
 
@@ -2670,8 +2695,86 @@ function buildApiContent(type: LandingPageType, content: LandingPageContent) {
     title: content.audioTitle,
     description: content.description,
     audioUrl: content.audioUrl || undefined,
-    audioAssetId: content.audio?.assetId,
+    ...getApiMediaAssetFields({
+      asset: content.audio,
+      assetIdKey: "audioAssetId",
+      assetPathKey: "audioAssetPath",
+      fallbackAssetPath: getFirstPartyTemplateAssetPath(templateAssets, "audio"),
+    }),
+    ...templateMedia,
   };
+}
+
+function getApiImageReference(image: LandingPageImage) {
+  const assetPath = getTrustedTemplateAssetPath(image.previewUrl);
+
+  return assetPath
+    ? {
+        assetPath,
+        alt: image.alt,
+        caption: image.caption,
+      }
+    : {
+        assetId: image.assetId,
+        alt: image.alt,
+        caption: image.caption,
+      };
+}
+
+function getApiMediaAssetFields({
+  asset,
+  assetIdKey,
+  assetPathKey,
+  fallbackAssetPath,
+}: {
+  readonly asset?: LandingPageMediaAsset;
+  readonly assetIdKey: string;
+  readonly assetPathKey: string;
+  readonly fallbackAssetPath?: string;
+}) {
+  const assetPath = getTrustedTemplateAssetPath(asset?.previewUrl) ?? fallbackAssetPath;
+
+  if (assetPath) {
+    return { [assetPathKey]: assetPath };
+  }
+
+  return asset?.assetId ? { [assetIdKey]: asset.assetId } : {};
+}
+
+function getFirstPartyTemplateMediaFields(
+  templateAssets: LandingPageTemplatePreset["assetRequirements"]
+) {
+  const heroAsset = templateAssets.find(
+    (asset) => asset.slot === "hero" && asset.assetPath
+  );
+
+  if (!heroAsset?.assetPath) return {};
+
+  return {
+    heroAssetPath: heroAsset.assetPath,
+    heroAlt: heroAsset.alt,
+    heroWidth: heroAsset.width,
+    heroHeight: heroAsset.height,
+  };
+}
+
+function getFirstPartyTemplateAssetPath(
+  templateAssets: LandingPageTemplatePreset["assetRequirements"],
+  slot: LandingPageTemplatePreset["assetRequirements"][number]["slot"]
+) {
+  return getTrustedTemplateAssetPath(
+    templateAssets.find((asset) => asset.slot === slot)?.assetPath
+  );
+}
+
+function getTrustedTemplateAssetPath(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  return /^\/assets\/landing-page-templates\/[a-z0-9/_-]+\.(?:png|jpe?g|webp|svg|pdf|mp3|m4a|wav|webm)$/i.test(
+    value
+  )
+    ? value
+    : undefined;
 }
 
 function buildLinks(links: readonly LandingPageLink[]) {
