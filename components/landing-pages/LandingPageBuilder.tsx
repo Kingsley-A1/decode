@@ -29,14 +29,8 @@ import { LandingPagePreview } from "@/components/landing-pages/LandingPagePrevie
 import {
   defaultLandingPageTemplatePresets,
   initialLandingPageContent,
-  templateCategoryOptions,
 } from "@/components/landing-pages/landing-page-data";
-import type {
-  LandingPageTemplateAssetKind,
-  LandingPageTemplateCategory,
-  LandingPageTemplateFlag,
-  LandingPageTemplatePreset,
-} from "@/components/landing-pages/landing-page-template-types";
+import type { LandingPageTemplatePreset } from "@/components/landing-pages/landing-page-template-types";
 import type {
   LandingPageContent,
   LandingPageImage,
@@ -146,25 +140,6 @@ const statusOptions: readonly LandingPageStatus[] = [
   "archived",
 ];
 
-type TemplateCategoryFilter = "all" | LandingPageTemplateCategory;
-type TemplatePageTypeFilter = "all" | LandingPageType;
-type TemplateAssetKindFilter = "all" | LandingPageTemplateAssetKind;
-type TemplateFlagFilter = "all" | LandingPageTemplateFlag;
-
-interface TemplateFilters {
-  readonly category: TemplateCategoryFilter;
-  readonly pageType: TemplatePageTypeFilter;
-  readonly assetKind: TemplateAssetKindFilter;
-  readonly flag: TemplateFlagFilter;
-}
-
-const defaultTemplateFilters: TemplateFilters = {
-  category: "all",
-  pageType: "all",
-  assetKind: "all",
-  flag: "all",
-};
-
 const landingPageTypeLabels: Record<LandingPageType, string> = {
   profile: "Profile",
   business: "Business",
@@ -177,17 +152,6 @@ const landingPageTypeLabels: Record<LandingPageType, string> = {
   images: "Images",
   video_link: "Video link",
   audio_link: "Audio link",
-};
-
-const assetKindLabels: Record<LandingPageTemplateAssetKind, string> = {
-  image: "Images",
-  pdf: "PDF",
-  audio: "Audio",
-};
-
-const templateFlagLabels: Record<LandingPageTemplateFlag, string> = {
-  popular: "Popular",
-  new: "New",
 };
 
 const thumbnailToneClasses: Record<
@@ -1006,35 +970,11 @@ function TemplateExplorer({
   readonly onUseTemplate: (preset: LandingPageTemplatePreset) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<TemplateFilters>(defaultTemplateFilters);
   const debouncedQuery = useDebouncedValue(query, 180);
 
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<TemplateCategoryFilter, number>([
-      ["all", templates.length],
-    ]);
-
-    for (const template of templates) {
-      counts.set(template.category, (counts.get(template.category) ?? 0) + 1);
-    }
-
-    return counts;
-  }, [templates]);
-
-  const pageTypeOptions = useMemo(() => {
-    const uniqueTypes = Array.from(
-      new Set(templates.map((template) => template.type))
-    );
-
-    return uniqueTypes.map((value) => ({
-      value,
-      label: landingPageTypeLabels[value],
-    }));
-  }, [templates]);
-
   const filteredTemplates = useMemo(
-    () => getRankedTemplateMatches({ templates, query: debouncedQuery, filters }),
-    [debouncedQuery, filters, templates]
+    () => getRankedTemplateMatches({ templates, query: debouncedQuery }),
+    [debouncedQuery, templates]
   );
 
   const selectedTemplate =
@@ -1043,34 +983,6 @@ function TemplateExplorer({
     ) ??
     filteredTemplates[0] ??
     defaultLandingPageTemplatePresets[0]!;
-  const activeFilters = getActiveTemplateFilterChips({
-    query,
-    filters,
-  });
-  const hasActiveFilters = activeFilters.length > 0;
-  const handleFilterChange = <TFilter extends keyof TemplateFilters>(
-    key: TFilter,
-    value: TemplateFilters[TFilter]
-  ) => {
-    setFilters((previous) => ({ ...previous, [key]: value }));
-  };
-  const handleClearFilters = () => {
-    setQuery("");
-    setFilters(defaultTemplateFilters);
-  };
-  const handleRemoveFilter = (filterKey: string) => {
-    if (filterKey === "query") {
-      setQuery("");
-      return;
-    }
-
-    if (filterKey in defaultTemplateFilters) {
-      setFilters((previous) => ({
-        ...previous,
-        [filterKey]: defaultTemplateFilters[filterKey as keyof TemplateFilters],
-      }));
-    }
-  };
 
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -1090,117 +1002,17 @@ function TemplateExplorer({
       <div className="mt-4 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
           <div className="sticky top-16 z-20 -mx-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/85 sm:-mx-3 sm:p-3">
-          <Input
-            label="Search templates"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search church, clinic, menu, admissions, warranty, property, audio"
-            leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
-          />
-
-          <div className="mt-4 min-w-0 overflow-x-auto pb-1">
-            <div
-              className="flex min-w-max gap-2"
-              role="toolbar"
-              aria-label="Template categories"
-            >
-              {templateCategoryOptions
-                .filter((option) => (categoryCounts.get(option.value) ?? 0) > 0)
-                .map((option) => {
-                  const isSelected = filters.category === option.value;
-
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => handleFilterChange("category", option.value)}
-                      aria-pressed={isSelected}
-                      className={cn(
-                        "inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition-colors",
-                        isSelected
-                          ? "border-sky-300 bg-sky-50 text-sky-900"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50"
-                      )}
-                    >
-                      {option.label}
-                      <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-200">
-                        {categoryCounts.get(option.value)}
-                      </span>
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-
-          <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-3">
-            <Select
-              label="Page type"
-              value={filters.pageType}
-              onChange={(event) =>
-                handleFilterChange(
-                  "pageType",
-                  event.target.value as TemplatePageTypeFilter
-                )
-              }
-            >
-              <option value="all">All page types</option>
-              {pageTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              label="Media"
-              value={filters.assetKind}
-              onChange={(event) =>
-                handleFilterChange(
-                  "assetKind",
-                  event.target.value as TemplateAssetKindFilter
-                )
-              }
-            >
-              <option value="all">All media needs</option>
-              {Object.entries(assetKindLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              label="Priority"
-              value={filters.flag}
-              onChange={(event) =>
-                handleFilterChange("flag", event.target.value as TemplateFlagFilter)
-              }
-            >
-              <option value="all">All templates</option>
-              {Object.entries(templateFlagLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-600" aria-live="polite">
+            <Input
+              label="Search templates"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search church, clinic, menu, admissions, warranty, property, audio"
+              leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
+            />
+            <p className="mt-3 text-sm text-slate-600" aria-live="polite">
               {filteredTemplates.length} template
               {filteredTemplates.length === 1 ? "" : "s"} found
             </p>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={handleClearFilters}>
-                Clear filters
-              </Button>
-            )}
-          </div>
-
-          {hasActiveFilters && (
-            <ActiveTemplateFilterChips
-              filters={activeFilters}
-              onRemove={handleRemoveFilter}
-            />
-          )}
           </div>
 
           {filteredTemplates.length === 0 ? (
@@ -1526,16 +1338,14 @@ function getTemplateAssetBadges(template: LandingPageTemplatePreset) {
 function getRankedTemplateMatches({
   templates,
   query,
-  filters,
 }: {
   readonly templates: readonly LandingPageTemplatePreset[];
   readonly query: string;
-  readonly filters: TemplateFilters;
 }) {
   return templates
     .map((template) => ({
       template,
-      score: getTemplateMatchScore({ template, query, filters }),
+      score: getTemplateMatchScore({ template, query }),
     }))
     .filter((item) => item.score >= 0)
     .sort(
@@ -1549,28 +1359,10 @@ function getRankedTemplateMatches({
 function getTemplateMatchScore({
   template,
   query,
-  filters,
 }: {
   readonly template: LandingPageTemplatePreset;
   readonly query: string;
-  readonly filters: TemplateFilters;
 }) {
-  if (filters.category !== "all" && template.category !== filters.category) {
-    return -1;
-  }
-  if (filters.pageType !== "all" && template.type !== filters.pageType) {
-    return -1;
-  }
-  if (
-    filters.assetKind !== "all" &&
-    !template.assetRequirements.some((asset) => asset.kind === filters.assetKind)
-  ) {
-    return -1;
-  }
-  if (filters.flag !== "all" && !template.flags.includes(filters.flag)) {
-    return -1;
-  }
-
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return 0;
 
@@ -1634,74 +1426,6 @@ function getTemplateSearchTerms(query: string) {
   }
 
   return [...terms];
-}
-
-function ActiveTemplateFilterChips({
-  filters,
-  onRemove,
-}: {
-  readonly filters: readonly { readonly key: string; readonly label: string }[];
-  readonly onRemove: (key: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2" aria-label="Active template filters">
-      {filters.map((filter) => (
-        <button
-          key={filter.key}
-          type="button"
-          onClick={() => onRemove(filter.key)}
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
-          aria-label={`Remove ${filter.label} filter`}
-        >
-          {filter.label}
-          <span aria-hidden="true" className="text-slate-400">
-            x
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function getActiveTemplateFilterChips({
-  query,
-  filters,
-}: {
-  readonly query: string;
-  readonly filters: TemplateFilters;
-}) {
-  const activeFilters: { key: string; label: string }[] = [];
-  const trimmedQuery = query.trim();
-
-  if (trimmedQuery) activeFilters.push({ key: "query", label: trimmedQuery });
-  if (filters.category !== "all") {
-    activeFilters.push({
-      key: "category",
-      label:
-        templateCategoryOptions.find((option) => option.value === filters.category)
-          ?.label ?? filters.category,
-    });
-  }
-  if (filters.pageType !== "all") {
-    activeFilters.push({
-      key: "pageType",
-      label: landingPageTypeLabels[filters.pageType],
-    });
-  }
-  if (filters.assetKind !== "all") {
-    activeFilters.push({
-      key: "assetKind",
-      label: assetKindLabels[filters.assetKind],
-    });
-  }
-  if (filters.flag !== "all") {
-    activeFilters.push({
-      key: "flag",
-      label: templateFlagLabels[filters.flag],
-    });
-  }
-
-  return activeFilters;
 }
 
 function useDebouncedValue<TValue>(value: TValue, delayMs: number): TValue {
