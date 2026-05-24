@@ -16,7 +16,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const verifyRequest = verifyLinkRequestSchema.parse(body);
-    const result = await verifyLink({ url: verifyRequest.url });
+    const result = await verifyLink({
+      url: verifyRequest.url,
+      skipProbe: verifyRequest.skipProbe,
+    });
 
     return apiSuccess({ data: result, requestId });
   } catch (error) {

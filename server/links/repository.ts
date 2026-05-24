@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { toLegacyReasons } from "@/server/links/analysis";
 import type { LinkVerificationResult } from "@/server/links/service";
@@ -13,6 +13,7 @@ const linkCheckSelect = {
   reasons: true,
   evidence: true,
   probeSummary: true,
+  safeBrowsingTtl: true,
   checkedAt: true,
   expiresAt: true,
 } satisfies Prisma.LinkCheckSelect;
@@ -25,6 +26,15 @@ export type LinkCheckRecord = Prisma.LinkCheckGetPayload<{
  *  analyzer output the wire response is built from, minus the cache block. */
 export type LinkCheckPersistInput = Omit<LinkVerificationResult, "cache">;
 
+/** Timing metadata for a persisted verdict. `safeBrowsingTtl` bounds the
+ *  freshness of the Safe Browsing portion specifically; it is null when no
+ *  Safe Browsing lookup contributed to the verdict. */
+export interface LinkCheckTiming {
+  readonly checkedAt: Date;
+  readonly expiresAt: Date;
+  readonly safeBrowsingTtl: Date | null;
+}
+
 export interface LinkCheckRepository {
   readonly findFreshByNormalizedUrl: (
     normalizedUrl: string,
@@ -32,8 +42,7 @@ export interface LinkCheckRepository {
   ) => Promise<LinkCheckRecord | null>;
   readonly upsertVerdict: (
     input: LinkCheckPersistInput,
-    checkedAt: Date,
-    expiresAt: Date
+    timing: LinkCheckTiming
   ) => Promise<LinkCheckRecord>;
 }
 
@@ -50,6 +59,10 @@ function findFreshByNormalizedUrl(
     where: {
       normalizedUrl,
       expiresAt: { gt: now },
+      // A row whose Safe Browsing data has gone stale is treated as a miss
+      // so it gets re-verified — rows without an SB lookup (null) rely on
+      // the row-level `expiresAt` instead.
+      OR: [{ safeBrowsingTtl: null }, { safeBrowsingTtl: { gt: now } }],
     },
     select: linkCheckSelect,
   });
@@ -57,16 +70,17 @@ function findFreshByNormalizedUrl(
 
 function upsertVerdict(
   input: LinkCheckPersistInput,
-  checkedAt: Date,
-  expiresAt: Date
+  timing: LinkCheckTiming
 ): Promise<LinkCheckRecord> {
   if (!input.normalizedUrl) {
     throw new Error("Only normalized links can be cached.");
   }
 
-  // Persist both columns: `evidence` is canonical; `reasons` is the legacy
+  // Persist four columns: `evidence` is canonical; `reasons` is the legacy
   // projection so older readers (and the existing admin console) keep
-  // working. Phase B never writes `probeSummary`.
+  // working; `probeSummary` carries the Phase C network probe; and
+  // `safeBrowsingTtl` bounds the freshness of the Phase D threat-intel
+  // portion. Any of the last three may be SQL NULL.
   const reasons = toLegacyReasons(input.evidence);
 
   const data = {
@@ -74,8 +88,12 @@ function upsertVerdict(
     confidence: input.confidence,
     reasons: reasons as unknown as Prisma.InputJsonValue,
     evidence: input.evidence as unknown as Prisma.InputJsonValue,
-    checkedAt,
-    expiresAt,
+    probeSummary: input.probe
+      ? (input.probe as unknown as Prisma.InputJsonValue)
+      : Prisma.DbNull,
+    safeBrowsingTtl: timing.safeBrowsingTtl,
+    checkedAt: timing.checkedAt,
+    expiresAt: timing.expiresAt,
   };
 
   return prisma.linkCheck.upsert({

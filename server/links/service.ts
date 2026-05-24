@@ -4,13 +4,19 @@ import {
   analyzeLink,
   toLegacyReasons,
   type LegacyReason,
-  type LinkAnalysisResult,
 } from "@/server/links/analysis";
-import type {
-  Evidence,
-  ProbeSummary,
-  VerificationVerdict,
+import {
+  mergeEvidence,
+  type Evidence,
+  type ProbeSummary,
+  type VerificationVerdict,
 } from "@/server/links/evidence";
+import { probeUrl } from "@/server/links/probe";
+import { getProbeEvidence } from "@/server/links/probeEvidence";
+import {
+  checkSafeBrowsing,
+  type SafeBrowsingResult,
+} from "@/server/links/safeBrowsing";
 import {
   prismaLinkCheckRepository,
   type LinkCheckRecord,
@@ -21,7 +27,27 @@ import { scoreEvidence } from "@/server/links/score";
 export interface VerifyLinkInput {
   readonly url: string;
   readonly now?: Date;
+  /** Skip the network probe and Safe Browsing lookup; return the instant
+   *  heuristic-only verdict. Used for the UI's optimistic first paint. */
+  readonly skipProbe?: boolean;
 }
+
+export type ProbeRunner = (url: string) => Promise<ProbeSummary>;
+export type SafeBrowsingRunner = (url: string) => Promise<SafeBrowsingResult>;
+
+export interface VerifyLinkDeps {
+  readonly repository?: LinkCheckRepository;
+  readonly probe?: ProbeRunner;
+  readonly safeBrowsing?: SafeBrowsingRunner;
+}
+
+// Heuristic codes that mean the host is not a public destination. We never
+// probe or send these to Safe Browsing — they are internal / malformed.
+const HOST_BLOCKING_CODES: ReadonlySet<string> = new Set([
+  "private_network_host",
+  "localhost_host",
+  "raw_ip_host",
+]);
 
 export interface LinkVerificationCacheMetadata {
   readonly hit: boolean;
@@ -49,74 +75,150 @@ const LINK_CHECK_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export async function verifyLink(
   input: VerifyLinkInput,
-  repository: LinkCheckRepository = prismaLinkCheckRepository
+  deps: VerifyLinkDeps = {}
 ): Promise<LinkVerificationResult> {
+  const repository = deps.repository ?? prismaLinkCheckRepository;
+  const probeRunner = deps.probe ?? probeUrl;
+  const safeBrowsingRunner = deps.safeBrowsing ?? checkSafeBrowsing;
   const now = input.now ?? new Date();
-  const analysis = analyzeForWire(input.url);
+  const analysis = analyzeLink(input.url);
 
   if (!analysis.normalizedUrl) {
-    return {
-      ...analysis,
-      cache: {
-        hit: false,
-        cacheable: false,
-        checkedAt: null,
-        expiresAt: null,
-      },
-    };
+    return buildResult(
+      toWire(analysis.evidence, analysis.normalizedUrl, analysis.host, null),
+      uncacheable(null)
+    );
+  }
+
+  // A fresh cached verdict is always backed by external evidence (we never
+  // cache heuristic-only results), so a cache hit is the best answer we
+  // have — honour it even when the caller asked to skip the probe.
+  const cached = await findCached(repository, analysis.normalizedUrl, now);
+  if (cached) {
+    return getCachedVerificationResult(cached);
+  }
+
+  // External lookups run only for public hosts: we never fetch or disclose
+  // internal / private / IP-literal targets. `skipProbe` opts out of both.
+  const external = !input.skipProbe;
+  const publicHost = !hasHostBlockingEvidence(analysis.evidence);
+
+  // The probe is additionally skipped when heuristics already condemned the
+  // URL — fetching a likely-phishing page buys nothing. Safe Browsing still
+  // runs on suspicious public URLs: authoritative intel can upgrade a
+  // heuristic "suspicious" to a confirmed "malicious".
+  const wantProbe =
+    external &&
+    publicHost &&
+    analysis.verdict !== "suspicious" &&
+    analysis.verdict !== "malicious";
+  const wantSafeBrowsing = external && publicHost;
+
+  const [probe, safeBrowsing] = await Promise.all([
+    wantProbe
+      ? probeRunner(analysis.normalizedUrl)
+      : Promise.resolve<ProbeSummary | null>(null),
+    wantSafeBrowsing
+      ? safeBrowsingRunner(analysis.normalizedUrl)
+      : Promise.resolve<SafeBrowsingResult | null>(null),
+  ]);
+
+  let evidence = analysis.evidence;
+  if (probe) {
+    evidence = mergeEvidence(evidence, getProbeEvidence(probe));
+  }
+  if (safeBrowsing && safeBrowsing.evidence.length > 0) {
+    evidence = mergeEvidence(evidence, safeBrowsing.evidence);
+  }
+
+  const wire = toWire(evidence, analysis.normalizedUrl, analysis.host, probe);
+
+  // Cache only verdicts backed by external evidence. A probe result, or a
+  // completed Safe Browsing lookup, qualifies. Heuristic-only verdicts are
+  // free to recompute and caching them would shadow a later full check.
+  const hasExternalEvidence =
+    probe !== null ||
+    Boolean(safeBrowsing?.checked && safeBrowsing.evidence.length > 0);
+  if (!hasExternalEvidence) {
+    return buildResult(wire, uncacheable(now));
   }
 
   try {
-    const cached = await repository.findFreshByNormalizedUrl(
-      analysis.normalizedUrl,
-      now
-    );
-
-    if (cached) {
-      return getCachedVerificationResult(cached);
-    }
-
     const expiresAt = new Date(now.getTime() + LINK_CHECK_CACHE_TTL_MS);
-    const stored = await repository.upsertVerdict(analysis, now, expiresAt);
+    const safeBrowsingTtl =
+      safeBrowsing?.checked && safeBrowsing.cacheTtlMs !== null
+        ? new Date(now.getTime() + safeBrowsing.cacheTtlMs)
+        : null;
+    const stored = await repository.upsertVerdict(wire, {
+      checkedAt: now,
+      expiresAt,
+      safeBrowsingTtl,
+    });
 
-    return {
-      ...analysis,
-      cache: {
-        hit: false,
-        cacheable: true,
-        checkedAt: stored.checkedAt.toISOString(),
-        expiresAt: stored.expiresAt.toISOString(),
-      },
-    };
+    return buildResult(wire, {
+      hit: false,
+      cacheable: true,
+      checkedAt: stored.checkedAt.toISOString(),
+      expiresAt: stored.expiresAt.toISOString(),
+    });
   } catch {
-    return {
-      ...analysis,
-      cache: {
-        hit: false,
-        cacheable: false,
-        checkedAt: now.toISOString(),
-        expiresAt: null,
-      },
-    };
+    return buildResult(wire, uncacheable(now));
   }
 }
 
-/** Runs the heuristic analyzer and adds the wire-only fields. Phase B
- *  has no probe, so `probe` is null and `ssrfProtected` is false. */
-function analyzeForWire(
-  url: string
-): Omit<LinkVerificationResult, "cache"> {
-  const analysis: LinkAnalysisResult = analyzeLink(url);
+function hasHostBlockingEvidence(evidence: readonly Evidence[]): boolean {
+  return evidence.some((entry) => HOST_BLOCKING_CODES.has(entry.code));
+}
+
+/** Looks up a fresh cached verdict, degrading to a miss if the store is
+ *  unavailable so verification still works when the database is down. */
+async function findCached(
+  repository: LinkCheckRepository,
+  normalizedUrl: string,
+  now: Date
+): Promise<LinkCheckRecord | null> {
+  try {
+    return await repository.findFreshByNormalizedUrl(normalizedUrl, now);
+  } catch {
+    return null;
+  }
+}
+
+type WireResult = Omit<LinkVerificationResult, "cache">;
+
+function toWire(
+  evidence: readonly Evidence[],
+  normalizedUrl: string | null,
+  host: string | null,
+  probe: ProbeSummary | null
+): WireResult {
+  const scored = scoreEvidence(evidence);
 
   return {
-    verdict: analysis.verdict,
-    confidence: analysis.confidence,
-    normalizedUrl: analysis.normalizedUrl,
-    host: analysis.host,
-    reasons: toLegacyReasons(analysis.evidence),
-    evidence: analysis.evidence,
-    probe: null,
-    ssrfProtected: analysis.ssrfProtected,
+    verdict: scored.verdict,
+    confidence: scored.confidence,
+    normalizedUrl,
+    host,
+    reasons: toLegacyReasons(evidence),
+    evidence,
+    probe,
+    ssrfProtected: probe !== null,
+  };
+}
+
+function buildResult(
+  wire: WireResult,
+  cache: LinkVerificationCacheMetadata
+): LinkVerificationResult {
+  return { ...wire, cache };
+}
+
+function uncacheable(now: Date | null): LinkVerificationCacheMetadata {
+  return {
+    hit: false,
+    cacheable: false,
+    checkedAt: now ? now.toISOString() : null,
+    expiresAt: null,
   };
 }
 
