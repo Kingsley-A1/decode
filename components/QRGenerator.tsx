@@ -855,7 +855,8 @@ export function QRGenerator({
     [type, logoChoice]
   );
   const stepIndex = ["content", "design", "export"].indexOf(currentStep);
-  const previewValue = payload?.value || "https://decode.com.ng";
+  const previewValue = payload?.value ?? "";
+  const hasPreviewPayload = Boolean(previewValue);
   const qrOptions = useMemo<QROptions>(() => ({
     data: previewValue,
     width: renderableDesign.size,
@@ -1262,16 +1263,20 @@ export function QRGenerator({
         title={`${mode === "dynamic" ? "Dynamic" : "Static"} / ${getTypeLabel(type)}`}
         summary={payload?.summary ?? "Complete content to preview the payload."}
         preview={
-          <div
-            ref={mobileQrRef}
-            className="w-full overflow-hidden rounded-md [&_canvas]:!h-auto [&_canvas]:!w-full"
-          />
+          hasPreviewPayload ? (
+            <div
+              ref={mobileQrRef}
+              className="w-full overflow-hidden rounded-md [&_canvas]:!h-auto [&_canvas]:!w-full"
+            />
+          ) : (
+            <QRPayloadPlaceholder mode={mode} />
+          )
         }
         status={{
           label: scanability.label,
           variant: getScanabilityBadgeVariant(scanability.state),
         }}
-        isLoading={!isMobilePreviewReady}
+        isLoading={hasPreviewPayload && !isMobilePreviewReady}
         data-testid="mobile-preview-tray"
       />
 
@@ -1358,20 +1363,24 @@ export function QRGenerator({
         <aside className="hidden xl:block xl:w-[390px] xl:self-start">
           <div className="sticky top-24 space-y-3">
             <QRPreviewPanel
-              isLoading={!isReady}
+              isLoading={hasPreviewPayload && !isReady}
               className="p-3"
               previewClassName="max-w-[280px] p-4 shadow-[0_12px_36px_rgba(15,23,42,0.08)]"
             >
-              <QRFrame
-                key={design.frameStyle}
-                frameStyle={design.frameStyle}
-                title={form.title}
-              >
-                <div
-                  ref={qrRef}
-                  className="w-full overflow-hidden rounded-lg [&_canvas]:!h-auto [&_canvas]:!w-full"
-                />
-              </QRFrame>
+              {hasPreviewPayload ? (
+                <QRFrame
+                  key={design.frameStyle}
+                  frameStyle={design.frameStyle}
+                  title={form.title}
+                >
+                  <div
+                    ref={qrRef}
+                    className="w-full overflow-hidden rounded-lg [&_canvas]:!h-auto [&_canvas]:!w-full"
+                  />
+                </QRFrame>
+              ) : (
+                <QRPayloadPlaceholder mode={mode} />
+              )}
               {logoUrl && (
                 <IconButton
                   onClick={handleRemoveLogo}
@@ -2392,6 +2401,29 @@ function MiniQRCode() {
           }
         />
       ))}
+    </div>
+  );
+}
+
+function QRPayloadPlaceholder({ mode }: { readonly mode: QRMode }) {
+  const isDynamic = mode === "dynamic";
+
+  return (
+    <div
+      className="flex aspect-square w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center"
+      data-testid="qr-payload-placeholder"
+    >
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-slate-200">
+        <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <p className="text-sm font-semibold text-slate-900">
+        {isDynamic ? "Publish first" : "Add content"}
+      </p>
+      <p className="max-w-48 text-xs leading-5 text-slate-600">
+        {isDynamic
+          ? "The QR preview appears after Decode assigns a public link."
+          : "Complete the content step to render a QR preview."}
+      </p>
     </div>
   );
 }

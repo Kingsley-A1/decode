@@ -38,6 +38,16 @@ export function useQRCode(options: QROptions) {
       if (typeof window === "undefined") return;
 
       setIsReady(false);
+      qrCodeRef.current = null;
+
+      const data = options.data.trim();
+      if (!data) {
+        if (ref.current) {
+          ref.current.innerHTML = "";
+        }
+
+        return;
+      }
 
       const [{ default: QRCodeStyling }] = await Promise.all([
         import("qr-code-styling"),
@@ -50,7 +60,7 @@ export function useQRCode(options: QROptions) {
         width: options.width || 280,
         height: options.height || 280,
         type: "canvas",
-        data: options.data || "https://github.com",
+        data,
         margin: options.margin ?? 4,
         qrOptions: {
           errorCorrectionLevel: options.errorCorrectionLevel || "Q",
