@@ -1,5 +1,6 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { Buffer } from "node:buffer";
 import QRCode from "qrcode";
 
 const primaryRoutes = [
@@ -230,6 +231,9 @@ test.describe("phase 8 release quality gate", () => {
       .getByRole("button", { name: "Use School admissions template" })
       .click();
     await expect(page.getByLabel("Business name")).toHaveValue("Oakfield Academy");
+    await expect(
+      page.getByRole("heading", { name: "Build and attach page", level: 2 })
+    ).toBeFocused();
     await expect(page.getByText("School admissions template loaded.")).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Mobile preview", level: 2 })
@@ -279,6 +283,147 @@ test.describe("phase 8 release quality gate", () => {
     });
     await expectNoDocumentOverflow(page);
     await expectNoClippedInteractiveText(page);
+  });
+
+  test("QR detail page uses live data and archives through the API", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+
+    let archivePayload: unknown;
+    await page.route("**/api/qr-codes/qr_live_detail/archive", async (route) => {
+      archivePayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            qrCode: {
+              id: "qr_live_detail",
+              title: "Live Campaign QR",
+              type: "url",
+              mode: "dynamic",
+              status: "archived",
+              slug: "live-detail",
+              destinationUrl: "https://kingtech.com.ng/live",
+              redirectUrl: "https://decode.com.ng/r/live-detail",
+              payloadValue: "https://decode.com.ng/r/live-detail",
+              designConfig: {
+                foregroundColor: "#111827",
+                backgroundColor: "#FFFFFF",
+                margin: 16,
+                logoSizeRatio: 0,
+                dotStyle: "rounded",
+                cornerStyle: "square",
+                errorCorrectionLevel: "Q",
+                size: 1024,
+              },
+              scanCount: 8,
+              publishedAt: "2026-05-21T08:00:00.000Z",
+              archivedAt: "2026-05-24T09:00:00.000Z",
+              createdAt: "2026-05-21T07:55:00.000Z",
+              updatedAt: "2026-05-24T09:00:00.000Z",
+            },
+          },
+          requestId: "req_archive_live_detail",
+        }),
+      });
+    });
+    await page.route("**/api/qr-codes/qr_live_detail", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            qrCode: {
+              id: "qr_live_detail",
+              title: "Live Campaign QR",
+              type: "url",
+              mode: "dynamic",
+              status: "published",
+              slug: "live-detail",
+              destinationUrl: "https://kingtech.com.ng/live",
+              redirectUrl: "https://decode.com.ng/r/live-detail",
+              payloadValue: "https://decode.com.ng/r/live-detail",
+              designConfig: {
+                foregroundColor: "#111827",
+                backgroundColor: "#FFFFFF",
+                margin: 16,
+                logoSizeRatio: 0,
+                dotStyle: "rounded",
+                cornerStyle: "square",
+                errorCorrectionLevel: "Q",
+                size: 1024,
+              },
+              scanCount: 8,
+              publishedAt: "2026-05-21T08:00:00.000Z",
+              archivedAt: null,
+              createdAt: "2026-05-21T07:55:00.000Z",
+              updatedAt: "2026-05-23T12:00:00.000Z",
+            },
+            analytics: {
+              totalQRCodes: 1,
+              dynamicQRCodes: 1,
+              totalScans: 8,
+              scanTrend: [
+                { label: "May 22", scans: 2 },
+                { label: "May 23", scans: 6 },
+              ],
+              scansByDeviceClass: [
+                { deviceClass: "Mobile", count: 6 },
+                { deviceClass: "Desktop", count: 2 },
+              ],
+              scansByReferrer: [{ referrer: "Direct", count: 5 }],
+              recentScans: [
+                {
+                  id: "scan_live_detail_1",
+                  qrCodeId: "qr_live_detail",
+                  scannedAt: "2026-05-24T08:00:00.000Z",
+                  deviceClass: "Mobile",
+                  referrer: "Direct",
+                  region: "Lagos",
+                  country: "NG",
+                  qrCode: { title: "Live Campaign QR" },
+                },
+              ],
+            },
+          },
+          requestId: "req_live_detail",
+        }),
+      });
+    });
+
+    const detailResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/qr-codes/qr_live_detail") &&
+        response.request().method() === "GET"
+    );
+    await page.goto("/dashboard/qr/qr_live_detail", {
+      waitUntil: "domcontentloaded",
+    });
+    await detailResponse;
+    await expect(
+      page.getByRole("heading", { name: "Saved QR code", level: 1 })
+    ).toBeVisible();
+    await expect(page.getByText("Live Campaign QR").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText("https://kingtech.com.ng/live").first()).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("Cafe Menu Redirect");
+    await expect(page.getByText("Mobile").first()).toBeVisible();
+    await expect(page.getByText("Desktop").first()).toBeVisible();
+    await expect(page.getByText("Direct").first()).toBeVisible();
+    await expect(page.getByText("Lagos, NG").first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Archive" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Archive QR code?" })
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Archive QR" }).click();
+    await expect(page.getByText("Archived").first()).toBeVisible();
+    expect(archivePayload).toMatchObject({});
   });
 
   test("generator completes the static QR workflow and updates frames", async ({
@@ -374,6 +519,151 @@ test.describe("phase 8 release quality gate", () => {
     await expect(
       page.getByRole("button", { name: "Copy payload" })
     ).toBeEnabled();
+  });
+
+  test("dynamic generator waits for the server payload before export", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(90_000);
+
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+
+    let publishPayload: unknown;
+    let renderPayload: unknown;
+    await page.route("**/api/auth/session", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          user: {
+            name: "Dynamic QR User",
+            email: "dynamic-qr@decode.test",
+          },
+          expires: "2026-12-31T23:59:59.000Z",
+        }),
+      });
+    });
+    await page.route("**/api/qr-codes/*/render", async (route) => {
+      renderPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            asset: { id: "asset_live_smoke" },
+            downloadUrl: "/mock-downloads/live-smoke.png",
+            warnings: [],
+          },
+          requestId: "req_dynamic_render_smoke",
+        }),
+      });
+    });
+    await page.route("**/mock-downloads/live-smoke.png", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: Buffer.from("decode-dynamic-qr-smoke"),
+      });
+    });
+    await page.route("**/api/qr-codes", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+
+      publishPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            qrCode: {
+              id: "qr_live_smoke",
+              slug: "live-smoke",
+              redirectUrl: "http://127.0.0.1:3100/r/live-smoke",
+              destinationUrl: "https://kingtech.com.ng/",
+            },
+            payload: {
+              value: "http://127.0.0.1:3100/r/live-smoke",
+              destinationUrl: "https://kingtech.com.ng/",
+            },
+          },
+          requestId: "req_dynamic_publish_smoke",
+        }),
+      });
+    });
+
+    await page.goto("/generate");
+    await expect(
+      page.getByRole("heading", { name: "Generate QR codes", level: 1 })
+    ).toBeVisible();
+
+    await page
+      .getByRole("group", { name: "QR behavior" })
+      .getByRole("button", { name: /dynamic/i })
+      .click();
+    await page.getByLabel("Destination URL").fill("https://kingtech.com.ng/");
+    await page.getByRole("button", { name: "Continue to design" }).click();
+    await expect(
+      page.getByRole("heading", { name: "2. Design and guardrails" })
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Continue to export" }).click();
+
+    const builderPanel = page.getByTestId("qr-builder-panel");
+    await expect(
+      builderPanel.getByText(
+        "Publish to assign public link -> https://kingtech.com.ng/"
+      )
+    ).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("assigned-after-publish");
+    await expect(page.locator("body")).not.toContainText("decode.com.ngh");
+    await expect(page.getByRole("button", { name: "Copy payload" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Download PNG" })).toBeDisabled();
+    await expect(
+      page.getByLabel("QR preview").getByTestId("qr-payload-placeholder")
+    ).toBeVisible();
+    await expect(page.getByLabel("QR preview").locator("canvas")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Publish dynamic QR" }).click();
+    await expect(
+      builderPanel.getByText(
+        "Published dynamic QR: http://127.0.0.1:3100/r/live-smoke"
+      )
+    ).toBeVisible();
+    await expect(
+      builderPanel.getByText(
+        "http://127.0.0.1:3100/r/live-smoke -> https://kingtech.com.ng/"
+      )
+    ).toBeVisible();
+    expect(publishPayload).toMatchObject({
+      mode: "dynamic",
+      type: "url",
+      content: { url: "https://kingtech.com.ng/" },
+    });
+    await expect(page.getByLabel("QR preview").locator("canvas").first()).toBeVisible();
+    await expect(
+      page.getByLabel("QR preview").getByTestId("qr-payload-placeholder")
+    ).toHaveCount(0);
+
+    await expect(page.getByRole("button", { name: "Copy payload" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Download PNG" })).toBeEnabled();
+    await page.getByRole("button", { name: "Copy payload" }).click();
+    await expect(
+      page.getByRole("button", { name: "Copied payload" })
+    ).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe("http://127.0.0.1:3100/r/live-smoke");
+
+    const renderResponse = page.waitForResponse(
+      "**/api/qr-codes/qr_live_smoke/render"
+    );
+    await page.getByRole("button", { name: "Download PNG" }).click();
+    await renderResponse;
+    expect(renderPayload).toMatchObject({ format: "png" });
   });
 
   test("generator mobile cleanup keeps preview, progress, and frame choice fast", async ({
