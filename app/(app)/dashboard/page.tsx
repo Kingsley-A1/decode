@@ -6,7 +6,7 @@ export default function DashboardPage() {
     <PageShell
       eyebrow="Workspace"
       title="Dashboard"
-      description="Start from a clean workspace, then manage saved QR codes, dynamic destinations, pages, and scan activity as real data is created."
+      description="Start in your workspace, then manage saved QR codes, dynamic destinations, links, pages, and scan activity as real data is created."
     >
       <DashboardClient />
     </PageShell>

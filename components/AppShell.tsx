@@ -54,8 +54,10 @@ export function AppShell({ children, chrome = "default" }: AppShellProps) {
       <NavBar />
       <div
         className={cn(
-          "mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8",
-          isWorkspace ? "py-4 sm:py-5 lg:py-6" : "py-6 sm:py-8 lg:py-10"
+          "mx-auto w-full px-4 sm:px-6 lg:px-8",
+          isWorkspace
+            ? "max-w-none py-4 sm:py-5 lg:py-6"
+            : "max-w-7xl py-6 sm:py-8 lg:py-10"
         )}
       >
         <main id="main-content" className="min-w-0">

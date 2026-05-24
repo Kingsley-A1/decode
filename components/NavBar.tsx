@@ -140,7 +140,7 @@ export function NavBar() {
               href="/me"
               aria-label="Open profile"
               title="Profile"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-800"
+              className="hidden h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-800 sm:inline-flex"
             >
               <UserRound className="h-5 w-5" aria-hidden="true" />
             </Link>
