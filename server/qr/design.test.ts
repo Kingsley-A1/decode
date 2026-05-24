@@ -7,7 +7,7 @@ describe("getQRDesignWarnings", () => {
       foregroundColor: "#FFFFFF",
       backgroundColor: "#F8FAFC",
       margin: 1,
-      logoSizeRatio: 0.25,
+      logoSizeRatio: 0.27,
       dotStyle: "square",
       cornerStyle: "square",
       errorCorrectionLevel: "M",

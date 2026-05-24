@@ -35,7 +35,7 @@ const dynamicSlugSchema = z
 export const defaultQRDesignConfig = {
   foregroundColor: "#0F172A",
   backgroundColor: "#FFFFFF",
-  margin: 4,
+  margin: 16,
   logoSizeRatio: 0,
   dotStyle: QR_DOT_STYLE.SQUARE,
   cornerStyle: QR_CORNER_STYLE.SQUARE,
@@ -55,7 +55,7 @@ const baseCreateQRCodeSchema = z.object({
     .object({
       foregroundColor: hexColorSchema.default("#0F172A"),
       backgroundColor: hexColorSchema.default("#FFFFFF"),
-      margin: z.number().int().min(0).max(16).default(4),
+      margin: z.number().int().min(0).max(16).default(16),
       logoSizeRatio: z.number().min(0).max(0.35).default(0),
       dotStyle: z
         .enum([
@@ -186,13 +186,6 @@ export const createQRCodeRequestSchema = createQRCodeRequestBaseSchema.superRefi
       });
     }
 
-    if (!value.slug) {
-      context.addIssue({
-        code: "custom",
-        path: ["slug"],
-        message: "Dynamic QR codes require a stable redirect slug.",
-      });
-    }
   }
 );
 

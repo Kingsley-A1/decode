@@ -54,7 +54,6 @@ import {
   QRPreviewPanel,
   Select,
   SegmentedControl,
-  Slider,
   Textarea,
 } from "@/components/ui";
 
@@ -133,7 +132,6 @@ interface FormState {
   vcardEmail: string;
   vcardWebsite: string;
   vcardAddress: string;
-  slug: string;
 }
 
 interface DesignState {
@@ -335,6 +333,8 @@ type PresetDesignState = Pick<
   | "frameStyle"
 >;
 
+const defaultLogoSizeRatio = 0.26;
+
 const designPresetOptions: {
   readonly value: DesignPreset;
   readonly label: string;
@@ -381,9 +381,9 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
   clean: {
     foregroundColor: "#0F172A",
     backgroundColor: "#FFFFFF",
-    dotStyle: "rounded",
-    cornerStyle: "rounded",
-    margin: 4,
+    dotStyle: "square",
+    cornerStyle: "square",
+    margin: 16,
     errorCorrectionLevel: "Q",
     frameStyle: "none",
   },
@@ -392,7 +392,7 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     backgroundColor: "#FFFFFF",
     dotStyle: "square",
     cornerStyle: "square",
-    margin: 4,
+    margin: 16,
     errorCorrectionLevel: "Q",
     frameStyle: "classic",
   },
@@ -401,8 +401,8 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     backgroundColor: "#F5F3FF",
     dotStyle: "dots",
     cornerStyle: "dot",
-    margin: 4,
-    errorCorrectionLevel: "H",
+    margin: 16,
+    errorCorrectionLevel: "Q",
     frameStyle: "ticket",
   },
   menu: {
@@ -410,7 +410,7 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     backgroundColor: "#ECFDF5",
     dotStyle: "rounded",
     cornerStyle: "rounded",
-    margin: 4,
+    margin: 16,
     errorCorrectionLevel: "Q",
     frameStyle: "minimal",
   },
@@ -419,8 +419,8 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     backgroundColor: "#ECFEFF",
     dotStyle: "classy",
     cornerStyle: "dot",
-    margin: 4,
-    errorCorrectionLevel: "H",
+    margin: 16,
+    errorCorrectionLevel: "Q",
     frameStyle: "scan-me",
   },
   coupon: {
@@ -428,8 +428,8 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     backgroundColor: "#FFFBEB",
     dotStyle: "extra-rounded",
     cornerStyle: "rounded",
-    margin: 4,
-    errorCorrectionLevel: "H",
+    margin: 16,
+    errorCorrectionLevel: "Q",
     frameStyle: "badge",
   },
 };
@@ -728,7 +728,7 @@ const thumbnailQrActiveCells = new Set([
 
 const initialFormState: FormState = {
   title: "Decode QR Code",
-  url: "https://decode.com.ng",
+  url: "",
   text: "Decode makes QR workflows safer and more useful.",
   email: "",
   emailSubject: "",
@@ -750,15 +750,14 @@ const initialFormState: FormState = {
   vcardEmail: "",
   vcardWebsite: "",
   vcardAddress: "",
-  slug: "campaign-launch",
 };
 
 const initialDesignState: DesignState = {
   foregroundColor: "#0F172A",
   backgroundColor: "#FFFFFF",
-  dotStyle: "rounded",
-  cornerStyle: "rounded",
-  margin: 4,
+  dotStyle: "square",
+  cornerStyle: "square",
+  margin: 16,
   logoSizeRatio: 0,
   errorCorrectionLevel: "Q",
   size: 1024,
@@ -964,8 +963,10 @@ export function QRGenerator({
   const applyLogoSafeDesign = () => {
     setDesign((previous) => ({
       ...previous,
-      logoSizeRatio: previous.logoSizeRatio > 0 ? previous.logoSizeRatio : 0.16,
-      errorCorrectionLevel: "H",
+      logoSizeRatio:
+        previous.logoSizeRatio > 0
+          ? previous.logoSizeRatio
+          : defaultLogoSizeRatio,
     }));
   };
 
@@ -1090,7 +1091,6 @@ export function QRGenerator({
           type: "url",
           title: form.title || "Dynamic QR Code",
           save: true,
-          slug: form.slug,
           content: { url: form.url },
           design: getApiDesign(design, Boolean(logoUrl)),
         }),
@@ -1233,12 +1233,7 @@ export function QRGenerator({
         </section>
 
         <aside className="hidden xl:block xl:w-[390px] xl:self-start">
-          <div
-            className="space-y-3 xl:fixed xl:top-28 xl:z-30 xl:w-[390px] xl:max-w-[calc(100vw-2rem)]"
-            style={{
-              right: "max(2rem, calc((100vw - 80rem) / 2 + 2rem))",
-            }}
-          >
+          <div className="sticky top-24 space-y-3">
             <QRPreviewPanel
               isLoading={!isReady}
               className="p-3"
@@ -1341,7 +1336,7 @@ function ContentStep({
 
       {isDynamic && (
         <Alert variant="info" title="Dynamic v1 supports URL redirects">
-          Dynamic QR codes require a website URL and stable slug before publish.
+          Dynamic QR codes require a website URL. Decode assigns the stable public link when you publish.
         </Alert>
       )}
 
@@ -1446,18 +1441,6 @@ function ContentFields({
         hint="Used in downloads and dashboard labels."
         containerClassName="md:col-span-2"
       />
-
-      {mode === "dynamic" && (
-        <Input
-          label="Dynamic slug"
-          value={form.slug}
-          onChange={(event) => onFormChange("slug", normalizeSlugInput(event.target.value))}
-          placeholder="campaign-launch"
-          error={errors.slug}
-          hint="Lowercase letters, numbers, and hyphens only."
-          containerClassName="md:col-span-2"
-        />
-      )}
 
       {type === "url" && (
         <Input
@@ -1836,7 +1819,7 @@ function DesignStep({
 
       <DisclosureSection
         title="Advanced design controls"
-        description="Dots, corners, quiet zone, correction, and export source size."
+        description="Dots, corners, and export source size."
         defaultOpen={shouldOpenAdvanced}
       >
         <div className="space-y-4">
@@ -1870,53 +1853,6 @@ function DesignStep({
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Slider
-              label="Quiet zone"
-              valueLabel={String(design.margin)}
-              min={0}
-              max={16}
-              value={design.margin}
-              minLabel="0"
-              maxLabel="16"
-              onChange={(event) =>
-                onDesignChange((previous) => ({
-                  ...previous,
-                  margin: Number(event.target.value),
-                }))
-              }
-            />
-            <Slider
-              label="Logo size"
-              valueLabel={`${Math.round(design.logoSizeRatio * 100)}%`}
-              min={0}
-              max={35}
-              value={Math.round(design.logoSizeRatio * 100)}
-              minLabel="0%"
-              maxLabel="35%"
-              onChange={(event) =>
-                onDesignChange((previous) => ({
-                  ...previous,
-                  logoSizeRatio: Number(event.target.value) / 100,
-                }))
-              }
-            />
-            <Select
-              label="Error correction"
-              value={design.errorCorrectionLevel}
-              onChange={(event) =>
-                onDesignChange((previous) => ({
-                  ...previous,
-                  errorCorrectionLevel:
-                    event.target.value as ErrorCorrectionLevel,
-                }))
-              }
-              hint="Use high correction when adding a logo."
-            >
-              <option value="L">Low - smallest code</option>
-              <option value="M">Medium</option>
-              <option value="Q">Quartile - recommended</option>
-              <option value="H">High - best for logos</option>
-            </Select>
             <Select
               label="Export size"
               value={String(design.size)}
@@ -2196,8 +2132,7 @@ function ExportStep({
 
       {mode === "dynamic" && (
         <Alert variant="info" title="Dynamic destination">
-          Destination: {form.url || "Add a destination URL"}; slug:{" "}
-          {form.slug || "required"}
+          Destination: {form.url || "Add a destination URL"}; public QR link is assigned after publish.
         </Alert>
       )}
       {mode === "dynamic" && scanability.blocksPublish && (
@@ -2486,10 +2421,6 @@ function validateContent({
   const errors: Record<string, string> = {};
 
   if (mode === "dynamic") {
-    if (!/^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$/.test(form.slug)) {
-      errors.slug =
-        "Use 3-64 lowercase letters, numbers, and hyphens. Start and end with a letter or number.";
-    }
     if (type !== "url") {
       errors.type = "Dynamic QR codes currently require a website URL.";
     }
@@ -2556,7 +2487,7 @@ function buildPayload({
 }): PayloadResult | null {
   try {
     if (mode === "dynamic") {
-      const redirectUrl = getDynamicRedirectUrl(form.slug);
+      const redirectUrl = getDynamicRedirectUrl();
       return {
         value: redirectUrl,
         destinationUrl: normalizeHttpUrl(form.url),
@@ -2679,12 +2610,15 @@ function getScanability({
   if (hasLogo && design.logoSizeRatio > 0.3) {
     isBlocked = true;
     reasons.push("Reduce logo size below 30% so it does not cover QR modules.");
-  } else if (hasLogo && design.logoSizeRatio > 0.2) {
-    reasons.push("Logo size is above 20% and may cover required QR modules.");
+  } else if (hasLogo && design.logoSizeRatio > defaultLogoSizeRatio) {
+    reasons.push("Logo size is above 26% and may cover required QR modules.");
   }
 
-  if (hasLogo && design.errorCorrectionLevel !== "H") {
-    reasons.push("Use high error correction when adding a logo.");
+  if (
+    hasLogo &&
+    !["Q", "H"].includes(design.errorCorrectionLevel)
+  ) {
+    reasons.push("Use quartile or high error correction when adding a logo.");
   }
 
   if (isBlocked) {
@@ -2898,19 +2832,11 @@ function normalizePhone(value: string): string {
   return value.replace(/[^\d+]/g, "");
 }
 
-function normalizeSlugInput(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 64);
-}
-
-function getDynamicRedirectUrl(slug: string): string {
+function getDynamicRedirectUrl(): string {
   const origin =
     typeof window === "undefined" ? "https://decode.local" : window.location.origin;
 
-  return `${origin}/r/${slug || "your-slug"}`;
+  return `${origin}/r/assigned-after-publish`;
 }
 
 function normalizeHexDraft(value: string): string {

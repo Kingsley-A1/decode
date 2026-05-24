@@ -46,6 +46,10 @@ export interface PreparedQRCode {
   readonly warnings: ReturnType<typeof getQRDesignWarnings>;
 }
 
+interface PrepareQRCodeOptions {
+  readonly dynamicSlug?: string | null;
+}
+
 export interface CreateQRCodeInput {
   readonly request: CreateQRCodeRequest;
   readonly userId?: string;
@@ -101,6 +105,8 @@ export interface DynamicDestinationClient {
   ): Promise<TResult>;
 }
 
+const GENERATED_DYNAMIC_SLUG_ATTEMPTS = 5;
+
 interface DynamicSlugLookupClient {
   readonly qRCode: {
     findUnique(
@@ -109,8 +115,11 @@ interface DynamicSlugLookupClient {
   };
 }
 
-export function prepareQRCode(request: CreateQRCodeRequest): PreparedQRCode {
-  const payload = getPreparedPayload(request);
+export function prepareQRCode(
+  request: CreateQRCodeRequest,
+  options: PrepareQRCodeOptions = {}
+): PreparedQRCode {
+  const payload = getPreparedPayload(request, options.dynamicSlug);
   const warnings = getQRDesignWarnings(request.design);
 
   return { payload, design: request.design, warnings };
@@ -120,9 +129,9 @@ export async function createQRCode({
   request,
   userId,
 }: CreateQRCodeInput) {
-  const preparedQRCode = prepareQRCode(request);
-
   if (!request.save) {
+    const preparedQRCode = prepareQRCode(request);
+
     return { qrCode: null, ...preparedQRCode };
   }
 
@@ -134,22 +143,45 @@ export async function createQRCode({
     userId,
     workspaceId: request.workspaceId,
   });
-  const title = request.title ?? getDefaultQRCodeTitle(preparedQRCode.payload);
   const isDynamic = request.mode === QR_CODE_MODE.DYNAMIC;
-  const slug = getDynamicQRCodeSlug(request);
+  const requestedSlug = getRequestedDynamicQRCodeSlug(request);
+  const attempts =
+    isDynamic && !requestedSlug ? GENERATED_DYNAMIC_SLUG_ATTEMPTS : 1;
 
-  const qrCode = await createQRCodeRecord({
-    request,
-    userId,
-    workspaceId,
-    title,
-    slug,
-    payload: preparedQRCode.payload,
-    design: preparedQRCode.design,
-    isDynamic,
-  });
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const slug = isDynamic
+      ? requestedSlug ?? createGeneratedDynamicSlug()
+      : null;
+    const preparedQRCode = prepareQRCode(request, { dynamicSlug: slug });
+    const title = request.title ?? getDefaultQRCodeTitle(preparedQRCode.payload);
 
-  return { qrCode, ...preparedQRCode };
+    try {
+      const qrCode = await createQRCodeRecord({
+        request,
+        userId,
+        workspaceId,
+        title,
+        slug,
+        payload: preparedQRCode.payload,
+        design: preparedQRCode.design,
+        isDynamic,
+      });
+
+      return { qrCode, ...preparedQRCode };
+    } catch (error) {
+      if (
+        !requestedSlug &&
+        error instanceof QRCodeConflictError &&
+        attempt < attempts - 1
+      ) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new QRCodeConflictError("Could not assign a unique dynamic QR slug.");
 }
 
 export const createStaticQRCode = createQRCode;
@@ -418,16 +450,19 @@ async function resolveWritableWorkspaceId({
   return defaultWorkspace.id;
 }
 
-function getPreparedPayload(request: CreateQRCodeRequest): BuiltQRPayload {
+function getPreparedPayload(
+  request: CreateQRCodeRequest,
+  dynamicSlug?: string | null
+): BuiltQRPayload {
   const payload = buildQRPayload(request);
 
   if (request.mode !== QR_CODE_MODE.DYNAMIC) {
     return payload;
   }
 
-  const slug = getDynamicQRCodeSlug(request);
+  const slug = getAssignedDynamicQRCodeSlug(request, dynamicSlug);
   if (!slug) {
-    throw new QRCodeStateError("Dynamic QR codes require a stable redirect slug.");
+    throw new QRCodeStateError("Dynamic QR codes require an assigned redirect slug.");
   }
 
   if (!payload.destinationUrl) {
@@ -445,12 +480,12 @@ function getPreparedPayload(request: CreateQRCodeRequest): BuiltQRPayload {
   };
 }
 
-function getDynamicQRCodeSlug(request: CreateQRCodeRequest): string | null {
+function getRequestedDynamicQRCodeSlug(
+  request: CreateQRCodeRequest
+): string | null {
   if (request.mode !== QR_CODE_MODE.DYNAMIC) return null;
 
-  if (!request.slug) {
-    throw new QRCodeStateError("Dynamic QR codes require a stable redirect slug.");
-  }
+  if (!request.slug) return null;
 
   const slug = normalizeDynamicSlug(request.slug);
   if (isReservedDynamicSlug(slug)) {
@@ -458,6 +493,17 @@ function getDynamicQRCodeSlug(request: CreateQRCodeRequest): string | null {
   }
 
   return slug;
+}
+
+function getAssignedDynamicQRCodeSlug(
+  request: CreateQRCodeRequest,
+  dynamicSlug?: string | null
+): string | null {
+  return getRequestedDynamicQRCodeSlug(request) ?? dynamicSlug ?? null;
+}
+
+function createGeneratedDynamicSlug(): string {
+  return `qr-${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
 async function assertDynamicSlugAvailable(

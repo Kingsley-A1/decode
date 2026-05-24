@@ -35,6 +35,28 @@ describe("dynamic QR service", () => {
     );
   });
 
+  it("accepts dynamic creation without a user-entered slug and prepares with the assigned slug", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://decode.example";
+    const request = createQRCodeRequestSchema.parse({
+      mode: QR_CODE_MODE.DYNAMIC,
+      save: true,
+      type: QR_CODE_TYPE.URL,
+      content: { url: "https://brand.example/promo" },
+    });
+
+    const preparedQRCode = prepareQRCode(request, {
+      dynamicSlug: "qr-generated123",
+    });
+
+    expect(request.slug).toBeUndefined();
+    expect(preparedQRCode.payload.value).toBe(
+      "https://decode.example/r/qr-generated123"
+    );
+    expect(preparedQRCode.payload.destinationUrl).toBe(
+      "https://brand.example/promo"
+    );
+  });
+
   it("updates destination without changing the stored QR redirect value and writes an audit log", async () => {
     const createdAt = new Date("2026-05-18T00:00:00.000Z");
     const updatedAt = new Date("2026-05-18T01:00:00.000Z");

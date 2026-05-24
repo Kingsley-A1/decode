@@ -55,20 +55,24 @@ function getQuietZoneWarning(
 function getLogoSizeWarning(
   design: QRDesignConfig
 ): QRDesignWarning | null {
-  if (design.logoSizeRatio <= 0.2) return null;
+  if (design.logoSizeRatio <= 0.26) return null;
 
   return {
     code: "LOGO_TOO_LARGE",
     severity: "warning",
     message:
-      "Logo size is above 20% of the QR area and may cover required modules.",
+      "Logo size is above 26% of the QR area and may cover required modules.",
   };
 }
 
 function getLogoErrorCorrectionWarning(
   design: QRDesignConfig
 ): QRDesignWarning | null {
-  if (design.logoSizeRatio <= 0 || design.errorCorrectionLevel === "H") {
+  if (
+    design.logoSizeRatio <= 0 ||
+    design.errorCorrectionLevel === "Q" ||
+    design.errorCorrectionLevel === "H"
+  ) {
     return null;
   }
 
@@ -76,7 +80,7 @@ function getLogoErrorCorrectionWarning(
     code: "LOW_ERROR_CORRECTION_WITH_LOGO",
     severity: "warning",
     message:
-      "Use high error correction when adding a logo to improve scan reliability.",
+      "Use quartile or high error correction when adding a logo to improve scan reliability.",
   };
 }
 
