@@ -9,13 +9,13 @@ import {
   Instagram,
   MapPin,
   Music2,
-  Phone,
   Pizza,
   Search,
   Sparkles,
   Utensils,
   X,
 } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
 
 type CategoryId =
   | "cakes"
@@ -50,6 +50,9 @@ interface Category {
   readonly label: string;
   readonly summary: string;
 }
+
+const sunflourWhatsAppPhone = "2348130000300";
+const sunflourDisplayPhone = "08130000300";
 
 const images = {
   cake:
@@ -891,6 +894,18 @@ function formatPriceSummary(item: MenuItem): string {
     .join(" / ");
 }
 
+function getWhatsAppUrl(message: string): string {
+  return `https://wa.me/${sunflourWhatsAppPhone}?text=${encodeURIComponent(message)}`;
+}
+
+function getGeneralEnquiryMessage(): string {
+  return "Hello Sunflour Bakery, I would like to make an enquiry about your menu.";
+}
+
+function getItemEnquiryMessage(item: MenuItem): string {
+  return `Hello Sunflour Bakery, I would like to enquire about ${item.name}. Please confirm availability, ordering details, and pickup timing.`;
+}
+
 function regularPizzaPrices(): readonly Price[] {
   return [
     { label: "Small", amount: "NGN 5,500" },
@@ -993,6 +1008,7 @@ export function SunflourMenuClient() {
         </section>
       </main>
       <ContactFooter />
+      <WhatsAppFloatingAction />
       <ItemModal item={selectedItem} onClose={() => setSelectedItemId(null)} />
     </div>
   );
@@ -1299,6 +1315,8 @@ function ItemModal({
 
   if (!item) return null;
 
+  const itemWhatsAppUrl = getWhatsAppUrl(getItemEnquiryMessage(item));
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:justify-center sm:p-6"
@@ -1390,11 +1408,14 @@ function ItemModal({
             )}
 
             <a
-              href="tel:08130000300"
-              className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#b22416] px-5 py-3 text-sm font-black text-[#fffdf8] transition hover:bg-[#911d12]"
+              href={itemWhatsAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Message Sunflour Bakery on WhatsApp about ${item.name}`}
+              className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#128c4a] px-5 py-3 text-sm font-black text-white shadow-[0_16px_36px_rgba(18,140,74,0.22)] transition hover:bg-[#0f773f] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#25d366]"
             >
-              <Phone className="h-4 w-4" aria-hidden="true" />
-              Call Sunflour to order
+              <FaWhatsapp className="h-5 w-5" aria-hidden="true" />
+              Enquire on WhatsApp
             </a>
           </div>
         </div>
@@ -1404,6 +1425,8 @@ function ItemModal({
 }
 
 function ContactFooter() {
+  const whatsAppUrl = getWhatsAppUrl(getGeneralEnquiryMessage());
+
   return (
     <footer className="border-t border-[#f0d9a8] bg-[#ffffff] px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto grid w-full max-w-7xl gap-6 md:grid-cols-[1fr,1.2fr]">
@@ -1424,11 +1447,14 @@ function ContactFooter() {
             <span>Atekong by Fiesta Fries</span>
           </a>
           <a
-            href="tel:08130000300"
+            href={whatsAppUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Message Sunflour Bakery on WhatsApp"
             className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#eed49b] bg-[#fffdf8] px-4 py-3 transition hover:border-[#b22416]"
           >
-            <Phone className="h-5 w-5 shrink-0 text-[#b22416]" aria-hidden="true" />
-            <span>08130000300</span>
+            <FaWhatsapp className="h-5 w-5 shrink-0 text-[#128c4a]" aria-hidden="true" />
+            <span>WhatsApp: {sunflourDisplayPhone}</span>
           </a>
           <a
             href="https://www.instagram.com/sunflour_bakery_calabar/"
@@ -1447,5 +1473,22 @@ function ContactFooter() {
         </div>
       </div>
     </footer>
+  );
+}
+
+function WhatsAppFloatingAction() {
+  const whatsAppUrl = getWhatsAppUrl(getGeneralEnquiryMessage());
+
+  return (
+    <a
+      href={whatsAppUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Message Sunflour Bakery on WhatsApp"
+      className="fixed bottom-4 right-4 z-40 inline-flex min-h-14 w-14 items-center justify-center rounded-full bg-[#128c4a] text-white shadow-[0_18px_45px_rgba(18,140,74,0.35)] transition hover:-translate-y-0.5 hover:bg-[#0f773f] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-[#25d366] sm:bottom-6 sm:right-6 sm:w-auto sm:gap-2 sm:px-5"
+    >
+      <FaWhatsapp className="h-6 w-6" aria-hidden="true" />
+      <span className="hidden text-sm font-black sm:inline">WhatsApp</span>
+    </a>
   );
 }
