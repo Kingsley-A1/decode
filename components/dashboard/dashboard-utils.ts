@@ -1,5 +1,6 @@
 import type {
   DashboardBreakdownRow,
+  DashboardQRDesignConfig,
   DashboardQRCode,
   DashboardQRMode,
   DashboardQRStatus,
@@ -71,7 +72,7 @@ export function getQRCodeDestinationLabel(qrCode: DashboardQRCode): string {
     return qrCode.destinationUrl ?? "No destination set";
   }
 
-  return `${getTypeLabel(qrCode.type)} content is encoded in the QR image`;
+  return qrCode.payloadValue ?? `${getTypeLabel(qrCode.type)} content is encoded in the QR image`;
 }
 
 export function buildSummaryFromRows(
@@ -105,11 +106,40 @@ export function normalizeQRCode(value: unknown): DashboardQRCode | null {
     status,
     slug: readNullableString(value.slug),
     destinationUrl: readNullableString(value.destinationUrl),
+    redirectUrl: readNullableString(value.redirectUrl),
+    payloadValue: readNullableString(value.payloadValue),
+    designConfig: readDesignConfig(value.designConfig),
     scanCount: readNumber(value.scanCount),
     createdAt: readDateString(value.createdAt),
     updatedAt: readDateString(value.updatedAt),
     publishedAt: readNullableDateString(value.publishedAt),
     archivedAt: readNullableDateString(value.archivedAt),
+  };
+}
+
+function readDesignConfig(value: unknown): DashboardQRDesignConfig | null {
+  if (!isRecord(value)) return null;
+
+  const errorCorrectionLevel = readString(value.errorCorrectionLevel);
+
+  if (
+    errorCorrectionLevel !== "L" &&
+    errorCorrectionLevel !== "M" &&
+    errorCorrectionLevel !== "Q" &&
+    errorCorrectionLevel !== "H"
+  ) {
+    return null;
+  }
+
+  return {
+    foregroundColor: readString(value.foregroundColor) || "#0F172A",
+    backgroundColor: readString(value.backgroundColor) || "#FFFFFF",
+    margin: readNumber(value.margin),
+    logoSizeRatio: readNumber(value.logoSizeRatio),
+    dotStyle: readString(value.dotStyle) || "square",
+    cornerStyle: readString(value.cornerStyle) || "square",
+    errorCorrectionLevel,
+    size: readNumber(value.size) || 1024,
   };
 }
 

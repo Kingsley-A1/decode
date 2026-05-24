@@ -10,10 +10,7 @@ import {
   Save,
   ShieldAlert,
 } from "lucide-react";
-import {
-  getDemoQRCodeById,
-  type DashboardQRCode,
-} from "@/components/dashboard/dashboard-data";
+import type { DashboardQRCode } from "@/components/dashboard/dashboard-data";
 import {
   getApiErrorMessage,
   getModeLabel,
@@ -48,6 +45,7 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
   const [destinationUrl, setDestinationUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -72,13 +70,12 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
       setQRCode(normalized);
       setDestinationUrl(normalized.destinationUrl ?? "");
     } catch (error) {
-      const previewQRCode = getDemoQRCodeById(qrCodeId);
-      setQRCode(previewQRCode);
-      setDestinationUrl(previewQRCode?.destinationUrl ?? "");
+      setQRCode(null);
+      setDestinationUrl("");
       setNotice(
         error instanceof Error
-          ? `${error.message} Editing is shown in preview mode when possible.`
-          : "Editing is shown in preview mode when possible."
+          ? error.message
+          : "Could not load QR code."
       );
     } finally {
       setIsLoading(false);
@@ -128,38 +125,46 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
       );
       setSaveStatus("Dynamic destination updated.");
     } catch (error) {
-      if (notice) {
-        setQRCode((current) =>
-          current
-            ? {
-                ...current,
-                destinationUrl: normalizeHttpUrl(destinationUrl),
-                updatedAt: new Date().toISOString(),
-              }
-            : current
-        );
-        setSaveStatus("Preview destination updated locally.");
-      } else {
-        setSaveError(
-          error instanceof Error
-            ? error.message
-            : "Could not update destination."
-        );
-      }
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Could not update destination."
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const confirmArchive = () => {
+  const confirmArchive = async () => {
     if (!qrCode) return;
 
-    setQRCode({
-      ...qrCode,
-      status: "archived",
-      archivedAt: new Date().toISOString(),
-    });
-    setShowArchiveDialog(false);
+    setIsArchiving(true);
+    setNotice(null);
+
+    try {
+      const response = await fetchJson<ApiResponse<{ qrCode?: unknown }>>(
+        `/api/qr-codes/${encodeURIComponent(qrCode.id)}/archive`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(response.error?.message ?? "Could not archive QR code.");
+      }
+
+      const normalized = normalizeQRCode(response.data?.qrCode);
+      if (normalized) setQRCode(normalized);
+      setShowArchiveDialog(false);
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Could not archive QR code."
+      );
+    } finally {
+      setIsArchiving(false);
+    }
   };
 
   if (isLoading) {
@@ -170,7 +175,7 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
     return (
       <EmptyState
         title="QR code not found"
-        description="This edit route is ready, but no matching saved QR code could be loaded."
+        description={notice ?? "No matching saved QR code could be loaded."}
         icon={<ShieldAlert className="h-6 w-6" aria-hidden="true" />}
         action={
           <Link
@@ -204,6 +209,7 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
           <Button
             variant="danger"
             onClick={() => setShowArchiveDialog(true)}
+            isLoading={isArchiving}
             leftIcon={<Archive className="h-4 w-4" aria-hidden="true" />}
           >
             Archive
@@ -212,7 +218,7 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
       </div>
 
       {notice && (
-        <Alert variant="info" title="Preview edit">
+        <Alert variant="warning" title="QR edit notice">
           {notice}
         </Alert>
       )}
@@ -334,6 +340,7 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
             <Button
               variant="danger"
               onClick={confirmArchive}
+              isLoading={isArchiving}
               leftIcon={<Archive className="h-4 w-4" aria-hidden="true" />}
             >
               Archive QR

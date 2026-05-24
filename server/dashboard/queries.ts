@@ -12,6 +12,7 @@ export interface WorkspaceDashboardInput {
 export interface WorkspaceDashboardAnalyticsInput extends WorkspaceDashboardInput {
   readonly take?: number;
   readonly cursorId?: string;
+  readonly qrCodeId?: string;
 }
 
 export async function getWorkspaceDashboardSummary({
@@ -50,6 +51,46 @@ export async function getWorkspaceDashboardSummary({
   };
 }
 
+export async function getWorkspaceQRCodeAnalytics({
+  workspaceId,
+  qrCodeId,
+}: WorkspaceDashboardInput & { readonly qrCodeId: string }) {
+  const qrCode = await prisma.qRCode.findFirst({
+    where: { id: qrCodeId, workspaceId, deletedAt: null },
+    select: qrCodeDashboardSelect,
+  });
+
+  if (!qrCode) return null;
+
+  const [
+    totalScans,
+    recentScans,
+    scanTrend,
+    scansByDeviceClass,
+    scansByReferrer,
+  ] = await Promise.all([
+    countWorkspaceScans(workspaceId, qrCodeId),
+    listRecentWorkspaceScans({ workspaceId, qrCodeId, take: 25 }),
+    listWorkspaceScanTrend({ workspaceId, qrCodeId }),
+    listWorkspaceScansByDeviceClass({ workspaceId, qrCodeId }),
+    listWorkspaceScansByReferrer({ workspaceId, qrCodeId }),
+  ]);
+
+  return {
+    totalQRCodes: 1,
+    dynamicQRCodes: qrCode.mode === QR_CODE_MODE.DYNAMIC ? 1 : 0,
+    totalScans,
+    recentActivityLabel:
+      totalScans > 0 ? `${totalScans} total scans` : "None",
+    recentQRCodes: [qrCode],
+    recentScans,
+    topQRCodes: [qrCode],
+    scanTrend,
+    scansByDeviceClass,
+    scansByReferrer,
+  };
+}
+
 function countWorkspaceQRCodes(workspaceId: string): Promise<number> {
   return prisma.qRCode.count({ where: { workspaceId, deletedAt: null } });
 }
@@ -60,8 +101,13 @@ function countWorkspaceDynamicQRCodes(workspaceId: string): Promise<number> {
   });
 }
 
-function countWorkspaceScans(workspaceId: string): Promise<number> {
-  return prisma.scanEvent.count({ where: getWorkspaceScanWhere(workspaceId) });
+function countWorkspaceScans(
+  workspaceId: string,
+  qrCodeId?: string
+): Promise<number> {
+  return prisma.scanEvent.count({
+    where: getWorkspaceScanWhere({ workspaceId, qrCodeId }),
+  });
 }
 
 function listRecentWorkspaceQRCodes(workspaceId: string) {
@@ -77,9 +123,13 @@ export function listRecentWorkspaceScans({
   workspaceId,
   take,
   cursorId,
+  qrCodeId,
 }: WorkspaceDashboardAnalyticsInput) {
   return prisma.scanEvent.findMany({
-    where: getWorkspaceScanWhere(workspaceId),
+    where: getWorkspaceScanWhere({
+      workspaceId,
+      qrCodeId,
+    }),
     orderBy: { scannedAt: "desc" },
     take: getBoundedTake(take, 25, 100),
     ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
@@ -122,10 +172,11 @@ export function listTopWorkspaceQRCodes({
 export async function listWorkspaceScansByDeviceClass({
   workspaceId,
   take,
+  qrCodeId,
 }: WorkspaceDashboardAnalyticsInput) {
   const rows = await prisma.scanEvent.groupBy({
     by: ["deviceClass"],
-    where: getWorkspaceScanWhere(workspaceId),
+    where: getWorkspaceScanWhere({ workspaceId, qrCodeId }),
     _count: { _all: true },
   });
 
@@ -141,11 +192,12 @@ export async function listWorkspaceScansByDeviceClass({
 export async function listWorkspaceScansByReferrer({
   workspaceId,
   take,
+  qrCodeId,
 }: WorkspaceDashboardAnalyticsInput) {
   const rows = await prisma.scanEvent.groupBy({
     by: ["referrer"],
     where: {
-      ...getWorkspaceScanWhere(workspaceId),
+      ...getWorkspaceScanWhere({ workspaceId, qrCodeId }),
       referrer: { not: null },
     },
     _count: { _all: true },
@@ -158,6 +210,26 @@ export async function listWorkspaceScansByReferrer({
     }))
     .sort(sortByCountDesc)
     .slice(0, getBoundedTake(take, 10, 50));
+}
+
+export async function listWorkspaceScanTrend({
+  workspaceId,
+  qrCodeId,
+}: WorkspaceDashboardAnalyticsInput) {
+  const since = new Date();
+  since.setDate(since.getDate() - 13);
+  since.setHours(0, 0, 0, 0);
+
+  const rows = await prisma.scanEvent.findMany({
+    where: {
+      ...getWorkspaceScanWhere({ workspaceId, qrCodeId }),
+      scannedAt: { gte: since },
+    },
+    orderBy: { scannedAt: "asc" },
+    select: { scannedAt: true },
+  });
+
+  return buildScanTrend(rows.map((row) => row.scannedAt), since, 14);
 }
 
 function sortByCountDesc(
@@ -177,10 +249,54 @@ function getBoundedTake(
   return Math.min(Math.max(take, 1), max);
 }
 
-function getWorkspaceScanWhere(workspaceId: string): Prisma.ScanEventWhereInput {
+export function getWorkspaceScanWhere({
+  workspaceId,
+  qrCodeId,
+}: {
+  readonly workspaceId: string;
+  readonly qrCodeId?: string;
+}): Prisma.ScanEventWhereInput {
   return {
     workspaceId,
+    ...(qrCodeId ? { qrCodeId } : {}),
     workspace: { deletedAt: null },
     qrCode: { deletedAt: null },
   };
+}
+
+function buildScanTrend(
+  scannedAtValues: readonly Date[],
+  since: Date,
+  days: number
+) {
+  const counts = new Map<string, number>();
+
+  for (let index = 0; index < days; index += 1) {
+    const date = new Date(since);
+    date.setDate(since.getDate() + index);
+    counts.set(getDateKey(date), 0);
+  }
+
+  for (const scannedAt of scannedAtValues) {
+    const key = getDateKey(scannedAt);
+    if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries()).map(([date, scans]) => ({
+    label: formatTrendLabel(date),
+    date,
+    scans,
+  }));
+}
+
+function getDateKey(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function formatTrendLabel(dateKey: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${dateKey}T00:00:00.000Z`));
 }

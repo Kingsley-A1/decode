@@ -11,7 +11,9 @@ import {
   QRCodePayloadError,
   QRCodeStateError,
 } from "@/server/qr/errors";
-import { getWorkspaceQRCode } from "@/server/qr/repository";
+import { getWorkspaceQRCodeAnalytics } from "@/server/dashboard/queries";
+import { toQRCodeDetail, toQRCodeListItem } from "@/server/qr/dto";
+import { getWorkspaceQRCodeDetail } from "@/server/qr/repository";
 import { updateDynamicQRCodeDestination } from "@/server/qr/service";
 import { updateQRCodeDestinationRequestSchema } from "@/server/qr/schemas";
 import {
@@ -55,7 +57,7 @@ export async function GET(request: Request, context: RouteContext) {
       });
     }
 
-    const qrCode = await getWorkspaceQRCode({ workspaceId, qrCodeId: id });
+    const qrCode = await getWorkspaceQRCodeDetail({ workspaceId, qrCodeId: id });
     if (!qrCode) {
       return apiError({
         code: "QR_CODE_NOT_FOUND",
@@ -65,7 +67,15 @@ export async function GET(request: Request, context: RouteContext) {
       });
     }
 
-    return apiSuccess({ data: { qrCode }, requestId });
+    const analytics = await getWorkspaceQRCodeAnalytics({
+      workspaceId,
+      qrCodeId: id,
+    });
+
+    return apiSuccess({
+      data: { qrCode: toQRCodeDetail(qrCode), analytics },
+      requestId,
+    });
   } catch (error) {
     return apiError({
       code: getAccessErrorCode(error),
@@ -100,7 +110,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       userId: session.userId,
     });
 
-    return apiSuccess({ data: result, requestId });
+    return apiSuccess({
+      data: { ...result, qrCode: toQRCodeListItem(result.qrCode) },
+      requestId,
+    });
   } catch (error) {
     if (error instanceof ZodError) {
       return apiValidationError({ error, requestId });

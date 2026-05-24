@@ -112,6 +112,7 @@ export function DashboardClient() {
     emptyDashboardSummary
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingArchive, setPendingArchive] = useState<DashboardQRCode | null>(
     null
@@ -195,17 +196,42 @@ export function DashboardClient() {
     summary.totalScans > 0 ||
     summary.dynamicQRCodes > 0;
 
-  const confirmArchive = () => {
+  const confirmArchive = async () => {
     if (!pendingArchive) return;
 
-    setRows((currentRows) =>
-      currentRows.map((row) =>
-        row.id === pendingArchive.id
-          ? { ...row, status: "archived", archivedAt: new Date().toISOString() }
-          : row
-      )
-    );
-    setPendingArchive(null);
+    setIsArchiving(true);
+    setNotice(null);
+
+    try {
+      const response = await fetchJson<ApiResponse<{ qrCode: unknown }>>(
+        `/api/qr-codes/${encodeURIComponent(pendingArchive.id)}/archive`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(response.error?.message ?? "Could not archive QR code.");
+      }
+
+      const archivedQRCode = normalizeQRCode(response.data?.qrCode);
+      if (archivedQRCode) {
+        setRows((currentRows) =>
+          currentRows.map((row) =>
+            row.id === archivedQRCode.id ? archivedQRCode : row
+          )
+        );
+      }
+      setPendingArchive(null);
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Could not archive QR code."
+      );
+    } finally {
+      setIsArchiving(false);
+    }
   };
 
   return (
@@ -312,6 +338,7 @@ export function DashboardClient() {
             <Button
               variant="danger"
               onClick={confirmArchive}
+              isLoading={isArchiving}
               leftIcon={<Archive className="h-4 w-4" aria-hidden="true" />}
             >
               Archive QR
@@ -484,10 +511,13 @@ function getDashboardKpis(summary: DashboardSummaryModel): readonly DashboardKpi
 
 async function fetchJson<TData>(
   url: string,
-  signal?: AbortSignal
+  initOrSignal?: RequestInit | AbortSignal
 ): Promise<TData> {
+  const signal = isAbortSignal(initOrSignal) ? initOrSignal : initOrSignal?.signal;
+  const init = isAbortSignal(initOrSignal) ? undefined : initOrSignal;
   const response = await fetch(url, {
-    headers: { Accept: "application/json" },
+    ...init,
+    headers: { Accept: "application/json", ...(init?.headers ?? {}) },
     signal,
   });
   const data = (await response.json().catch(() => null)) as unknown;
@@ -497,6 +527,10 @@ async function fetchJson<TData>(
   }
 
   return data as TData;
+}
+
+function isAbortSignal(value: RequestInit | AbortSignal | undefined): value is AbortSignal {
+  return Boolean(value && "aborted" in value && "addEventListener" in value);
 }
 
 function isExpectedEmptyAccessMessage(message: string): boolean {

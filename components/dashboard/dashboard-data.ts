@@ -9,11 +9,25 @@ export interface DashboardQRCode {
   readonly status: DashboardQRStatus;
   readonly slug: string | null;
   readonly destinationUrl: string | null;
+  readonly redirectUrl: string | null;
+  readonly payloadValue: string | null;
+  readonly designConfig: DashboardQRDesignConfig | null;
   readonly scanCount: number;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly publishedAt: string | null;
   readonly archivedAt: string | null;
+}
+
+export interface DashboardQRDesignConfig {
+  readonly foregroundColor: string;
+  readonly backgroundColor: string;
+  readonly margin: number;
+  readonly logoSizeRatio: number;
+  readonly dotStyle: string;
+  readonly cornerStyle: string;
+  readonly errorCorrectionLevel: "L" | "M" | "Q" | "H";
+  readonly size: number;
 }
 
 export interface DashboardScanEvent {
@@ -67,6 +81,9 @@ export const demoQRCodes: readonly DashboardQRCode[] = [
     status: "published",
     slug: "cafe-menu",
     destinationUrl: "https://decode.example/cafe/menu",
+    redirectUrl: "https://decode.example/r/cafe-menu",
+    payloadValue: "https://decode.example/r/cafe-menu",
+    designConfig: null,
     scanCount: 1248,
     createdAt: "2026-05-01T10:00:00.000Z",
     updatedAt: "2026-05-19T08:20:00.000Z",
@@ -81,6 +98,9 @@ export const demoQRCodes: readonly DashboardQRCode[] = [
     status: "published",
     slug: null,
     destinationUrl: null,
+    redirectUrl: null,
+    payloadValue: "WIFI:T:WPA;S:Guest;P:decode;;",
+    designConfig: null,
     scanCount: 386,
     createdAt: "2026-05-02T15:30:00.000Z",
     updatedAt: "2026-05-10T11:12:00.000Z",
@@ -95,6 +115,9 @@ export const demoQRCodes: readonly DashboardQRCode[] = [
     status: "published",
     slug: "launch",
     destinationUrl: "https://decode.example/waitlist",
+    redirectUrl: "https://decode.example/r/launch",
+    payloadValue: "https://decode.example/r/launch",
+    designConfig: null,
     scanCount: 812,
     createdAt: "2026-05-08T09:00:00.000Z",
     updatedAt: "2026-05-18T19:05:00.000Z",
@@ -109,6 +132,9 @@ export const demoQRCodes: readonly DashboardQRCode[] = [
     status: "published",
     slug: null,
     destinationUrl: null,
+    redirectUrl: null,
+    payloadValue: null,
+    designConfig: null,
     scanCount: 143,
     createdAt: "2026-05-03T13:10:00.000Z",
     updatedAt: "2026-05-05T16:45:00.000Z",
@@ -173,7 +199,3 @@ export const demoSummary: DashboardSummaryModel = {
     },
   ],
 };
-
-export function getDemoQRCodeById(id: string): DashboardQRCode | null {
-  return demoQRCodes.find((qrCode) => qrCode.id === id) ?? null;
-}

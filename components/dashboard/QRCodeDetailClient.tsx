@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -12,10 +12,11 @@ import {
 } from "lucide-react";
 import { DashboardAnalytics } from "@/components/dashboard/DashboardAnalytics";
 import {
-  demoSummary,
-  getDemoQRCodeById,
+  emptyDashboardSummary,
   type DashboardQRCode,
+  type DashboardSummaryModel,
 } from "@/components/dashboard/dashboard-data";
+import { useQRCode, type QROptions } from "@/hooks/useQRCode";
 import {
   formatDateTime,
   formatNumber,
@@ -25,6 +26,7 @@ import {
   getQRCodeEditHref,
   getStatusLabel,
   getTypeLabel,
+  normalizeSummary,
   normalizeQRCode,
 } from "@/components/dashboard/dashboard-utils";
 import {
@@ -50,7 +52,10 @@ interface QRCodeDetailClientProps {
 
 export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
   const [qrCode, setQRCode] = useState<DashboardQRCode | null>(null);
+  const [summary, setSummary] =
+    useState<DashboardSummaryModel>(emptyDashboardSummary);
   const [isLoading, setIsLoading] = useState(true);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
 
@@ -59,9 +64,9 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
     setNotice(null);
 
     try {
-      const response = await fetchJson<ApiResponse<{ qrCode: unknown }>>(
-        `/api/qr-codes/${encodeURIComponent(qrCodeId)}`
-      );
+      const response = await fetchJson<
+        ApiResponse<{ qrCode: unknown; analytics?: unknown }>
+      >(`/api/qr-codes/${encodeURIComponent(qrCodeId)}`);
 
       if (!response.ok) {
         throw new Error(response.error?.message ?? "Could not load QR code.");
@@ -71,13 +76,16 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
       if (!normalized) throw new Error("The QR code response was incomplete.");
 
       setQRCode(normalized);
+      setSummary(
+        normalizeSummary(response.data?.analytics) ?? emptyDashboardSummary
+      );
     } catch (error) {
-      const previewQRCode = getDemoQRCodeById(qrCodeId);
-      setQRCode(previewQRCode);
+      setQRCode(null);
+      setSummary(emptyDashboardSummary);
       setNotice(
         error instanceof Error
-          ? `${error.message} Showing preview detail data when available.`
-          : "Showing preview detail data when available."
+          ? error.message
+          : "Could not load this QR code."
       );
     } finally {
       setIsLoading(false);
@@ -88,15 +96,36 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
     void loadQRCode();
   }, [loadQRCode]);
 
-  const confirmArchive = () => {
+  const confirmArchive = async () => {
     if (!qrCode) return;
 
-    setQRCode({
-      ...qrCode,
-      status: "archived",
-      archivedAt: new Date().toISOString(),
-    });
-    setShowArchiveDialog(false);
+    setIsArchiving(true);
+    setNotice(null);
+
+    try {
+      const response = await fetchJson<ApiResponse<{ qrCode: unknown }>>(
+        `/api/qr-codes/${encodeURIComponent(qrCode.id)}/archive`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(response.error?.message ?? "Could not archive QR code.");
+      }
+
+      const normalized = normalizeQRCode(response.data?.qrCode);
+      if (normalized) setQRCode(normalized);
+      setShowArchiveDialog(false);
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Could not archive QR code."
+      );
+    } finally {
+      setIsArchiving(false);
+    }
   };
 
   if (isLoading) {
@@ -107,7 +136,7 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
     return (
       <EmptyState
         title="QR code not found"
-        description="This dashboard detail route is ready, but no matching saved QR code could be loaded."
+        description={notice ?? "No matching saved QR code could be loaded."}
         icon={<QrCode className="h-6 w-6" aria-hidden="true" />}
         action={
           <Link
@@ -142,6 +171,7 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
           <Button
             variant="danger"
             onClick={() => setShowArchiveDialog(true)}
+            isLoading={isArchiving}
             leftIcon={<Archive className="h-4 w-4" aria-hidden="true" />}
           >
             Archive
@@ -150,7 +180,7 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
       </div>
 
       {notice && (
-        <Alert variant="info" title="Preview detail">
+        <Alert variant="warning" title="QR detail notice">
           {notice}
         </Alert>
       )}
@@ -205,7 +235,7 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
 
         <aside className="space-y-4">
           <QRPreviewPanel>
-            <MiniQRPattern label={qrCode.title} />
+            <SavedQRCodePreview qrCode={qrCode} />
           </QRPreviewPanel>
           {qrCode.mode === "dynamic" ? (
             <Alert variant="info" title="Editable destination">
@@ -237,7 +267,7 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
         </div>
       </section>
 
-      <DashboardAnalytics summary={demoSummary} />
+      <DashboardAnalytics summary={summary} />
 
       <Dialog
         open={showArchiveDialog}
@@ -257,6 +287,7 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
             <Button
               variant="danger"
               onClick={confirmArchive}
+              isLoading={isArchiving}
               leftIcon={<Archive className="h-4 w-4" aria-hidden="true" />}
             >
               Archive QR
@@ -283,35 +314,67 @@ function InfoBlock({
   );
 }
 
-function MiniQRPattern({ label }: { readonly label: string }) {
+function SavedQRCodePreview({ qrCode }: { readonly qrCode: DashboardQRCode }) {
+  const qrOptions = useMemo<QROptions>(() => {
+    const design = qrCode.designConfig;
+
+    return {
+      data: qrCode.payloadValue ?? qrCode.redirectUrl ?? qrCode.destinationUrl ?? "",
+      width: 260,
+      height: 260,
+      margin: design?.margin ?? 16,
+      dotsColor: design?.foregroundColor ?? "#0F172A",
+      backgroundColor: design?.backgroundColor ?? "#FFFFFF",
+      dotsType: getQROptionDotStyle(design?.dotStyle),
+      cornersSquareType: getQROptionCornerStyle(design?.cornerStyle),
+      cornersDotType: design?.cornerStyle === "dot" ? "dot" : "square",
+      errorCorrectionLevel: design?.errorCorrectionLevel ?? "Q",
+      logoSize: 0,
+    };
+  }, [qrCode]);
+  const { ref, isReady } = useQRCode(qrOptions);
+
+  if (!qrOptions.data) {
+    return (
+      <div className="flex min-h-48 items-center justify-center text-center text-sm leading-6 text-slate-500">
+        No saved QR payload is available for this code.
+      </div>
+    );
+  }
+
   return (
     <div
-      aria-label={`${label} QR preview`}
-      className="grid aspect-square w-full max-w-[260px] grid-cols-9 gap-1 rounded-lg bg-white p-4"
-    >
-      {Array.from({ length: 81 }, (_, index) => {
-        const row = Math.floor(index / 9);
-        const column = index % 9;
-        const isFinder =
-          (row < 3 && column < 3) ||
-          (row < 3 && column > 5) ||
-          (row > 5 && column < 3);
-        const isActive =
-          isFinder || (row * 7 + column * 11 + label.length) % 4 !== 0;
-
-        return (
-          <span
-            key={index}
-            className={
-              isActive
-                ? "rounded-[3px] bg-slate-950"
-                : "rounded-[3px] bg-slate-100"
-            }
-          />
-        );
-      })}
-    </div>
+      ref={ref}
+      aria-label={`${qrCode.title} QR preview`}
+      className={`w-full overflow-hidden rounded-lg [&_canvas]:!h-auto [&_canvas]:!w-full ${
+        isReady ? "" : "animate-pulse"
+      }`}
+    />
   );
+}
+
+function getQROptionDotStyle(
+  value: string | undefined
+): QROptions["dotsType"] {
+  if (
+    value === "rounded" ||
+    value === "dots" ||
+    value === "classy" ||
+    value === "extra-rounded"
+  ) {
+    return value;
+  }
+
+  return "square";
+}
+
+function getQROptionCornerStyle(
+  value: string | undefined
+): QROptions["cornersSquareType"] {
+  if (value === "rounded") return "extra-rounded";
+  if (value === "dot") return "dot";
+
+  return "square";
 }
 
 function DetailSkeleton() {
@@ -324,8 +387,14 @@ function DetailSkeleton() {
   );
 }
 
-async function fetchJson<TData>(url: string): Promise<TData> {
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
+async function fetchJson<TData>(
+  url: string,
+  init?: RequestInit
+): Promise<TData> {
+  const response = await fetch(url, {
+    ...init,
+    headers: { Accept: "application/json", ...(init?.headers ?? {}) },
+  });
   const data = (await response.json().catch(() => null)) as unknown;
 
   if (!response.ok) {
