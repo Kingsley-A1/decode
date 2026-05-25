@@ -66,6 +66,12 @@ export const primaryNavItems: readonly NavigationItem[] = [
     label: "Pricing",
     description: "Compare Decode plans and manual payment options.",
   },
+  {
+    href: "/api",
+    icon: FileCode2,
+    label: "API",
+    description: "Integrate Decode APIs into external apps.",
+  },
 ] as const;
 
 export const appNavSections: readonly NavigationSection[] = [
@@ -117,6 +123,7 @@ export const appNavSections: readonly NavigationSection[] = [
         label: "Docs",
         description: "Learn the Decode workflows.",
       },
+      primaryNavItems[6],
       {
         href: "/review",
         icon: MessageSquareQuote,
@@ -160,6 +167,7 @@ export const menuNavItems: readonly NavigationItem[] = [
   primaryNavItems[3],
   primaryNavItems[4],
   primaryNavItems[5],
+  primaryNavItems[6],
   {
     href: "/decode",
     icon: FileCode2,

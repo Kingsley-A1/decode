@@ -77,6 +77,21 @@ test.describe("phase 8 release quality gate", () => {
     }
   });
 
+  test("api docs route documents the integration surface", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await page.goto("/api", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByRole("heading", { name: "Decode API documentation", level: 1 })
+    ).toBeVisible();
+    await expect(page.getByText("/api/qr-codes", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("/api/assets/presign", { exact: true })).toBeVisible();
+    await expect(page.getByText("https://decode.com.ng").first()).toBeVisible();
+    await waitForRouteHydration(page);
+    await expectNoDocumentOverflow(page);
+    await expectNoSeriousAxeViolations(page);
+  });
+
   test("common breakpoints render without horizontal overflow", async ({
     page,
   }, testInfo) => {
@@ -114,7 +129,7 @@ test.describe("phase 8 release quality gate", () => {
 
     let publishPayload: unknown;
 
-    await page.route("**/api/auth/session", async (route) => {
+    await page.route("**/api/auth/session**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -464,6 +479,7 @@ test.describe("phase 8 release quality gate", () => {
     await expect(
       page.getByRole("radio", { name: "Select Ticket frame" })
     ).toHaveAttribute("aria-checked", "true");
+    await expectQrCanvasToUseNeutralModules(page);
 
     const logoBuffer = createSolidLogoSvgBuffer("#EF4444");
     await page.locator("#qr-logo-upload").setInputFiles({
@@ -494,7 +510,10 @@ test.describe("phase 8 release quality gate", () => {
       Math.abs((framedPreviewBox?.width ?? 0) - (initialPreviewBox?.width ?? 0))
     ).toBeLessThanOrEqual(80);
 
-    await page.getByLabel("Background hex", { exact: true }).fill("#7C3AED");
+    await page
+      .locator("summary", { hasText: "Advanced design controls" })
+      .click();
+    await page.getByLabel("QR background hex", { exact: true }).fill("#0F172A");
     await expect(
       scanabilityMeter.getByText("Blocked for publish").first()
     ).toBeVisible();
@@ -531,7 +550,7 @@ test.describe("phase 8 release quality gate", () => {
 
     let publishPayload: unknown;
     let renderPayload: unknown;
-    await page.route("**/api/auth/session", async (route) => {
+    await page.route("**/api/auth/session**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -600,12 +619,14 @@ test.describe("phase 8 release quality gate", () => {
     await expect(
       page.getByRole("heading", { name: "Generate QR codes", level: 1 })
     ).toBeVisible();
+    await expect(page.getByLabel("Open profile")).toBeVisible();
 
     await page
       .getByRole("group", { name: "QR behavior" })
       .getByRole("button", { name: /dynamic/i })
       .click();
     await page.getByLabel("Destination URL").fill("https://kingtech.com.ng/");
+    await expect(page.getByLabel("QR preview").locator("canvas").first()).toBeVisible();
     await page.getByRole("button", { name: "Continue to design" }).click();
     await expect(
       page.getByRole("heading", { name: "2. Design and guardrails" })
@@ -622,10 +643,10 @@ test.describe("phase 8 release quality gate", () => {
     await expect(page.locator("body")).not.toContainText("decode.com.ngh");
     await expect(page.getByRole("button", { name: "Copy payload" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Download PNG" })).toBeDisabled();
+    await expect(page.getByLabel("QR preview").locator("canvas").first()).toBeVisible();
     await expect(
       page.getByLabel("QR preview").getByTestId("qr-payload-placeholder")
-    ).toBeVisible();
-    await expect(page.getByLabel("QR preview").locator("canvas")).toHaveCount(0);
+    ).toHaveCount(0);
 
     await page.getByRole("button", { name: "Publish dynamic QR" }).click();
     await expect(
@@ -663,6 +684,9 @@ test.describe("phase 8 release quality gate", () => {
     );
     await page.getByRole("button", { name: "Download PNG" }).click();
     await renderResponse;
+    await expect(
+      page.getByRole("heading", { name: "Sign in to finish export" })
+    ).toHaveCount(0);
     expect(renderPayload).toMatchObject({ format: "png" });
   });
 
@@ -1144,6 +1168,51 @@ async function expectQrPreviewCenterToBeColor(
         );
       },
       { message: "uploaded logo should render in the QR preview on first upload" }
+    )
+    .toBe(true);
+}
+
+async function expectQrCanvasToUseNeutralModules(page: Page) {
+  const canvas = page.getByLabel("QR preview").locator("canvas").first();
+
+  await expect
+    .poll(
+      async () => {
+        const pixelCounts = await canvas.evaluate((node) => {
+          const previewCanvas = node as HTMLCanvasElement;
+          const context = previewCanvas.getContext("2d");
+          if (!context) return null;
+
+          const { width, height } = previewCanvas;
+          const { data } = context.getImageData(0, 0, width, height);
+          let neutralDarkPixels = 0;
+          let accentBluePixels = 0;
+
+          for (let index = 0; index < data.length; index += 4) {
+            const red = data[index] ?? 0;
+            const green = data[index + 1] ?? 0;
+            const blue = data[index + 2] ?? 0;
+            const alpha = data[index + 3] ?? 0;
+
+            if (alpha < 255) continue;
+            if (red < 40 && green < 50 && blue < 70) neutralDarkPixels += 1;
+            if (red < 90 && green < 90 && blue > 140) accentBluePixels += 1;
+          }
+
+          return { neutralDarkPixels, accentBluePixels };
+        });
+
+        return Boolean(
+          pixelCounts &&
+            pixelCounts.neutralDarkPixels > 1_000 &&
+            pixelCounts.accentBluePixels < 10
+        );
+      },
+      {
+        message:
+          "frame accent color should not recolor the QR modules inside the canvas",
+        timeout: 15_000,
+      }
     )
     .toBe(true);
 }

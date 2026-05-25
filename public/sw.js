@@ -1,4 +1,4 @@
-const CACHE_NAME = "decode-v2";
+const CACHE_NAME = "decode-v3";
 const OFFLINE_URL = "/";
 
 const ASSETS_TO_CACHE = [
@@ -40,6 +40,10 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") {
+    return;
+  }
+
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() => {
@@ -48,22 +52,45 @@ self.addEventListener("fetch", (event) => {
         });
       })
     );
-  } else {
-    event.respondWith(
-      caches.match(event.request).then((response) => {
-        return (
-          response ||
-          fetch(event.request).then((fetchResponse) => {
-            if (fetchResponse.status === 200) {
-              const responseClone = fetchResponse.clone();
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(event.request, responseClone);
-              });
-            }
-            return fetchResponse;
-          })
-        );
-      })
-    );
+    return;
   }
+
+  if (!shouldCacheRequest(event.request)) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return (
+        response ||
+        fetch(event.request).then((fetchResponse) => {
+          if (fetchResponse.ok) {
+            const responseClone = fetchResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return fetchResponse;
+        })
+      );
+    })
+  );
 });
+
+function shouldCacheRequest(request) {
+  const url = new URL(request.url);
+
+  if (url.origin !== self.location.origin) return false;
+  if (url.pathname.startsWith("/api/")) return false;
+  if (url.pathname.startsWith("/admin")) return false;
+
+  if (url.pathname.startsWith("/_next/")) {
+    return ["font", "image", "script", "style"].includes(request.destination);
+  }
+
+  return (
+    ASSETS_TO_CACHE.includes(url.pathname) ||
+    ["font", "image", "script", "style"].includes(request.destination)
+  );
+}

@@ -1,13 +1,13 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   type ComponentType,
 } from "react";
-import { getSession } from "next-auth/react";
 import {
   AlertTriangle,
   Check,
@@ -36,6 +36,7 @@ import {
 } from "react-icons/fa";
 import { useQRCode, type QROptions } from "@/hooks/useQRCode";
 import { OAuthSignInPanel } from "@/components/auth/OAuthSignInPanel";
+import { getFreshClientSession } from "@/lib/client-auth";
 import { PageHeader } from "./PageHeader";
 import {
   Alert,
@@ -79,6 +80,7 @@ type FrameStyle =
   | "ticket"
   | "badge"
   | "minimal";
+type ClientAuthState = "checking" | "authenticated" | "anonymous";
 type LogoChoiceValue =
   | "none"
   | "upload"
@@ -137,6 +139,7 @@ interface FormState {
 interface DesignState {
   foregroundColor: string;
   backgroundColor: string;
+  frameColor: string;
   dotStyle: DotStyle;
   cornerStyle: CornerStyle;
   margin: number;
@@ -326,20 +329,21 @@ const exportFormatOptions: {
 ];
 
 const colorPresets = [
-  { name: "Ink", value: "#0f172a" },
-  { name: "Apple blue", value: "#007AFF" },
-  { name: "Cyan", value: "#0891b2" },
-  { name: "Violet", value: "#7c3aed" },
-  { name: "Green", value: "#047857" },
-  { name: "Amber", value: "#b45309" },
-  { name: "Rose", value: "#be123c" },
-  { name: "Slate", value: "#334155" },
+  { name: "Blue", value: "#2563EB" },
+  { name: "Violet", value: "#2B16D0" },
+  { name: "Red", value: "#D01616" },
+  { name: "Emerald", value: "#059669" },
+  { name: "Cyan", value: "#0891B2" },
+  { name: "Amber", value: "#B45309" },
+  { name: "Rose", value: "#BE123C" },
+  { name: "Ink", value: "#0F172A" },
 ];
 
 type PresetDesignState = Pick<
   DesignState,
   | "foregroundColor"
   | "backgroundColor"
+  | "frameColor"
   | "dotStyle"
   | "cornerStyle"
   | "margin"
@@ -395,6 +399,7 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
   clean: {
     foregroundColor: "#0F172A",
     backgroundColor: "#FFFFFF",
+    frameColor: "#2563EB",
     dotStyle: "square",
     cornerStyle: "square",
     margin: 16,
@@ -402,8 +407,9 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     frameStyle: "none",
   },
   corporate: {
-    foregroundColor: "#007AFF",
+    foregroundColor: "#0F172A",
     backgroundColor: "#FFFFFF",
+    frameColor: "#2563EB",
     dotStyle: "square",
     cornerStyle: "square",
     margin: 16,
@@ -411,8 +417,9 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     frameStyle: "classic",
   },
   event: {
-    foregroundColor: "#7C3AED",
-    backgroundColor: "#F5F3FF",
+    foregroundColor: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    frameColor: "#2B16D0",
     dotStyle: "dots",
     cornerStyle: "dot",
     margin: 16,
@@ -420,8 +427,9 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     frameStyle: "ticket",
   },
   menu: {
-    foregroundColor: "#047857",
-    backgroundColor: "#ECFDF5",
+    foregroundColor: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    frameColor: "#047857",
     dotStyle: "rounded",
     cornerStyle: "rounded",
     margin: 16,
@@ -429,8 +437,9 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     frameStyle: "minimal",
   },
   social: {
-    foregroundColor: "#0891B2",
-    backgroundColor: "#ECFEFF",
+    foregroundColor: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    frameColor: "#0891B2",
     dotStyle: "classy",
     cornerStyle: "dot",
     margin: 16,
@@ -438,8 +447,9 @@ const designPresets: Record<Exclude<DesignPreset, "custom">, PresetDesignState> 
     frameStyle: "scan-me",
   },
   coupon: {
-    foregroundColor: "#B45309",
-    backgroundColor: "#FFFBEB",
+    foregroundColor: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    frameColor: "#D01616",
     dotStyle: "extra-rounded",
     cornerStyle: "rounded",
     margin: 16,
@@ -769,6 +779,7 @@ const initialFormState: FormState = {
 const initialDesignState: DesignState = {
   foregroundColor: "#0F172A",
   backgroundColor: "#FFFFFF",
+  frameColor: "#2563EB",
   dotStyle: "square",
   cornerStyle: "square",
   margin: 16,
@@ -801,12 +812,27 @@ export function QRGenerator({
   const [authPromptVisible, setAuthPromptVisible] = useState(false);
   const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(false);
+  const [authState, setAuthState] = useState<ClientAuthState>("checking");
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const builderPanelRef = useRef<HTMLElement>(null);
   const builderTopRef = useRef<HTMLDivElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousStepRef = useRef(currentStep);
+
+  const refreshAuthSession = useCallback(async () => {
+    const session = await getFreshClientSession();
+
+    if (session?.user) {
+      setAuthState("authenticated");
+      setAuthPromptVisible(false);
+      setAuthPromptMessage(null);
+      return session;
+    }
+
+    setAuthState("anonymous");
+    return null;
+  }, []);
 
   const validation = useMemo(
     () => validateContent({ type, mode, form }),
@@ -843,6 +869,10 @@ export function QRGenerator({
         design.backgroundColor,
         initialDesignState.backgroundColor
       ),
+      frameColor: getSafeHex(
+        design.frameColor,
+        initialDesignState.frameColor
+      ),
     }),
     [design]
   );
@@ -855,7 +885,19 @@ export function QRGenerator({
     [type, logoChoice]
   );
   const stepIndex = ["content", "design", "export"].indexOf(currentStep);
-  const previewValue = payload?.value ?? "";
+  const previewValue = useMemo(() => {
+    if (payload?.value) return payload.value;
+
+    if (mode === "dynamic" && type === "url" && validation.isValid) {
+      try {
+        return normalizeHttpUrl(form.url);
+      } catch {
+        return "";
+      }
+    }
+
+    return "";
+  }, [form.url, mode, payload?.value, type, validation.isValid]);
   const hasPreviewPayload = Boolean(previewValue);
   const qrOptions = useMemo<QROptions>(() => ({
     data: previewValue,
@@ -916,6 +958,26 @@ export function QRGenerator({
     setDraftNotice("Restored your QR draft after sign-in.");
     window.localStorage.removeItem(qrGeneratorAuthDraftStorageKey);
   }, []);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void refreshAuthSession();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshAuthSession();
+      }
+    };
+
+    void refreshAuthSession();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshAuthSession]);
 
   useEffect(() => {
     if (previousStepRef.current === currentStep) return;
@@ -1082,7 +1144,7 @@ export function QRGenerator({
     setPublishError(null);
 
     try {
-      const session = await getSession();
+      const session = await refreshAuthSession();
 
       if (!session?.user) {
         persistAuthDraft();
@@ -1238,6 +1300,7 @@ export function QRGenerator({
         destinationUrl,
         signature: dynamicPublishSignature,
       });
+      setAuthState("authenticated");
       setAuthPromptVisible(false);
       setAuthPromptMessage(null);
       setPublishStatus(`Published dynamic QR: ${payloadValue}`);
@@ -1251,7 +1314,7 @@ export function QRGenerator({
   };
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4">
       {showHeader && (
         <PageHeader
           title="QR Generator"
@@ -1269,7 +1332,7 @@ export function QRGenerator({
               className="w-full overflow-hidden rounded-md [&_canvas]:!h-auto [&_canvas]:!w-full"
             />
           ) : (
-            <QRPayloadPlaceholder mode={mode} />
+            <QRPayloadPlaceholder mode={mode} compact />
           )
         }
         status={{
@@ -1286,10 +1349,10 @@ export function QRGenerator({
         </Alert>
       )}
 
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-start">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,65fr)_minmax(320px,30fr)] xl:items-start">
         <section
           ref={builderPanelRef}
-          className="min-w-0 space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:max-h-[calc(100dvh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-4"
+          className="min-w-0 space-y-5 xl:pr-2"
           data-testid="qr-builder-panel"
         >
           <div ref={builderTopRef} className="min-w-0 scroll-mt-28">
@@ -1348,7 +1411,9 @@ export function QRGenerator({
               publishStatus={publishStatus}
               publishError={publishError}
               isPublishing={isPublishing}
-              authPromptVisible={authPromptVisible}
+              authPromptVisible={
+                authPromptVisible && authState !== "authenticated"
+              }
               authPromptMessage={authPromptMessage}
               isCheckingAuth={isCheckingAuth}
               onBack={() => goToStep("design")}
@@ -1360,17 +1425,18 @@ export function QRGenerator({
           )}
         </section>
 
-        <aside className="hidden xl:block xl:w-[390px] xl:self-start">
+        <aside className="hidden min-w-0 xl:block xl:self-start">
           <div className="sticky top-24 space-y-3">
             <QRPreviewPanel
               isLoading={hasPreviewPayload && !isReady}
-              className="p-3"
-              previewClassName="max-w-[280px] p-4 shadow-[0_12px_36px_rgba(15,23,42,0.08)]"
+              variant="bare"
+              previewClassName="max-w-[300px] p-4 shadow-[0_12px_36px_rgba(15,23,42,0.08)]"
             >
               {hasPreviewPayload ? (
                 <QRFrame
                   key={design.frameStyle}
                   frameStyle={design.frameStyle}
+                  frameColor={renderableDesign.frameColor}
                   title={form.title}
                 >
                   <div
@@ -1399,6 +1465,9 @@ export function QRGenerator({
                   {mode === "dynamic" ? "Dynamic" : "Static"}
                 </Badge>
                 <Badge variant="neutral">{getTypeLabel(type)}</Badge>
+                {mode === "dynamic" && payload?.requiresPublish && (
+                  <Badge variant="warning">Preview only</Badge>
+                )}
                 <Badge variant={getScanabilityBadgeVariant(scanability.state)}>
                   {scanability.label}
                 </Badge>
@@ -1851,48 +1920,57 @@ function DesignStep({
         )}
       />
 
-      <div className="space-y-3">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ColorInput
-            label="Foreground hex"
-            value={design.foregroundColor}
-            onChange={(value) =>
-              onDesignChange((previous) => ({
-                ...previous,
-                foregroundColor: normalizeHexDraft(value),
-              }))
-            }
-          />
-          <ColorInput
-            label="Background hex"
-            value={design.backgroundColor}
-            onChange={(value) =>
-              onDesignChange((previous) => ({
-                ...previous,
-                backgroundColor: normalizeHexDraft(value),
-              }))
-            }
+      <FramePicker
+        value={design.frameStyle}
+        frameColor={design.frameColor}
+        onChange={(value) =>
+          onDesignChange((previous) => ({ ...previous, frameStyle: value }))
+        }
+      />
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] lg:items-end">
+          <div>
+            <ColorInput
+              label="Frame color hex"
+              value={design.frameColor}
+              onChange={(value) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  frameColor: normalizeHexDraft(value),
+                }))
+              }
+            />
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Frame color changes the border, label bar, and call-to-action only.
+              QR modules stay scan-safe unless changed in advanced controls.
+            </p>
+          </div>
+          <div
+            className="h-12 rounded-lg border border-slate-200 shadow-inner"
+            style={{ backgroundColor: getSafeHex(design.frameColor, "#2563EB") }}
+            aria-hidden="true"
           />
         </div>
 
         <div className="space-y-2">
-          <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
+          <p className="mt-4 flex items-center gap-2 text-sm font-medium text-slate-800">
             <Palette className="h-4 w-4" aria-hidden="true" />
-            Foreground presets
+            Frame color presets
           </p>
           <div className="flex flex-wrap gap-2">
             {colorPresets.map((preset) => (
               <ColorSwatch
                 key={preset.value}
                 color={preset.value}
-                label={`Use ${preset.name} foreground`}
+                label={`Use ${preset.name} frame color`}
                 isSelected={
-                  design.foregroundColor.toLowerCase() === preset.value
+                  design.frameColor.toLowerCase() === preset.value.toLowerCase()
                 }
                 onClick={() =>
                   onDesignChange((previous) => ({
                     ...previous,
-                    foregroundColor: preset.value.toUpperCase(),
+                    frameColor: preset.value.toUpperCase(),
                   }))
                 }
               />
@@ -1900,13 +1978,6 @@ function DesignStep({
           </div>
         </div>
       </div>
-
-      <FramePicker
-        value={design.frameStyle}
-        onChange={(value) =>
-          onDesignChange((previous) => ({ ...previous, frameStyle: value }))
-        }
-      />
 
       <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
         <FileUpload
@@ -1951,10 +2022,33 @@ function DesignStep({
 
       <DisclosureSection
         title="Advanced design controls"
-        description="Dots, corners, and export source size."
+        description="QR module colors, dots, corners, and export source size."
         defaultOpen={shouldOpenAdvanced}
       >
         <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ColorInput
+              label="QR dots hex"
+              value={design.foregroundColor}
+              onChange={(value) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  foregroundColor: normalizeHexDraft(value),
+                }))
+              }
+            />
+            <ColorInput
+              label="QR background hex"
+              value={design.backgroundColor}
+              onChange={(value) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  backgroundColor: normalizeHexDraft(value),
+                }))
+              }
+            />
+          </div>
+
           <div className="grid gap-4 lg:grid-cols-2">
             <ChoiceRail
               value={design.dotStyle}
@@ -2337,9 +2431,11 @@ function ExportStep({
 
 function FramePicker({
   value,
+  frameColor,
   onChange,
 }: {
   readonly value: FrameStyle;
+  readonly frameColor: string;
   readonly onChange: (value: FrameStyle) => void;
 }) {
   return (
@@ -2357,7 +2453,10 @@ function FramePicker({
       data-testid="frame-picker"
       railTestId="frame-picker-rail"
       renderPreview={(option) => (
-        <FrameThumbnail frameStyle={option.value as FrameStyle} />
+        <FrameThumbnail
+          frameStyle={option.value as FrameStyle}
+          frameColor={frameColor}
+        />
       )}
       getDescription={(option) => {
         const frameOption = frameOptions.find(
@@ -2378,10 +2477,21 @@ function FramePicker({
   );
 }
 
-function FrameThumbnail({ frameStyle }: { readonly frameStyle: FrameStyle }) {
+function FrameThumbnail({
+  frameStyle,
+  frameColor,
+}: {
+  readonly frameStyle: FrameStyle;
+  readonly frameColor: string;
+}) {
   return (
     <div className="flex h-24 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-white p-2 sm:h-28">
-      <QRFrame frameStyle={frameStyle} title="Scan me" isThumbnail>
+      <QRFrame
+        frameStyle={frameStyle}
+        frameColor={frameColor}
+        title="Scan me"
+        isThumbnail
+      >
         <MiniQRCode />
       </QRFrame>
     </div>
@@ -2405,42 +2515,70 @@ function MiniQRCode() {
   );
 }
 
-function QRPayloadPlaceholder({ mode }: { readonly mode: QRMode }) {
+function QRPayloadPlaceholder({
+  mode,
+  compact = false,
+}: {
+  readonly mode: QRMode;
+  readonly compact?: boolean;
+}) {
   const isDynamic = mode === "dynamic";
 
   return (
     <div
-      className="flex aspect-square w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center"
+      className={
+        compact
+          ? "flex aspect-square w-full min-w-0 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 text-sky-700"
+          : "flex aspect-square w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center"
+      }
       data-testid="qr-payload-placeholder"
     >
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-slate-200">
-        <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+      <span
+        className={
+          compact
+            ? "inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-slate-200"
+            : "inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-slate-200"
+        }
+      >
+        <AlertTriangle
+          className={compact ? "h-4 w-4" : "h-5 w-5"}
+          aria-hidden="true"
+        />
       </span>
-      <p className="text-sm font-semibold text-slate-900">
-        {isDynamic ? "Publish first" : "Add content"}
-      </p>
-      <p className="max-w-48 text-xs leading-5 text-slate-600">
-        {isDynamic
-          ? "The QR preview appears after Decode assigns a public link."
-          : "Complete the content step to render a QR preview."}
-      </p>
+      {!compact && (
+        <>
+          <p className="text-sm font-semibold text-slate-900">
+            {isDynamic ? "Add destination" : "Add content"}
+          </p>
+          <p className="max-w-48 text-xs leading-5 text-slate-600">
+            {isDynamic
+              ? "Enter a valid destination URL to preview before publishing."
+              : "Complete the content step to render a QR preview."}
+          </p>
+        </>
+      )}
     </div>
   );
 }
 
 function QRFrame({
   frameStyle,
+  frameColor,
   title,
   isThumbnail = false,
   children,
 }: {
   readonly frameStyle: FrameStyle;
+  readonly frameColor: string;
   readonly title: string;
   readonly isThumbnail?: boolean;
   readonly children: React.ReactNode;
 }) {
   const safeTitle = title.trim() || "Scan me";
   const displayTitle = getShortFrameTitle(safeTitle);
+  const accentColor = getSafeHex(frameColor, initialDesignState.frameColor);
+  const accentSoft = hexToRgba(accentColor, 0.1);
+  const accentSofter = hexToRgba(accentColor, 0.06);
   const qrSlotClass = isThumbnail
     ? "mx-auto w-14"
     : "mx-auto w-[84%] max-w-[208px]";
@@ -2454,7 +2592,7 @@ function QRFrame({
         className={
           isThumbnail
             ? "mx-auto w-16 rounded-md bg-white p-1 ring-1 ring-slate-100"
-            : "mx-auto w-full max-w-[232px]"
+            : "mx-auto w-full max-w-[232px] rounded-xl bg-white p-1 ring-1 ring-slate-100"
         }
       >
         {children}
@@ -2465,7 +2603,8 @@ function QRFrame({
   if (frameStyle === "scan-me") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-xl border border-slate-200 bg-white text-center`}
+        className={`${frameWidthClass} mx-auto rounded-2xl border-4 bg-white text-center shadow-sm`}
+        style={{ borderColor: accentColor }}
       >
         <div className={isThumbnail ? "px-3 pt-2" : "px-4 pt-4"}>
           <div className={qrSlotClass}>{children}</div>
@@ -2473,9 +2612,10 @@ function QRFrame({
         <p
           className={
             isThumbnail
-              ? "mx-auto my-1 inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[7px] font-semibold uppercase text-sky-700"
-              : "mx-auto my-2.5 inline-flex rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-sky-700"
+              ? "mx-auto my-1 inline-flex rounded-full px-2 py-0.5 text-[7px] font-semibold uppercase text-white"
+              : "mx-auto my-2.5 inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white"
           }
+          style={{ backgroundColor: accentColor }}
         >
           Scan me
         </p>
@@ -2486,15 +2626,17 @@ function QRFrame({
   if (frameStyle === "classic") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-xl border border-slate-200 bg-white text-center`}
+        className={`${frameWidthClass} mx-auto overflow-hidden rounded-2xl border-4 bg-white text-center shadow-sm`}
+        style={{ borderColor: accentColor }}
       >
         <p
           title={safeTitle}
           className={
             isThumbnail
-              ? "truncate border-b border-slate-100 px-3 py-1 text-[7px] font-semibold text-slate-600"
-              : "truncate border-b border-slate-100 px-5 py-2 text-xs font-semibold text-slate-700"
+              ? "truncate px-3 py-1 text-[7px] font-bold uppercase text-white"
+              : "truncate px-5 py-2 text-xs font-bold uppercase tracking-normal text-white"
           }
+          style={{ backgroundColor: accentColor }}
         >
           {displayTitle}
         </p>
@@ -2508,19 +2650,30 @@ function QRFrame({
   if (frameStyle === "ticket") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-xl border border-dashed border-sky-300 bg-sky-50/30 text-center`}
+        className={`${frameWidthClass} mx-auto rounded-2xl border-4 bg-white text-center shadow-sm`}
+        style={{ borderColor: accentColor }}
       >
         <div className={isThumbnail ? "px-3 pt-2" : "px-4 pt-4"}>
           <div className={qrSlotClass}>{children}</div>
         </div>
+        <span
+          className={
+            isThumbnail
+              ? "mx-auto block h-0 w-0 border-x-[7px] border-b-[7px] border-x-transparent"
+              : "mx-auto block h-0 w-0 border-x-[11px] border-b-[11px] border-x-transparent"
+          }
+          style={{ borderBottomColor: accentColor }}
+          aria-hidden="true"
+        />
         <p
           className={
             isThumbnail
-              ? "mt-1 border-t border-dashed border-sky-200 px-3 py-1 text-[7px] font-bold uppercase text-sky-800"
-              : "mt-4 border-t border-dashed border-sky-200 px-5 py-2 text-[11px] font-bold uppercase tracking-normal text-sky-800"
+              ? "rounded-b-xl px-3 py-1 text-[7px] font-bold uppercase text-white"
+              : "rounded-b-xl px-5 py-2 text-[11px] font-bold uppercase tracking-normal text-white"
           }
+          style={{ backgroundColor: accentColor }}
         >
-          Ticket
+          Scan me
         </p>
       </div>
     );
@@ -2529,10 +2682,14 @@ function QRFrame({
   if (frameStyle === "badge") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-xl border border-slate-200 bg-white text-center`}
+        className={`${frameWidthClass} mx-auto rounded-2xl border bg-white text-center shadow-sm`}
+        style={{ borderColor: accentSoft, backgroundColor: accentSofter }}
       >
         <div className={isThumbnail ? "p-2 pb-1" : "p-4 pb-2"}>
-          <div className="rounded-lg bg-slate-50/80 p-2 ring-1 ring-slate-100">
+          <div
+            className="rounded-xl bg-white p-2 ring-1"
+            style={{ boxShadow: `inset 0 0 0 1px ${accentSoft}` }}
+          >
             <div className={qrSlotClass}>{children}</div>
           </div>
         </div>
@@ -2540,9 +2697,10 @@ function QRFrame({
           title={safeTitle}
           className={
             isThumbnail
-              ? "truncate px-3 pb-2 text-[7px] font-semibold text-slate-700"
-              : "truncate px-4 pb-3 text-xs font-semibold text-slate-700"
+              ? "truncate px-3 pb-2 text-[7px] font-bold uppercase"
+              : "truncate px-4 pb-3 text-xs font-bold uppercase"
           }
+          style={{ color: accentColor }}
         >
           {displayTitle}
         </p>
@@ -2552,14 +2710,16 @@ function QRFrame({
 
   return (
     <div
-      className={`${frameWidthClass} mx-auto rounded-xl border border-slate-200 bg-white text-center`}
+      className={`${frameWidthClass} mx-auto rounded-2xl border bg-white text-center shadow-sm`}
+      style={{ borderColor: accentSoft }}
     >
       <p
         className={
           isThumbnail
-            ? "px-3 pt-2 text-[7px] font-bold uppercase text-sky-700"
-            : "px-5 pt-4 text-[11px] font-bold uppercase tracking-normal text-sky-700"
+            ? "px-3 pt-2 text-[7px] font-bold uppercase"
+            : "px-5 pt-4 text-[11px] font-bold uppercase tracking-normal"
         }
+        style={{ color: accentColor }}
       >
         Scan
       </p>
@@ -2903,12 +3063,14 @@ function getApiDesign(design: DesignState, hasLogo: boolean) {
       design.backgroundColor,
       initialDesignState.backgroundColor
     ),
+    frameColor: getSafeHex(design.frameColor, initialDesignState.frameColor),
     margin: design.margin,
     logoSizeRatio: hasLogo ? design.logoSizeRatio : 0,
     dotStyle: design.dotStyle,
     cornerStyle: design.cornerStyle,
     errorCorrectionLevel: design.errorCorrectionLevel,
     size: design.size,
+    frameStyle: design.frameStyle,
   };
 }
 
@@ -3045,6 +3207,15 @@ function getSafeHex(value: string, fallback: string): string {
   const normalizedValue = normalizeHexDraft(value);
 
   return isValidHexColor(normalizedValue) ? normalizedValue : fallback;
+}
+
+function hexToRgba(value: string, alpha: number): string {
+  const safeValue = getSafeHex(value, initialDesignState.frameColor);
+  const red = Number.parseInt(safeValue.slice(1, 3), 16);
+  const green = Number.parseInt(safeValue.slice(3, 5), 16);
+  const blue = Number.parseInt(safeValue.slice(5, 7), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 function isValidHexColor(value: string): boolean {

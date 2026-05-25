@@ -5,6 +5,7 @@ interface QRPreviewPanelProps {
   children: ReactNode;
   isLoading?: boolean;
   action?: ReactNode;
+  variant?: "card" | "bare";
   className?: string;
   previewClassName?: string;
 }
@@ -13,13 +14,16 @@ export function QRPreviewPanel({
   children,
   isLoading = false,
   action,
+  variant = "card",
   className,
   previewClassName,
 }: QRPreviewPanelProps) {
   return (
     <section
       className={cn(
-        "rounded-xl border border-slate-200 bg-white p-4 shadow-sm",
+        variant === "card"
+          ? "rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+          : "p-0",
         className
       )}
       aria-label="QR preview"

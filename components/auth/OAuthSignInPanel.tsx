@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { Github, Loader2, ShieldCheck } from "lucide-react";
+import { getFreshClientSession } from "@/lib/client-auth";
 import { cn } from "@/lib/utils";
 
 interface OAuthSignInPanelProps {
@@ -11,6 +12,7 @@ interface OAuthSignInPanelProps {
   readonly title?: string;
   readonly description?: string;
   readonly className?: string;
+  readonly hideWhenAuthenticated?: boolean;
   readonly onBeforeSignIn?: () => void;
 }
 
@@ -57,12 +59,29 @@ export function OAuthSignInPanel({
   title = "Sign in to continue",
   description = "Use Google or GitHub to access your Decode workspace.",
   className,
+  hideWhenAuthenticated = true,
   onBeforeSignIn,
 }: OAuthSignInPanelProps) {
   const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(
     null
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [sessionState, setSessionState] = useState<
+    "checking" | "authenticated" | "anonymous"
+  >("checking");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getFreshClientSession().then((session) => {
+      if (!isMounted) return;
+      setSessionState(session?.user ? "authenticated" : "anonymous");
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSignIn = async (provider: OAuthProvider) => {
     if (pendingProvider) return;
@@ -81,6 +100,8 @@ export function OAuthSignInPanel({
     }
   };
 
+  if (hideWhenAuthenticated && sessionState === "authenticated") return null;
+
   return (
     <section
       className={cn(
@@ -89,7 +110,7 @@ export function OAuthSignInPanel({
       )}
       aria-labelledby="oauth-sign-in-title"
       aria-describedby="oauth-sign-in-description oauth-sign-in-trust"
-      aria-busy={Boolean(pendingProvider)}
+      aria-busy={Boolean(pendingProvider) || sessionState === "checking"}
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -118,7 +139,7 @@ export function OAuthSignInPanel({
             key={provider.id}
             provider={provider}
             isLoading={pendingProvider === provider.id}
-            isDisabled={Boolean(pendingProvider)}
+            isDisabled={Boolean(pendingProvider) || sessionState === "checking"}
             onClick={() => void handleSignIn(provider.id)}
           />
         ))}

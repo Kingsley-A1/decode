@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Menu, Plus, UserRound, X } from "lucide-react";
-import { getSession } from "next-auth/react";
+import { getFreshClientSession } from "@/lib/client-auth";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 import {
@@ -31,26 +31,38 @@ export function NavBar() {
   useEffect(() => {
     let isMounted = true;
 
-    getSession()
-      .then((session) => {
-        if (!isMounted) return;
+    const syncAuthState = async () => {
+      const session = await getFreshClientSession();
+      if (!isMounted) return;
 
-        if (session) {
-          rememberKnownUser();
-          setAuthState("authenticated");
-          return;
-        }
+      if (session?.user) {
+        rememberKnownUser();
+        setAuthState("authenticated");
+        return;
+      }
 
-        setAuthState(getSignedOutAuthState());
-      })
-      .catch(() => {
-        if (isMounted) setAuthState(getSignedOutAuthState());
-      });
+      setAuthState(getSignedOutAuthState());
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void syncAuthState();
+      }
+    };
+    const handleFocus = () => {
+      void syncAuthState();
+    };
+
+    void syncAuthState();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isMounted = false;
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     if (!isMenuOpen) return;

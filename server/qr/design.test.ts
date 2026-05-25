@@ -6,12 +6,14 @@ describe("getQRDesignWarnings", () => {
     const warnings = getQRDesignWarnings({
       foregroundColor: "#FFFFFF",
       backgroundColor: "#F8FAFC",
+      frameColor: "#2563EB",
       margin: 1,
       logoSizeRatio: 0.27,
       dotStyle: "square",
       cornerStyle: "square",
       errorCorrectionLevel: "M",
       size: 512,
+      frameStyle: "none",
     });
 
     expect(warnings.map((warning) => warning.code)).toEqual([

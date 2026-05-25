@@ -9,12 +9,14 @@ const baseRequest = {
   design: {
     foregroundColor: "#0F172A",
     backgroundColor: "#FFFFFF",
+    frameColor: "#2563EB",
     margin: 4,
     logoSizeRatio: 0,
     dotStyle: "square",
     cornerStyle: "square",
     errorCorrectionLevel: "Q",
     size: 256,
+    frameStyle: "none",
   },
 } as const;
 
