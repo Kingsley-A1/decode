@@ -57,6 +57,13 @@ export function createQRCodeAsset(input: CreateQRCodeAssetInput) {
   });
 }
 
+export function findReadyQRCodeExportByKey(key: string) {
+  return prisma.qRCodeAsset.findFirst({
+    where: { key, status: ASSET_STATUS.READY, deletedAt: null },
+    select: qrCodeAssetSelect,
+  });
+}
+
 export function getWorkspaceAsset({ workspaceId, assetId }: WorkspaceAssetInput) {
   return prisma.qRCodeAsset.findFirst({
     where: {

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { SCAN_BOT_DEVICE_CLASS } from "@/server/analytics/constants";
 import { QR_CODE_MODE } from "@/server/qr/constants";
 import { qrCodeDashboardSelect } from "@/server/qr/selectors";
 
@@ -259,6 +260,9 @@ export function getWorkspaceScanWhere({
   return {
     workspaceId,
     ...(qrCodeId ? { qrCodeId } : {}),
+    // Bots are recorded but excluded from human-facing metrics so analytics
+    // counts agree with the denormalized QRCode.scanCount.
+    deviceClass: { not: SCAN_BOT_DEVICE_CLASS },
     workspace: { deletedAt: null },
     qrCode: { deletedAt: null },
   };

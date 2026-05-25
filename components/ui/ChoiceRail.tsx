@@ -25,8 +25,9 @@ interface ChoiceRailProps<
   options: readonly TOption[];
   onChange: (value: TValue) => void;
   label: string;
-  size?: "sm" | "md" | "lg" | "icon";
+  size?: "sm" | "md" | "lg" | "icon" | "frame";
   desktopColumns?: 2 | 3 | 4;
+  layout?: "responsive-grid" | "horizontal";
   renderPreview?: (
     option: TOption,
     isSelected: boolean
@@ -47,6 +48,8 @@ const sizeClasses = {
   icon: "min-h-[86px] min-w-[88px] max-w-[96px] px-2 py-2",
   md: "min-h-16 min-w-[180px] px-3 py-3",
   lg: "min-h-[148px] min-w-[156px] max-w-[156px] p-2 sm:min-h-[184px] sm:min-w-0 sm:max-w-none sm:p-3",
+  frame:
+    "min-h-[124px] min-w-[132px] max-w-[132px] p-2 sm:min-h-[132px] sm:min-w-[140px] sm:max-w-[140px]",
 };
 
 const desktopColumnClasses = {
@@ -65,6 +68,7 @@ export function ChoiceRail<
   label,
   size = "sm",
   desktopColumns = 3,
+  layout = "responsive-grid",
   renderPreview,
   getDescription,
   className,
@@ -172,8 +176,8 @@ export function ChoiceRail<
         aria-describedby={selectedDescription ? descriptionId : undefined}
         className={cn(
           "flex min-w-0 gap-2 overflow-x-auto pb-2 [scroll-snap-type:x_mandatory]",
-          desktopColumnClasses[desktopColumns],
-          size === "lg" && "gap-3",
+          layout === "responsive-grid" && desktopColumnClasses[desktopColumns],
+          (size === "lg" || size === "frame") && "gap-3",
           railClassName
         )}
         data-testid={railTestId}

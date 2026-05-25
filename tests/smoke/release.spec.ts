@@ -88,6 +88,45 @@ test.describe("phase 8 release quality gate", () => {
     await expect(page.getByText("/api/assets/presign", { exact: true })).toBeVisible();
     await expect(page.getByText("https://decode.com.ng").first()).toBeVisible();
     await waitForRouteHydration(page);
+    const staticExample = page
+      .locator("article", { hasText: "Create a static QR payload" })
+      .first();
+    await expect(staticExample.getByRole("tab", { name: "JS" })).toBeVisible();
+    await staticExample.getByRole("tab", { name: "TS" }).click();
+    await expect(staticExample.getByText("DecodeApiResponse")).toBeVisible();
+    await staticExample.getByRole("tab", { name: "PY" }).click();
+    await expect(staticExample.getByText("import requests")).toBeVisible();
+    await staticExample.getByRole("button", { name: "Edit request" }).click();
+    await staticExample.getByRole("textbox", { name: "Editable request body JSON" }).fill(
+      JSON.stringify(
+        {
+          mode: "static",
+          save: false,
+          type: "url",
+          title: "Partner test",
+          content: { url: "https://partner.example/catalog" },
+          design: {
+            foregroundColor: "#0F172A",
+            backgroundColor: "#FFFFFF",
+            frameColor: "#2563EB",
+            frameStyle: "classic",
+          },
+        },
+        null,
+        2
+      )
+    );
+    await staticExample.getByRole("button", { name: "Close editor" }).click();
+    await expect(staticExample.getByRole("button", { name: "Copy code" })).toBeVisible();
+    await expect(staticExample.getByRole("button", { name: "Run request" })).toBeVisible();
+    await staticExample.getByRole("button", { name: "Run request" }).click();
+    await expect(staticExample.getByText(/^20[01]$/)).toBeVisible({
+      timeout: 30_000,
+    });
+    await staticExample.getByRole("button", { name: "Close run result" }).click();
+    await expect(
+      staticExample.getByRole("button", { name: "Close run result" })
+    ).toHaveCount(0);
     await expectNoDocumentOverflow(page);
     await expectNoSeriousAxeViolations(page);
   });
@@ -460,27 +499,37 @@ test.describe("phase 8 release quality gate", () => {
     await expect(page.getByLabel("QR preview")).toBeVisible();
     const initialPreviewBox = await page.getByLabel("QR preview").boundingBox();
 
+    const continueToDesign = page.getByRole("button", {
+      name: "Continue to design",
+    });
+    await page.getByLabel("Website URL").fill("https//decode.com.ng/phase-8");
+    await expect(
+      page.getByText("Add a colon after the protocol")
+    ).toBeVisible();
+    await expect(continueToDesign).toBeDisabled();
     await page.getByLabel("Website URL").fill("https://decode.com.ng/phase-8");
-    await page.getByRole("button", { name: "Continue to design" }).click();
+    await continueToDesign.click();
     await expect(
       page.getByRole("heading", { name: "2. Design and guardrails" })
     ).toBeVisible();
 
     await expect(
-      page.getByRole("radiogroup", { name: "Template preset" })
-    ).toBeVisible();
+      page.getByRole("tab", { name: "Template preset" })
+    ).toHaveAttribute("aria-selected", "true");
     await expect(
-      page.getByRole("radiogroup", { name: "QR frame" })
+      page.getByRole("radiogroup", { name: "Template preset" })
     ).toBeVisible();
 
     const eventPreset = page.getByRole("radio", { name: "Event" });
     await eventPreset.click();
     await expect(eventPreset).toHaveAttribute("aria-checked", "true");
+    await page.getByRole("tab", { name: "QR frame" }).click();
     await expect(
       page.getByRole("radio", { name: "Select Ticket frame" })
     ).toHaveAttribute("aria-checked", "true");
     await expectQrCanvasToUseNeutralModules(page);
 
+    await page.getByRole("tab", { name: "Logo" }).click();
     const logoBuffer = createSolidLogoSvgBuffer("#EF4444");
     await page.locator("#qr-logo-upload").setInputFiles({
       name: "decode-logo.svg",
@@ -493,6 +542,7 @@ test.describe("phase 8 release quality gate", () => {
       maxBlue: 120,
     });
 
+    await page.getByRole("tab", { name: "QR frame" }).click();
     const scanMeFrame = page.getByRole("radio", {
       name: "Select Scan me frame",
     });
@@ -510,21 +560,28 @@ test.describe("phase 8 release quality gate", () => {
       Math.abs((framedPreviewBox?.width ?? 0) - (initialPreviewBox?.width ?? 0))
     ).toBeLessThanOrEqual(80);
 
-    await page
-      .locator("summary", { hasText: "Advanced design controls" })
-      .click();
-    await page.getByLabel("QR background hex", { exact: true }).fill("#0F172A");
+    await page.getByRole("tab", { name: "Color" }).click();
+    await page.getByLabel("Background color hex", { exact: true }).fill("#0F172A");
     await expect(
       scanabilityMeter.getByText("Blocked for publish").first()
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Reset design" }).click();
+    await page.getByRole("tab", { name: "Template preset" }).click();
     await expect(page.getByRole("radio", { name: "Clean" })).toHaveAttribute(
       "aria-checked",
       "true"
     );
     await expect(scanabilityMeter.getByText("Ready").first()).toBeVisible();
 
+    await page.getByRole("button", { name: "Continue to export" }).click();
+    await expect(
+      page.getByRole("heading", { name: "3. Export and publish" })
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Go to Design step" }).click();
+    await expect(
+      page.getByRole("heading", { name: "2. Design and guardrails" })
+    ).toBeVisible();
     await page.getByRole("button", { name: "Continue to export" }).click();
     await expect(
       page.getByRole("heading", { name: "3. Export and publish" })
@@ -728,6 +785,7 @@ test.describe("phase 8 release quality gate", () => {
     await expect(designHeading).toBeVisible({ timeout: 15_000 });
     await expect(designHeading).toBeFocused();
 
+    await page.getByRole("tab", { name: "QR frame" }).click();
     const framePickerBox = await page.getByTestId("frame-picker").boundingBox();
     const railMetrics = await page
       .getByTestId("frame-picker-rail")
@@ -776,6 +834,7 @@ test.describe("phase 8 release quality gate", () => {
     await page.keyboard.press("ArrowRight");
     await expect(corporatePreset).toHaveAttribute("aria-checked", "true");
 
+    await page.getByRole("tab", { name: "QR frame" }).click();
     const noFrame = page.getByRole("radio", {
       name: "Select No frame frame",
     });
@@ -804,6 +863,7 @@ test.describe("phase 8 release quality gate", () => {
       dotStyleGroup.getByRole("radio", { name: "Rounded", exact: true })
     ).toHaveAttribute("aria-checked", "true");
 
+    await page.getByRole("tab", { name: "Logo" }).click();
     const logoBuffer = createSolidLogoSvgBuffer("#EF4444");
     const logoInput = page.locator("#qr-logo-upload");
     await logoInput.focus();

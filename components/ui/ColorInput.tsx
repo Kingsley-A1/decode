@@ -6,6 +6,7 @@ interface ColorInputProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  pickerLabel?: string;
   hint?: string;
   className?: string;
 }
@@ -14,6 +15,7 @@ export function ColorInput({
   label,
   value,
   onChange,
+  pickerLabel = "Color",
   hint,
   className,
 }: ColorInputProps) {
@@ -26,7 +28,7 @@ export function ColorInput({
           htmlFor={`${generatedId}-picker`}
           className="text-sm font-medium text-slate-800"
         >
-          Color
+          {pickerLabel}
         </label>
         <input
           id={`${generatedId}-picker`}

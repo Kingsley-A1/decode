@@ -115,4 +115,25 @@ describe("renderLandingPageHtml", () => {
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(html).not.toContain("<img src=x onerror=alert(1)>");
   });
+
+  it("drops unsafe link protocols and keeps allowed ones", () => {
+    const html = renderLandingPageHtml({
+      title: "Creator Links",
+      type: LANDING_PAGE_TYPE.LINKS,
+      content: {
+        heading: "Creator Links",
+        links: [
+          { label: "Malicious", url: "javascript:alert(1)" },
+          { label: "Data URI", url: "data:text/html,<script>alert(1)</script>" },
+          { label: "Safe site", url: "https://example.com/path" },
+        ],
+      },
+    });
+
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("data:text/html");
+    expect(html).toContain('href="https://example.com/path"');
+    expect(html).toContain("Safe site");
+    expect(html).not.toContain("Malicious");
+  });
 });

@@ -22,12 +22,14 @@ export interface DashboardQRCode {
 export interface DashboardQRDesignConfig {
   readonly foregroundColor: string;
   readonly backgroundColor: string;
+  readonly frameColor: string;
   readonly margin: number;
   readonly logoSizeRatio: number;
   readonly dotStyle: string;
   readonly cornerStyle: string;
   readonly errorCorrectionLevel: "L" | "M" | "Q" | "H";
   readonly size: number;
+  readonly frameStyle: string;
 }
 
 export interface DashboardScanEvent {

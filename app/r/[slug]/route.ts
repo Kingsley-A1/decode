@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import {
   apiError,
   createRequestId,
@@ -53,10 +53,26 @@ export async function GET(request: Request, context: RouteContext) {
       });
     }
 
-    await recordDynamicQRCodeScan({
-      qrCodeId: qrCode.id,
-      workspaceId: qrCode.workspaceId,
-      telemetry: buildScanTelemetry(request),
+    // Record the scan after the response is sent, and never let an analytics
+    // failure break the redirect — the visitor's destination matters more than
+    // the metric. Mirrors the resilience of the short-link route.
+    const telemetry = buildScanTelemetry(request);
+    after(async () => {
+      try {
+        await recordDynamicQRCodeScan({
+          qrCodeId: qrCode.id,
+          workspaceId: qrCode.workspaceId,
+          telemetry,
+        });
+      } catch (scanError) {
+        logStructured({
+          level: "warn",
+          event: "dynamic_qr.scan_record_failed",
+          requestId,
+          ok: false,
+          error: scanError instanceof Error ? scanError.message : "unknown",
+        });
+      }
     });
 
     if (hasPublishedLandingPage) {
@@ -78,6 +94,12 @@ export async function GET(request: Request, context: RouteContext) {
           headers: {
             "Content-Type": "text/html; charset=utf-8",
             "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+            // The landing page renders no scripts, so block them entirely as a
+            // hard stop against any injected markup that slips past escaping.
+            "Content-Security-Policy":
+              "default-src 'none'; img-src 'self'; media-src 'self'; " +
+              "style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; " +
+              "frame-ancestors 'none'",
             "x-request-id": requestId,
           },
         }
@@ -99,6 +121,9 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.redirect(qrCode.destinationUrl, {
       status: 302,
       headers: {
+        // Never cache the redirect: destination edits must take effect
+        // immediately and every scan must reach the server to be counted.
+        "Cache-Control": "no-store",
         "x-request-id": requestId,
       },
     });

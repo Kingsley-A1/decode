@@ -10,6 +10,7 @@ import {
   archiveQRCodeInWorkspace,
   prepareQRCode,
   updateDynamicQRCodeDestinationInWorkspace,
+  updateQRCodeInWorkspace,
   type ArchiveQRCodeClient,
   type ArchiveQRCodeTransactionClient,
   type DynamicDestinationClient,
@@ -141,6 +142,74 @@ describe("dynamic QR service", () => {
           nextUrl: "https://new.example/",
           slug: "spring-campaign",
         },
+      },
+    });
+  });
+
+  it("renames a QR code and writes an update audit log", async () => {
+    const createdAt = new Date("2026-05-18T00:00:00.000Z");
+    const payload = {
+      type: QR_CODE_TYPE.URL,
+      value: "https://decode.example/r/spring-campaign",
+      content: { url: "https://old.example/" },
+    };
+    const record = {
+      id: "qr_rename",
+      workspaceId: "workspace_123",
+      ownerId: "user_123",
+      title: "Old Title",
+      type: QR_CODE_TYPE.URL,
+      mode: QR_CODE_MODE.DYNAMIC,
+      status: QR_CODE_STATUS.PUBLISHED,
+      slug: "spring-campaign",
+      destinationUrl: "https://old.example/",
+      scanCount: 0,
+      publishedAt: createdAt,
+      archivedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+      payload,
+      landingPage: null,
+    };
+    const findFirst = vi.fn(async () => record);
+    const update = vi.fn(async (args: Prisma.QRCodeUpdateArgs) => ({
+      ...record,
+      ...(args.data as Prisma.QRCodeUncheckedUpdateInput),
+    }));
+    const create = vi.fn(async (args: Prisma.AuditLogCreateArgs) => args);
+    const client: DynamicDestinationClient = {
+      $transaction: async (callback) =>
+        callback({
+          qRCode: { findFirst, update },
+          auditLog: { create },
+        } as DynamicDestinationTransactionClient),
+    };
+
+    const result = await updateQRCodeInWorkspace(
+      {
+        qrCodeId: "qr_rename",
+        workspaceId: "workspace_123",
+        userId: "user_123",
+        title: "New Title",
+      },
+      client
+    );
+
+    const updateData = update.mock.calls[0]?.[0].data as
+      | Prisma.QRCodeUncheckedUpdateInput
+      | undefined;
+
+    expect(updateData?.title).toBe("New Title");
+    expect(updateData?.destinationUrl).toBeUndefined();
+    expect(result.qrCode.title).toBe("New Title");
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        workspaceId: "workspace_123",
+        actorUserId: "user_123",
+        action: AUDIT_ACTION.UPDATE,
+        entityType: AUDIT_ENTITY_TYPE.QR_CODE,
+        entityId: "qr_rename",
+        metadata: { previousTitle: "Old Title", nextTitle: "New Title" },
       },
     });
   });

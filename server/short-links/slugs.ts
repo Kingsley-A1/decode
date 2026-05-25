@@ -140,20 +140,29 @@ export interface MintShortLinkSlugOptions {
   readonly length: number;
   readonly isAvailable: (candidate: string) => Promise<boolean>;
   readonly maxAttempts?: number;
+  /** Hard ceiling on the escalated slug length. Callers that must honour the
+   *  3x-shorter promise pass the length-policy `maxSlugLength` here so a
+   *  collision never produces a slug longer than the promise allows. */
+  readonly maxLength?: number;
   readonly randomBytesImpl?: (size: number) => Buffer;
 }
 
 /** Mints a slug of the requested length, escalating length by +1 each
- *  time `maxAttempts` collisions are observed at the current length. */
+ *  time `maxAttempts` collisions are observed at the current length, up to
+ *  `maxLength` (default: the absolute slug-length cap). */
 export async function mintShortLinkSlug(
   options: MintShortLinkSlugOptions
 ): Promise<string> {
   const maxAttempts =
     options.maxAttempts ?? SHORT_LINK_DEFAULT_MAX_ATTEMPTS;
   const rb = options.randomBytesImpl ?? randomBytes;
+  const ceiling = Math.min(
+    SHORT_LINK_SLUG_MAX_LENGTH,
+    options.maxLength ?? SHORT_LINK_SLUG_MAX_LENGTH
+  );
   let length = clampSlugLength(options.length);
 
-  while (length <= SHORT_LINK_SLUG_MAX_LENGTH) {
+  while (length <= ceiling) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const candidate = generateSlug(length, rb);
       if (!isValidShortLinkSlug(candidate)) continue;
@@ -163,7 +172,7 @@ export async function mintShortLinkSlug(
   }
 
   throw new Error(
-    `Could not mint a short-link slug after escalating to length ${SHORT_LINK_SLUG_MAX_LENGTH}.`
+    `Could not mint a short-link slug after escalating to length ${ceiling}.`
   );
 }
 

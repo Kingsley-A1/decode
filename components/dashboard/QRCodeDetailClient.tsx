@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowLeft,
+  Copy,
+  Download,
   Edit3,
   ExternalLink,
   Link2,
   QrCode,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { DashboardAnalytics } from "@/components/dashboard/DashboardAnalytics";
 import {
   emptyDashboardSummary,
@@ -24,6 +28,7 @@ import {
   getModeLabel,
   getQRCodeDestinationLabel,
   getQRCodeEditHref,
+  getQRCodeHref,
   getStatusLabel,
   getTypeLabel,
   normalizeSummary,
@@ -46,11 +51,15 @@ interface ApiResponse<TData> {
   readonly error?: { readonly message: string };
 }
 
+type ExportFormat = "png" | "svg" | "pdf";
+const exportFormats: readonly ExportFormat[] = ["png", "svg", "pdf"];
+
 interface QRCodeDetailClientProps {
   readonly qrCodeId: string;
 }
 
 export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
+  const router = useRouter();
   const [qrCode, setQRCode] = useState<DashboardQRCode | null>(null);
   const [summary, setSummary] =
     useState<DashboardSummaryModel>(emptyDashboardSummary);
@@ -58,6 +67,10 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
   const [isArchiving, setIsArchiving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   const loadQRCode = useCallback(async () => {
     setIsLoading(true);
@@ -95,6 +108,84 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
   useEffect(() => {
     void loadQRCode();
   }, [loadQRCode]);
+
+  const handleDownload = async () => {
+    if (!qrCode) return;
+
+    setIsDownloading(true);
+    setDownloadError(null);
+
+    try {
+      const response = await fetch(
+        `/api/qr-codes/${encodeURIComponent(qrCode.id)}/render`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: exportFormat }),
+        }
+      );
+      const result = (await response.json().catch(() => null)) as
+        | ApiResponse<{ downloadUrl?: string }>
+        | null;
+
+      if (!response.ok || !result?.ok || !result.data?.downloadUrl) {
+        throw new Error(
+          getApiErrorMessage(result, "Could not render the QR export.")
+        );
+      }
+
+      const link = document.createElement("a");
+      link.href = result.data.downloadUrl;
+      link.rel = "noopener noreferrer";
+      link.download = `${qrCode.title || "decode-qr"}.${exportFormat}`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      setDownloadError(
+        error instanceof Error ? error.message : "Could not download QR code."
+      );
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (!qrCode) return;
+
+    setIsDuplicating(true);
+    setNotice(null);
+
+    try {
+      const response = await fetchJson<ApiResponse<{ qrCode: unknown }>>(
+        `/api/qr-codes/${encodeURIComponent(qrCode.id)}/duplicate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          response.error?.message ?? "Could not duplicate QR code."
+        );
+      }
+
+      const duplicate = normalizeQRCode(response.data?.qrCode);
+      if (duplicate) {
+        router.push(getQRCodeHref(duplicate));
+      } else {
+        setNotice("Duplicated, but the new QR code could not be opened.");
+      }
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Could not duplicate QR code."
+      );
+    } finally {
+      setIsDuplicating(false);
+    }
+  };
 
   const confirmArchive = async () => {
     if (!qrCode) return;
@@ -169,6 +260,14 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
             Edit
           </Link>
           <Button
+            variant="secondary"
+            onClick={handleDuplicate}
+            isLoading={isDuplicating}
+            leftIcon={<Copy className="h-4 w-4" aria-hidden="true" />}
+          >
+            Duplicate
+          </Button>
+          <Button
             variant="danger"
             onClick={() => setShowArchiveDialog(true)}
             isLoading={isArchiving}
@@ -237,6 +336,53 @@ export function QRCodeDetailClient({ qrCodeId }: QRCodeDetailClientProps) {
           <QRPreviewPanel>
             <SavedQRCodePreview qrCode={qrCode} />
           </QRPreviewPanel>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Download className="h-4 w-4 text-sky-700" aria-hidden="true" />
+              <p className="text-sm font-semibold text-slate-950">Download</p>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-600">
+              Exports are rendered from this saved design.
+            </p>
+            <div
+              className="mt-3 flex gap-2"
+              role="group"
+              aria-label="Export format"
+            >
+              {exportFormats.map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => setExportFormat(format)}
+                  aria-pressed={exportFormat === format}
+                  className={cn(
+                    "min-h-9 flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase transition-colors",
+                    exportFormat === format
+                      ? "border-sky-300 bg-sky-50 text-sky-900"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  {format}
+                </button>
+              ))}
+            </div>
+            <Button
+              variant="primary"
+              className="mt-3 w-full"
+              onClick={handleDownload}
+              isLoading={isDownloading}
+              leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
+            >
+              Download {exportFormat.toUpperCase()}
+            </Button>
+            {downloadError && (
+              <Alert className="mt-3" variant="danger">
+                {downloadError}
+              </Alert>
+            )}
+          </div>
+
           {qrCode.mode === "dynamic" ? (
             <Alert variant="info" title="Editable destination">
               This dynamic QR can route to a new URL without reprinting the code.

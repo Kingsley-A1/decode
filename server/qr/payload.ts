@@ -24,6 +24,8 @@ export function buildQRPayload(input: CreateQRCodeRequest): BuiltQRPayload {
       return buildPhonePayload(input.content);
     case QR_CODE_TYPE.SMS:
       return buildSmsPayload(input.content);
+    case QR_CODE_TYPE.WHATSAPP:
+      return buildWhatsappPayload(input.content);
     case QR_CODE_TYPE.WIFI:
       return buildWifiPayload(input.content);
     case QR_CODE_TYPE.VCARD:
@@ -91,6 +93,26 @@ function buildSmsPayload(content: {
   };
 }
 
+function buildWhatsappPayload(content: {
+  readonly phone: string;
+  readonly message?: string;
+}): BuiltQRPayload {
+  // Mirror the client generator: wa.me uses the international number without a
+  // leading "+", with an optional pre-filled message.
+  const phone = normalizePhone(content.phone).replace(/^\+/, "");
+  const query = content.message
+    ? `?text=${encodeURIComponent(content.message)}`
+    : "";
+  const value = `https://wa.me/${phone}${query}`;
+
+  return {
+    type: QR_CODE_TYPE.WHATSAPP,
+    value,
+    destinationUrl: value,
+    normalizedContent: { phone, message: content.message },
+  };
+}
+
 function buildWifiPayload(content: {
   readonly ssid: string;
   readonly password?: string;
@@ -149,6 +171,11 @@ function buildVCardPayload(content: {
 
 export function normalizeHttpUrl(value: string): string {
   const trimmedValue = value.trim();
+  const validationError = getHttpUrlValidationError(trimmedValue);
+  if (validationError) {
+    throw new QRCodePayloadError(validationError);
+  }
+
   const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmedValue);
   const candidate = hasScheme ? trimmedValue : `https://${trimmedValue}`;
   const url = new URL(candidate);
@@ -160,6 +187,51 @@ export function normalizeHttpUrl(value: string): string {
   }
 
   return url.toString();
+}
+
+function getHttpUrlValidationError(value: string): string | null {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "Enter a website URL.";
+  }
+
+  if (/\s/.test(trimmedValue)) {
+    return "Remove spaces from the URL.";
+  }
+
+  if (/^https?\/\//i.test(trimmedValue)) {
+    return "Add a colon after the protocol, for example https://example.com.";
+  }
+
+  if (
+    /^https?:[^/]/i.test(trimmedValue) ||
+    /^https?:\/[^/]/i.test(trimmedValue)
+  ) {
+    return "Use https:// or http:// with two slashes.";
+  }
+
+  const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmedValue);
+  if (hasScheme && !/^https?:/i.test(trimmedValue)) {
+    return "Only http and https URLs can be encoded as website QR codes.";
+  }
+
+  try {
+    const candidate = hasScheme ? trimmedValue : `https://${trimmedValue}`;
+    const url = new URL(candidate);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "Only http and https URLs can be encoded as website QR codes.";
+    }
+
+    if (!url.hostname) {
+      return "Enter a valid host name.";
+    }
+
+    return null;
+  } catch {
+    return "Enter a valid http or https URL.";
+  }
 }
 
 function normalizePhone(value: string): string {

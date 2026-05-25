@@ -15,6 +15,7 @@ export const QR_CODE_TYPE = {
   EMAIL: "email",
   PHONE: "phone",
   SMS: "sms",
+  WHATSAPP: "whatsapp",
   WIFI: "wifi",
   VCARD: "vcard",
 } as const;

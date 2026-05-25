@@ -43,6 +43,10 @@ interface QRCodeEditClientProps {
 export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
   const [qrCode, setQRCode] = useState<DashboardQRCode | null>(null);
   const [destinationUrl, setDestinationUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [titleStatus, setTitleStatus] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
@@ -69,9 +73,11 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
 
       setQRCode(normalized);
       setDestinationUrl(normalized.destinationUrl ?? "");
+      setTitle(normalized.title);
     } catch (error) {
       setQRCode(null);
       setDestinationUrl("");
+      setTitle("");
       setNotice(
         error instanceof Error
           ? error.message
@@ -132,6 +138,48 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
       );
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveTitle = async () => {
+    if (!qrCode) return;
+
+    const trimmed = title.trim();
+    if (!trimmed) {
+      setTitleError("Enter a title.");
+      return;
+    }
+
+    setIsSavingTitle(true);
+    setTitleStatus(null);
+    setTitleError(null);
+
+    try {
+      const response = await fetchJson<ApiResponse<{ qrCode?: unknown }>>(
+        `/api/qr-codes/${encodeURIComponent(qrCode.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: trimmed }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(response.error?.message ?? "Could not update title.");
+      }
+
+      const normalized = normalizeQRCode(response.data?.qrCode);
+      if (normalized) {
+        setQRCode(normalized);
+        setTitle(normalized.title);
+      }
+      setTitleStatus("Title updated.");
+    } catch (error) {
+      setTitleError(
+        error instanceof Error ? error.message : "Could not update title."
+      );
+    } finally {
+      setIsSavingTitle(false);
     }
   };
 
@@ -239,6 +287,42 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
         <p className="mt-2 break-all text-sm leading-6 text-slate-600">
           {getQRCodeDestinationLabel(qrCode)}
         </p>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold text-slate-950">Details</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Rename this QR code. The encoded content is not affected.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <Input
+            label="Title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="QR code title"
+          />
+          <Button
+            variant="primary"
+            onClick={handleSaveTitle}
+            isLoading={isSavingTitle}
+            disabled={!title.trim() || title.trim() === qrCode.title}
+            leftIcon={<Save className="h-4 w-4" aria-hidden="true" />}
+          >
+            Save title
+          </Button>
+        </div>
+        {titleStatus && (
+          <Alert className="mt-4" variant="success">
+            {titleStatus}
+          </Alert>
+        )}
+        {titleError && (
+          <Alert className="mt-4" variant="danger">
+            {titleError}
+          </Alert>
+        )}
       </section>
 
       {qrCode.mode === "dynamic" ? (

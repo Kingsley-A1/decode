@@ -14,8 +14,8 @@ import {
 import { getWorkspaceQRCodeAnalytics } from "@/server/dashboard/queries";
 import { toQRCodeDetail, toQRCodeListItem } from "@/server/qr/dto";
 import { getWorkspaceQRCodeDetail } from "@/server/qr/repository";
-import { updateDynamicQRCodeDestination } from "@/server/qr/service";
-import { updateQRCodeDestinationRequestSchema } from "@/server/qr/schemas";
+import { updateQRCode } from "@/server/qr/service";
+import { updateQRCodeRequestSchema } from "@/server/qr/schemas";
 import {
   getDefaultWorkspaceForUser,
   getWorkspaceAccess,
@@ -103,8 +103,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const { id } = await context.params;
     const body = await request.json();
-    const updateRequest = updateQRCodeDestinationRequestSchema.parse(body);
-    const result = await updateDynamicQRCodeDestination({
+    const updateRequest = updateQRCodeRequestSchema.parse(body);
+    const result = await updateQRCode({
       qrCodeId: id,
       request: updateRequest,
       userId: session.userId,

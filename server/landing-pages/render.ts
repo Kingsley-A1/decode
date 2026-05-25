@@ -669,7 +669,7 @@ function getOptionalLink(
   url: Prisma.JsonValue | string | undefined,
   ariaLabel?: string
 ): string {
-  const href = getString(url);
+  const href = getSafeHref(getString(url));
   if (!href) return "";
 
   const aria = ariaLabel
@@ -679,6 +679,33 @@ function getOptionalLink(
   return `<a class="primary-link" href="${escapeAttribute(
     href
   )}" rel="noopener noreferrer"${aria}>${escapeHtml(label)}</a>`;
+}
+
+const SAFE_LINK_PROTOCOLS = new Set([
+  "http:",
+  "https:",
+  "mailto:",
+  "tel:",
+]);
+
+/** Returns the href only if it is safe to render on a public landing page.
+ *  Same-origin relative paths are allowed; absolute URLs must use an allowed
+ *  protocol so `javascript:`, `data:`, and similar XSS vectors are dropped. */
+function getSafeHref(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return trimmed;
+
+  try {
+    const url = new URL(trimmed);
+
+    return SAFE_LINK_PROTOCOLS.has(url.protocol) ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function getIdentityImageHtml(

@@ -115,6 +115,11 @@ const smsContentSchema = z.object({
   message: z.string().trim().max(1000).optional(),
 });
 
+const whatsappContentSchema = z.object({
+  phone: z.string().trim().min(3).max(40),
+  message: z.string().trim().max(1000).optional(),
+});
+
 const wifiContentSchema = z.object({
   ssid: z.string().trim().min(1).max(64),
   password: z.string().max(128).optional(),
@@ -153,6 +158,10 @@ const createQRCodeRequestBaseSchema = z.discriminatedUnion("type", [
   baseCreateQRCodeSchema.extend({
     type: z.literal(QR_CODE_TYPE.SMS),
     content: smsContentSchema,
+  }),
+  baseCreateQRCodeSchema.extend({
+    type: z.literal(QR_CODE_TYPE.WHATSAPP),
+    content: whatsappContentSchema,
   }),
   baseCreateQRCodeSchema.extend({
     type: z.literal(QR_CODE_TYPE.WIFI),
@@ -210,6 +219,18 @@ export const updateQRCodeDestinationRequestSchema = z.object({
   destinationUrl: z.string().trim().min(1).max(2048),
 });
 
+export const updateQRCodeRequestSchema = z
+  .object({
+    workspaceId: z.string().trim().min(1).optional(),
+    title: z.string().trim().min(1).max(120).optional(),
+    destinationUrl: z.string().trim().min(1).max(2048).optional(),
+  })
+  .refine(
+    (value) =>
+      value.title !== undefined || value.destinationUrl !== undefined,
+    { message: "Provide a title or destination to update." }
+  );
+
 export const archiveQRCodeRequestSchema = z.object({
   workspaceId: z.string().trim().min(1).optional(),
 });
@@ -222,4 +243,5 @@ export type RenderQRCodeRequest = z.infer<typeof renderQRCodeRequestSchema>;
 export type UpdateQRCodeDestinationRequest = z.infer<
   typeof updateQRCodeDestinationRequestSchema
 >;
+export type UpdateQRCodeRequest = z.infer<typeof updateQRCodeRequestSchema>;
 export type ArchiveQRCodeRequest = z.infer<typeof archiveQRCodeRequestSchema>;

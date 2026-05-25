@@ -55,6 +55,7 @@ import {
   QRPreviewPanel,
   Select,
   SegmentedControl,
+  Tabs,
   Textarea,
 } from "@/components/ui";
 
@@ -80,6 +81,7 @@ type FrameStyle =
   | "ticket"
   | "badge"
   | "minimal";
+type DesignTab = "preset" | "frame" | "color" | "logo";
 type ClientAuthState = "checking" | "authenticated" | "anonymous";
 type LogoChoiceValue =
   | "none"
@@ -211,16 +213,18 @@ interface QRGeneratorAuthDraft {
 const workflowSteps = [
   {
     label: "Content",
-    description: "Choose type and enter the data encoded in the QR.",
   },
   {
     label: "Design",
-    description: "Customize style while keeping the code scannable.",
   },
   {
     label: "Export",
-    description: "Download, copy, or publish the finished QR.",
   },
+];
+const workflowStepOrder: readonly WorkflowStep[] = [
+  "content",
+  "design",
+  "export",
 ];
 
 const typeOptions: {
@@ -337,6 +341,14 @@ const colorPresets = [
   { name: "Amber", value: "#B45309" },
   { name: "Rose", value: "#BE123C" },
   { name: "Ink", value: "#0F172A" },
+];
+
+const backgroundColorPresets = [
+  { name: "White", value: "#FFFFFF" },
+  { name: "Mist", value: "#F8FAFC" },
+  { name: "Ice", value: "#EFF6FF" },
+  { name: "Mint", value: "#ECFDF5" },
+  { name: "Warm", value: "#FFFBEB" },
 ];
 
 type PresetDesignState = Pick<
@@ -807,6 +819,7 @@ export function QRGenerator({
   const [publishStatus, setPublishStatus] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [savedQRCodeId, setSavedQRCodeId] = useState<string | null>(null);
   const [publishedDynamicPayload, setPublishedDynamicPayload] =
     useState<PublishedDynamicPayload | null>(null);
   const [authPromptVisible, setAuthPromptVisible] = useState(false);
@@ -884,7 +897,7 @@ export function QRGenerator({
     () => getLogoChoiceOptions(type, logoChoice),
     [type, logoChoice]
   );
-  const stepIndex = ["content", "design", "export"].indexOf(currentStep);
+  const stepIndex = workflowStepOrder.indexOf(currentStep);
   const previewValue = useMemo(() => {
     if (payload?.value) return payload.value;
 
@@ -999,6 +1012,15 @@ export function QRGenerator({
 
   const goToStep = (nextStep: WorkflowStep) => {
     setCurrentStep(nextStep);
+  };
+
+  const handleStepSelect = (nextStepIndex: number) => {
+    if (nextStepIndex > stepIndex) return;
+
+    const nextStep = workflowStepOrder[nextStepIndex];
+    if (nextStep) {
+      goToStep(nextStep);
+    }
   };
 
   const persistAuthDraft = () => {
@@ -1131,6 +1153,18 @@ export function QRGenerator({
     goToStep("design");
   };
 
+  const downloadStaticQRCode = async (format: ExportFormat) => {
+    if (format === "png") {
+      await download("png");
+      return;
+    }
+    if (format === "svg") {
+      await download("svg");
+      return;
+    }
+    await downloadPdf(form.title || "Decode QR Code");
+  };
+
   const handleDownloadSelected = async (format: ExportFormat) => {
     if (!isReady) return;
 
@@ -1140,6 +1174,22 @@ export function QRGenerator({
       return;
     }
 
+    // Static QR codes encode their content directly — no account is required.
+    // Download instantly from the client renderer for the smoothest path.
+    if (mode !== "dynamic") {
+      setPublishError(null);
+      try {
+        await downloadStaticQRCode(format);
+      } catch (error) {
+        setPublishError(
+          error instanceof Error ? error.message : "Could not download QR code."
+        );
+      }
+      return;
+    }
+
+    // Dynamic downloads come from the server renderer (styled + cached) and
+    // require a published record, which in turn requires sign-in.
     setIsCheckingAuth(true);
     setPublishError(null);
 
@@ -1158,30 +1208,15 @@ export function QRGenerator({
       setAuthPromptVisible(false);
       setAuthPromptMessage(null);
 
-      if (mode === "dynamic") {
-        if (!publishedDynamicPayload?.qrCodeId) {
-          throw new Error("Publish this dynamic QR before downloading it.");
-        }
-
-        await downloadSavedDynamicQRCode({
-          qrCodeId: publishedDynamicPayload.qrCodeId,
-          format,
-        });
-        setPublishStatus(`Download ready for ${format.toUpperCase()} export.`);
-        return;
+      if (!publishedDynamicPayload?.qrCodeId) {
+        throw new Error("Publish this dynamic QR before downloading it.");
       }
 
-      if (format === "png") {
-        await download("png");
-        return;
-      }
-
-      if (format === "svg") {
-        await download("svg");
-        return;
-      }
-
-      await downloadPdf(form.title || "Decode QR Code");
+      await downloadSavedDynamicQRCode({
+        qrCodeId: publishedDynamicPayload.qrCodeId,
+        format,
+      });
+      setPublishStatus(`Download ready for ${format.toUpperCase()} export.`);
     } catch (error) {
       if (error instanceof Error && error.message.toLowerCase().includes("sign in")) {
         persistAuthDraft();
@@ -1313,6 +1348,63 @@ export function QRGenerator({
     }
   };
 
+  const handleSaveStatic = async () => {
+    if (mode !== "static" || !validation.isValid) return;
+
+    if (scanability.blocksPublish) {
+      setPublishError("Resolve blocked scanability issues before saving.");
+      setPublishStatus(null);
+      return;
+    }
+
+    setIsPublishing(true);
+    setPublishError(null);
+    setPublishStatus(null);
+
+    try {
+      const response = await fetch("/api/qr-codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "static",
+          type,
+          title: form.title || `${getTypeLabel(type)} QR Code`,
+          save: true,
+          content: buildApiContent(type, form),
+          design: getApiDesign(design, Boolean(logoUrl)),
+        }),
+      });
+      const result = (await response.json()) as ApiResponse<{
+        qrCode: { id: string } | null;
+      }>;
+
+      if (!result.ok) {
+        if (response.status === 401) {
+          persistAuthDraft();
+          setAuthPromptVisible(true);
+          setAuthPromptMessage(
+            "Sign in to save this QR code to your workspace. Your current QR draft is saved in this browser."
+          );
+          return;
+        }
+
+        throw new Error(result.error?.message ?? "Could not save QR code.");
+      }
+
+      setSavedQRCodeId(result.data?.qrCode?.id ?? null);
+      setAuthState("authenticated");
+      setAuthPromptVisible(false);
+      setAuthPromptMessage(null);
+      setPublishStatus("Saved to your workspace.");
+    } catch (error) {
+      setPublishError(
+        error instanceof Error ? error.message : "Could not save QR code."
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {showHeader && (
@@ -1359,6 +1451,7 @@ export function QRGenerator({
             <ProgressStepper
               steps={workflowSteps}
               currentStep={Math.max(stepIndex, 0)}
+              onStepSelect={handleStepSelect}
             />
           </div>
 
@@ -1420,6 +1513,8 @@ export function QRGenerator({
               onCopyPayload={handleCopyPayload}
               onDownloadSelected={(format) => void handleDownloadSelected(format)}
               onPublishDynamic={handlePublishDynamic}
+              onSaveStatic={handleSaveStatic}
+              savedQRCodeId={savedQRCodeId}
               onBeforeSignIn={persistAuthDraft}
             />
           )}
@@ -1649,6 +1744,10 @@ function ContentFields({
           value={form.url}
           onChange={(event) => onFormChange("url", event.target.value)}
           placeholder="https://example.com"
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           error={errors.url}
           leftIcon={<LinkIcon className="h-4 w-4" aria-hidden="true" />}
           containerClassName="md:col-span-2"
@@ -1827,6 +1926,10 @@ function ContentFields({
             label="Website"
             value={form.vcardWebsite}
             onChange={(event) => onFormChange("vcardWebsite", event.target.value)}
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             error={errors.vcardWebsite}
           />
           <Input
@@ -1876,6 +1979,185 @@ function DesignStep({
   readonly onContinue: () => void;
 }) {
   const shouldOpenAdvanced = scanability.state !== "ready";
+  const [activeDesignTab, setActiveDesignTab] = useState<DesignTab>("preset");
+  const designTabItems = [
+    {
+      value: "preset",
+      label: "Template preset",
+      panel: (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <ChoiceRail
+            value={selectedPreset}
+            options={designPresetOptions}
+            onChange={onPresetChange}
+            label="Template preset"
+            size="md"
+            desktopColumns={4}
+            getDescription={(option) => (
+              <>
+                <span className="font-medium text-slate-800">
+                  {option.label}:
+                </span>{" "}
+                {option.description}
+              </>
+            )}
+          />
+        </section>
+      ),
+    },
+    {
+      value: "frame",
+      label: "QR frame",
+      panel: (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <FramePicker
+            value={design.frameStyle}
+            frameColor={design.frameColor}
+            onChange={(value) =>
+              onDesignChange((previous) => ({ ...previous, frameStyle: value }))
+            }
+          />
+        </section>
+      ),
+    },
+    {
+      value: "color",
+      label: "Color",
+      panel: (
+        <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ColorInput
+              pickerLabel="Frame"
+              label="Frame color hex"
+              value={design.frameColor}
+              onChange={(value) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  frameColor: normalizeHexDraft(value),
+                }))
+              }
+              hint="Styles the frame border, label bar, and call-to-action."
+            />
+            <ColorInput
+              pickerLabel="Background"
+              label="Background color hex"
+              value={design.backgroundColor}
+              onChange={(value) =>
+                onDesignChange((previous) => ({
+                  ...previous,
+                  backgroundColor: normalizeHexDraft(value),
+                }))
+              }
+              hint="Sets the QR canvas behind the modules."
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-2">
+              <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                <Palette className="h-4 w-4" aria-hidden="true" />
+                Frame presets
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {colorPresets.map((preset) => (
+                  <ColorSwatch
+                    key={preset.value}
+                    color={preset.value}
+                    label={`Use ${preset.name} frame color`}
+                    isSelected={
+                      design.frameColor.toLowerCase() ===
+                      preset.value.toLowerCase()
+                    }
+                    onClick={() =>
+                      onDesignChange((previous) => ({
+                        ...previous,
+                        frameColor: preset.value.toUpperCase(),
+                      }))
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-800">
+                Background presets
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {backgroundColorPresets.map((preset) => (
+                  <ColorSwatch
+                    key={preset.value}
+                    color={preset.value}
+                    label={`Use ${preset.name} background color`}
+                    isSelected={
+                      design.backgroundColor.toLowerCase() ===
+                      preset.value.toLowerCase()
+                    }
+                    onClick={() =>
+                      onDesignChange((previous) => ({
+                        ...previous,
+                        backgroundColor: preset.value.toUpperCase(),
+                      }))
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      ),
+    },
+    {
+      value: "logo",
+      label: "Logo",
+      panel: (
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+            <FileUpload
+              id="qr-logo-upload"
+              ref={logoInputRef}
+              label="Logo"
+              accept="image/*"
+              onChange={onLogoUpload}
+              hint="Upload a square PNG or SVG, or choose a preset icon below."
+            />
+            <Button
+              variant="secondary"
+              onClick={onRemoveLogo}
+              disabled={!logoUrl}
+              leftIcon={<X className="h-4 w-4" aria-hidden="true" />}
+            >
+              Remove logo
+            </Button>
+          </div>
+
+          <ChoiceRail
+            value={logoChoice}
+            options={logoChoices}
+            onChange={onLogoChoiceChange}
+            label="Logo icon"
+            size="icon"
+            desktopColumns={4}
+            data-testid="logo-choice-picker"
+            railTestId="logo-choice-rail"
+            renderPreview={(option) => <LogoChoicePreview option={option} />}
+            getDescription={(option) => (
+              <>
+                <span className="font-medium text-slate-800">
+                  {option.label}:
+                </span>{" "}
+                {option.description}
+              </>
+            )}
+          />
+        </section>
+      ),
+    },
+  ] satisfies {
+    readonly value: DesignTab;
+    readonly label: string;
+    readonly panel: React.ReactNode;
+  }[];
 
   return (
     <div className="space-y-5">
@@ -1903,147 +2185,30 @@ function DesignStep({
         </Button>
       </div>
 
-      <ChoiceRail
-        value={selectedPreset}
-        options={designPresetOptions}
-        onChange={onPresetChange}
-        label="Template preset"
-        size="md"
-        desktopColumns={3}
-        getDescription={(option) => (
-          <>
-            <span className="font-medium text-slate-800">
-              {option.label}:
-            </span>{" "}
-            {option.description}
-          </>
-        )}
-      />
-
-      <FramePicker
-        value={design.frameStyle}
-        frameColor={design.frameColor}
-        onChange={(value) =>
-          onDesignChange((previous) => ({ ...previous, frameStyle: value }))
-        }
-      />
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] lg:items-end">
-          <div>
-            <ColorInput
-              label="Frame color hex"
-              value={design.frameColor}
-              onChange={(value) =>
-                onDesignChange((previous) => ({
-                  ...previous,
-                  frameColor: normalizeHexDraft(value),
-                }))
-              }
-            />
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Frame color changes the border, label bar, and call-to-action only.
-              QR modules stay scan-safe unless changed in advanced controls.
-            </p>
-          </div>
-          <div
-            className="h-12 rounded-lg border border-slate-200 shadow-inner"
-            style={{ backgroundColor: getSafeHex(design.frameColor, "#2563EB") }}
-            aria-hidden="true"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <p className="mt-4 flex items-center gap-2 text-sm font-medium text-slate-800">
-            <Palette className="h-4 w-4" aria-hidden="true" />
-            Frame color presets
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {colorPresets.map((preset) => (
-              <ColorSwatch
-                key={preset.value}
-                color={preset.value}
-                label={`Use ${preset.name} frame color`}
-                isSelected={
-                  design.frameColor.toLowerCase() === preset.value.toLowerCase()
-                }
-                onClick={() =>
-                  onDesignChange((previous) => ({
-                    ...previous,
-                    frameColor: preset.value.toUpperCase(),
-                  }))
-                }
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
-        <FileUpload
-          id="qr-logo-upload"
-          ref={logoInputRef}
-          label="Logo"
-          accept="image/*"
-          onChange={onLogoUpload}
-          hint="Upload a square PNG or SVG, or choose a preset icon below."
-        />
-        <Button
-          variant="secondary"
-          onClick={onRemoveLogo}
-          disabled={!logoUrl}
-          leftIcon={<X className="h-4 w-4" aria-hidden="true" />}
-        >
-          Remove logo
-        </Button>
-      </div>
-
-      <ChoiceRail
-        value={logoChoice}
-        options={logoChoices}
-        onChange={onLogoChoiceChange}
-        label="Logo icon"
-        size="icon"
-        desktopColumns={4}
-        data-testid="logo-choice-picker"
-        railTestId="logo-choice-rail"
-        renderPreview={(option) => <LogoChoicePreview option={option} />}
-        getDescription={(option) => (
-          <>
-            <span className="font-medium text-slate-800">
-              {option.label}:
-            </span>{" "}
-            {option.description}
-          </>
-        )}
+      <Tabs
+        value={activeDesignTab}
+        items={designTabItems}
+        onChange={setActiveDesignTab}
+        label="Design controls"
       />
 
       <ScanabilityMeter scanability={scanability} />
 
       <DisclosureSection
         title="Advanced design controls"
-        description="QR module colors, dots, corners, and export source size."
+        description="QR module color, dots, corners, and export source size."
         defaultOpen={shouldOpenAdvanced}
       >
         <div className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <ColorInput
+              pickerLabel="Dots"
               label="QR dots hex"
               value={design.foregroundColor}
               onChange={(value) =>
                 onDesignChange((previous) => ({
                   ...previous,
                   foregroundColor: normalizeHexDraft(value),
-                }))
-              }
-            />
-            <ColorInput
-              label="QR background hex"
-              value={design.backgroundColor}
-              onChange={(value) =>
-                onDesignChange((previous) => ({
-                  ...previous,
-                  backgroundColor: normalizeHexDraft(value),
                 }))
               }
             />
@@ -2237,6 +2402,8 @@ function ExportStep({
   onCopyPayload,
   onDownloadSelected,
   onPublishDynamic,
+  onSaveStatic,
+  savedQRCodeId,
   onBeforeSignIn,
 }: {
   readonly headingRef: React.RefObject<HTMLHeadingElement | null>;
@@ -2258,6 +2425,8 @@ function ExportStep({
   readonly onCopyPayload: () => void;
   readonly onDownloadSelected: (format: ExportFormat) => void;
   readonly onPublishDynamic: () => void;
+  readonly onSaveStatic: () => void;
+  readonly savedQRCodeId: string | null;
   readonly onBeforeSignIn: () => void;
 }) {
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
@@ -2354,6 +2523,17 @@ function ExportStep({
               Publish dynamic QR
             </Button>
           )}
+          {mode !== "dynamic" && (
+            <Button
+              variant="primary"
+              onClick={onSaveStatic}
+              disabled={scanability.blocksPublish || !canUsePayload}
+              isLoading={isPublishing}
+              leftIcon={<UploadCloud className="h-4 w-4" aria-hidden="true" />}
+            >
+              Save to workspace
+            </Button>
+          )}
         </div>
       </div>
 
@@ -2373,6 +2553,16 @@ function ExportStep({
         </Alert>
       )}
       {publishStatus && <Alert variant="success">{publishStatus}</Alert>}
+      {mode !== "dynamic" && savedQRCodeId && (
+        <Alert variant="success" title="Saved to workspace">
+          <a
+            className="font-semibold text-sky-800 underline underline-offset-2"
+            href={`/dashboard/qr/${savedQRCodeId}`}
+          >
+            View saved QR code
+          </a>
+        </Alert>
+      )}
       {publishError && <Alert variant="danger">{publishError}</Alert>}
       {authPromptVisible && (
         <div ref={authPromptRef}>
@@ -2448,10 +2638,12 @@ function FramePicker({
       }))}
       onChange={onChange}
       label="QR frame"
-      size="lg"
+      size="frame"
+      layout="horizontal"
       desktopColumns={3}
       data-testid="frame-picker"
       railTestId="frame-picker-rail"
+      railClassName="pb-3"
       renderPreview={(option) => (
         <FrameThumbnail
           frameStyle={option.value as FrameStyle}
@@ -2485,7 +2677,7 @@ function FrameThumbnail({
   readonly frameColor: string;
 }) {
   return (
-    <div className="flex h-24 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-white p-2 sm:h-28">
+    <div className="flex h-20 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-white p-1.5">
       <QRFrame
         frameStyle={frameStyle}
         frameColor={frameColor}
@@ -2580,10 +2772,10 @@ function QRFrame({
   const accentSoft = hexToRgba(accentColor, 0.1);
   const accentSofter = hexToRgba(accentColor, 0.06);
   const qrSlotClass = isThumbnail
-    ? "mx-auto w-14"
+    ? "mx-auto w-11"
     : "mx-auto w-[84%] max-w-[208px]";
   const frameWidthClass = isThumbnail
-    ? "w-full max-w-[124px]"
+    ? "w-full max-w-[104px]"
     : "w-full max-w-[248px]";
 
   if (frameStyle === "none") {
@@ -2591,7 +2783,7 @@ function QRFrame({
       <div
         className={
           isThumbnail
-            ? "mx-auto w-16 rounded-md bg-white p-1 ring-1 ring-slate-100"
+            ? "mx-auto w-14 rounded-md bg-white p-1 ring-1 ring-slate-100"
             : "mx-auto w-full max-w-[232px] rounded-xl bg-white p-1 ring-1 ring-slate-100"
         }
       >
@@ -2612,10 +2804,10 @@ function QRFrame({
         <p
           className={
             isThumbnail
-              ? "mx-auto my-1 inline-flex rounded-full px-2 py-0.5 text-[7px] font-semibold uppercase text-white"
-              : "mx-auto my-2.5 inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white"
+              ? "mx-auto my-1 inline-flex rounded-full px-2 py-0.5 text-[7px] font-semibold uppercase"
+              : "mx-auto my-2.5 inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-normal"
           }
-          style={{ backgroundColor: accentColor }}
+          style={{ backgroundColor: accentColor, color: "#FFFFFF" }}
         >
           Scan me
         </p>
@@ -2633,10 +2825,10 @@ function QRFrame({
           title={safeTitle}
           className={
             isThumbnail
-              ? "truncate px-3 py-1 text-[7px] font-bold uppercase text-white"
-              : "truncate px-5 py-2 text-xs font-bold uppercase tracking-normal text-white"
+              ? "truncate px-3 py-1 text-[7px] font-bold uppercase"
+              : "truncate px-5 py-2 text-xs font-bold uppercase tracking-normal"
           }
-          style={{ backgroundColor: accentColor }}
+          style={{ backgroundColor: accentColor, color: "#FFFFFF" }}
         >
           {displayTitle}
         </p>
@@ -2668,10 +2860,10 @@ function QRFrame({
         <p
           className={
             isThumbnail
-              ? "rounded-b-xl px-3 py-1 text-[7px] font-bold uppercase text-white"
-              : "rounded-b-xl px-5 py-2 text-[11px] font-bold uppercase tracking-normal text-white"
+              ? "rounded-b-xl px-3 py-1 text-[7px] font-bold uppercase"
+              : "rounded-b-xl px-5 py-2 text-[11px] font-bold uppercase tracking-normal"
           }
-          style={{ backgroundColor: accentColor }}
+          style={{ backgroundColor: accentColor, color: "#FFFFFF" }}
         >
           Scan me
         </p>
@@ -2748,8 +2940,9 @@ function validateContent({
   }
 
   if (type === "url") {
-    if (!isValidHttpUrl(form.url)) {
-      errors.url = "Enter a valid http or https URL.";
+    const urlError = getHttpUrlValidationError(form.url);
+    if (urlError) {
+      errors.url = urlError;
     }
   }
 
@@ -2790,8 +2983,11 @@ function validateContent({
     errors.vcardEmail = "Enter a valid email address.";
   }
 
-  if (type === "vcard" && form.vcardWebsite && !isValidHttpUrl(form.vcardWebsite)) {
-    errors.vcardWebsite = "Enter a valid website URL.";
+  if (type === "vcard" && form.vcardWebsite) {
+    const websiteError = getHttpUrlValidationError(form.vcardWebsite);
+    if (websiteError) {
+      errors.vcardWebsite = websiteError;
+    }
   }
 
   return { isValid: Object.keys(errors).length === 0, errors };
@@ -3053,6 +3249,54 @@ function createLogoPresetDataUrl(option: LogoChoiceOption): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+function buildApiContent(
+  type: QRType,
+  form: FormState
+): Record<string, unknown> {
+  switch (type) {
+    case "url":
+      return { url: form.url };
+    case "text":
+      return { text: form.text };
+    case "email":
+      return {
+        email: form.email,
+        ...(form.emailSubject ? { subject: form.emailSubject } : {}),
+        ...(form.emailBody ? { body: form.emailBody } : {}),
+      };
+    case "phone":
+      return { phone: form.phone };
+    case "sms":
+      return {
+        phone: form.smsPhone,
+        ...(form.smsMessage ? { message: form.smsMessage } : {}),
+      };
+    case "whatsapp":
+      return {
+        phone: form.whatsappPhone,
+        ...(form.whatsappMessage ? { message: form.whatsappMessage } : {}),
+      };
+    case "wifi":
+      return {
+        ssid: form.wifiSsid,
+        ...(form.wifiPassword ? { password: form.wifiPassword } : {}),
+        encryption: form.wifiEncryption,
+        hidden: form.wifiHidden,
+      };
+    case "vcard":
+      return {
+        ...(form.firstName ? { firstName: form.firstName } : {}),
+        ...(form.lastName ? { lastName: form.lastName } : {}),
+        ...(form.organization ? { organization: form.organization } : {}),
+        ...(form.jobTitle ? { title: form.jobTitle } : {}),
+        ...(form.vcardPhone ? { phone: form.vcardPhone } : {}),
+        ...(form.vcardEmail ? { email: form.vcardEmail } : {}),
+        ...(form.vcardWebsite ? { website: form.vcardWebsite } : {}),
+        ...(form.vcardAddress ? { address: form.vcardAddress } : {}),
+      };
+  }
+}
+
 function getApiDesign(design: DesignState, hasLogo: boolean) {
   return {
     foregroundColor: getSafeHex(
@@ -3148,6 +3392,11 @@ function getCornerSquareType(cornerStyle: CornerStyle): QROptions["cornersSquare
 
 function normalizeHttpUrl(value: string): string {
   const trimmedValue = value.trim();
+  const validationError = getHttpUrlValidationError(trimmedValue);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
   const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmedValue);
   const candidate = hasScheme ? trimmedValue : `https://${trimmedValue}`;
   const url = new URL(candidate);
@@ -3159,12 +3408,45 @@ function normalizeHttpUrl(value: string): string {
   return url.toString();
 }
 
-function isValidHttpUrl(value: string): boolean {
+function getHttpUrlValidationError(value: string): string | null {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "Enter a website URL.";
+  }
+
+  if (/\s/.test(trimmedValue)) {
+    return "Remove spaces from the URL.";
+  }
+
+  if (/^https?\/\//i.test(trimmedValue)) {
+    return "Add a colon after the protocol, for example https://example.com.";
+  }
+
+  if (/^https?:[^/]/i.test(trimmedValue) || /^https?:\/[^/]/i.test(trimmedValue)) {
+    return "Use https:// or http:// with two slashes.";
+  }
+
+  const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmedValue);
+  if (hasScheme && !/^https?:/i.test(trimmedValue)) {
+    return "Use http:// or https:// URLs only.";
+  }
+
   try {
-    normalizeHttpUrl(value);
-    return true;
+    const candidate = hasScheme ? trimmedValue : `https://${trimmedValue}`;
+    const url = new URL(candidate);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "Use http:// or https:// URLs only.";
+    }
+
+    if (!url.hostname) {
+      return "Enter a valid host name.";
+    }
+
+    return null;
   } catch {
-    return false;
+    return "Enter a valid http or https URL.";
   }
 }
 

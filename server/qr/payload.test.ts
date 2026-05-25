@@ -32,6 +32,16 @@ describe("buildQRPayload", () => {
     expect(payload.destinationUrl).toBe("https://example.com/path");
   });
 
+  it("rejects malformed website URL protocols", () => {
+    expect(() =>
+      buildQRPayload({
+        ...baseRequest,
+        type: QR_CODE_TYPE.URL,
+        content: { url: "https//example.com" },
+      })
+    ).toThrow("Add a colon after the protocol");
+  });
+
   it("builds a text payload", () => {
     const payload = buildQRPayload({
       ...baseRequest,
@@ -74,6 +84,19 @@ describe("buildQRPayload", () => {
     });
 
     expect(payload.value).toBe("SMSTO:+15551234567:Scan complete");
+  });
+
+  it("builds a WhatsApp payload mirroring the wa.me client format", () => {
+    const payload = buildQRPayload({
+      ...baseRequest,
+      type: QR_CODE_TYPE.WHATSAPP,
+      content: { phone: "+1 (555) 123-4567", message: "Hi there" },
+    });
+
+    expect(payload.value).toBe("https://wa.me/15551234567?text=Hi%20there");
+    expect(payload.destinationUrl).toBe(
+      "https://wa.me/15551234567?text=Hi%20there"
+    );
   });
 
   it("builds a Wi-Fi payload", () => {

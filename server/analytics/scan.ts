@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SCAN_BOT_DEVICE_CLASS } from "@/server/analytics/constants";
 
 export interface ScanTelemetry {
   readonly deviceClass: string;
@@ -52,7 +53,7 @@ function getBoundedHeader(
 function getDeviceClass(userAgent: string): string {
   if (!userAgent) return "unknown";
   if (/bot|crawler|spider|slurp|preview|facebookexternalhit/i.test(userAgent)) {
-    return "bot";
+    return SCAN_BOT_DEVICE_CLASS;
   }
   if (/ipad|tablet|kindle|silk/i.test(userAgent)) return "tablet";
   if (/mobile|iphone|ipod|android.*mobile/i.test(userAgent)) return "mobile";

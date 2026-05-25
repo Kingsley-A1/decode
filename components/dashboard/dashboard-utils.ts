@@ -120,26 +120,28 @@ export function normalizeQRCode(value: unknown): DashboardQRCode | null {
 function readDesignConfig(value: unknown): DashboardQRDesignConfig | null {
   if (!isRecord(value)) return null;
 
-  const errorCorrectionLevel = readString(value.errorCorrectionLevel);
-
-  if (
-    errorCorrectionLevel !== "L" &&
-    errorCorrectionLevel !== "M" &&
-    errorCorrectionLevel !== "Q" &&
-    errorCorrectionLevel !== "H"
-  ) {
-    return null;
-  }
+  const rawErrorCorrectionLevel = readString(value.errorCorrectionLevel);
+  // Default an unknown level instead of dropping the whole design — losing the
+  // colors, dot style, and frame over one stray field degrades the preview.
+  const errorCorrectionLevel =
+    rawErrorCorrectionLevel === "L" ||
+    rawErrorCorrectionLevel === "M" ||
+    rawErrorCorrectionLevel === "Q" ||
+    rawErrorCorrectionLevel === "H"
+      ? rawErrorCorrectionLevel
+      : "Q";
 
   return {
     foregroundColor: readString(value.foregroundColor) || "#0F172A",
     backgroundColor: readString(value.backgroundColor) || "#FFFFFF",
+    frameColor: readString(value.frameColor) || "#2563EB",
     margin: readNumber(value.margin),
     logoSizeRatio: readNumber(value.logoSizeRatio),
     dotStyle: readString(value.dotStyle) || "square",
     cornerStyle: readString(value.cornerStyle) || "square",
     errorCorrectionLevel,
     size: readNumber(value.size) || 1024,
+    frameStyle: readString(value.frameStyle) || "none",
   };
 }
 
