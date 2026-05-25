@@ -11,7 +11,8 @@ import {
 import { getR2SignedDownloadUrl, putR2Object } from "@/server/assets/r2";
 import { AUDIT_ACTION, AUDIT_ENTITY_TYPE } from "@/server/audit/constants";
 import { createAuditLog } from "@/server/audit/repository";
-import { QR_CODE_MODE, QR_CODE_STATUS } from "@/server/qr/constants";
+import { verifyLink } from "@/server/links/service";
+import { QR_CODE_MODE, QR_CODE_STATUS, QR_CODE_TYPE } from "@/server/qr/constants";
 import { getQRDesignWarnings } from "@/server/qr/design";
 import {
   QRCodeConflictError,
@@ -206,6 +207,13 @@ export async function createQRCode({
     workspaceId: request.workspaceId,
   });
   const isDynamic = request.mode === QR_CODE_MODE.DYNAMIC;
+
+  // Dynamic QR codes redirect through Decode, so we own the safety of the
+  // destination. Verify it before minting a public slug.
+  if (isDynamic && request.type === QR_CODE_TYPE.URL) {
+    await assertDynamicDestinationAllowed(request.content.url);
+  }
+
   const requestedSlug = getRequestedDynamicQRCodeSlug(request);
   const attempts =
     isDynamic && !requestedSlug ? GENERATED_DYNAMIC_SLUG_ATTEMPTS : 1;
@@ -281,6 +289,10 @@ export async function updateQRCode({
       ? normalizeHttpUrl(request.destinationUrl)
       : undefined;
 
+  if (destinationUrl !== undefined) {
+    await assertDynamicDestinationAllowed(destinationUrl);
+  }
+
   return updateQRCodeInWorkspace({
     qrCodeId,
     workspaceId,
@@ -288,6 +300,27 @@ export async function updateQRCode({
     title: request.title,
     destinationUrl,
   });
+}
+
+/**
+ * Blocks confirmed-malicious destinations from being encoded behind a Decode
+ * dynamic redirect. Fails open: a verification outage must never block a
+ * legitimate edit to a live customer link.
+ */
+async function assertDynamicDestinationAllowed(url: string): Promise<void> {
+  let verdict: string | undefined;
+
+  try {
+    verdict = (await verifyLink({ url })).verdict;
+  } catch {
+    return;
+  }
+
+  if (verdict === "malicious") {
+    throw new QRCodeStateError(
+      "This destination was flagged as malicious and cannot be used."
+    );
+  }
 }
 
 export async function duplicateQRCode({

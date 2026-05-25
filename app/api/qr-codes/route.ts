@@ -19,6 +19,7 @@ import {
   getDefaultWorkspaceForUser,
   getWorkspaceAccess,
 } from "@/server/workspaces/repository";
+import { enforceRateLimit } from "@/server/security/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -79,6 +80,14 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const requestId = createRequestId(request);
+
+  const limited = enforceRateLimit({
+    request,
+    scope: "qr-create",
+    options: { limit: 30, windowMs: 60_000 },
+    requestId,
+  });
+  if (limited) return limited;
 
   try {
     const body = await request.json();

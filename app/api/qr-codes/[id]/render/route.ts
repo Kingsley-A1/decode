@@ -8,6 +8,7 @@ import {
 } from "@/server/api/response";
 import { renderSavedQRCode } from "@/server/qr/service";
 import { renderQRCodeRequestSchema } from "@/server/qr/schemas";
+import { enforceRateLimit } from "@/server/security/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,14 @@ interface RouteContext {
 
 export async function POST(request: Request, context: RouteContext) {
   const requestId = createRequestId(request);
+
+  const limited = enforceRateLimit({
+    request,
+    scope: "qr-render",
+    options: { limit: 60, windowMs: 60_000 },
+    requestId,
+  });
+  if (limited) return limited;
 
   try {
     const session = await getRequiredUserSession();
