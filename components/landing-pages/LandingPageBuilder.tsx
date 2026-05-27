@@ -209,9 +209,7 @@ export function LandingPageBuilder() {
   const [dynamicQRCodeError, setDynamicQRCodeError] = useState<string | null>(
     null
   );
-  const [notice, setNotice] = useState<string | null>(
-    "Choose a template, validate the content, then save a draft or publish. Published pages remain editable."
-  );
+  const [notice, setNotice] = useState<string | null>(null);
   const builderSectionRef = useRef<HTMLDivElement>(null);
   const builderHeadingRef = useRef<HTMLHeadingElement>(null);
 
@@ -939,34 +937,18 @@ function TemplateExplorer({
     defaultLandingPageTemplatePresets[0]!;
 
   return (
-    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-slate-950">
-            Choose a template
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">
-            Search by industry or use case, then load a professional preset
-            into the builder.
-          </p>
-        </div>
-        <Badge variant="info">{templates.length} presets</Badge>
-      </div>
-
-      <div className="mt-4 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
+    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
-          <div className="sticky top-16 z-20 -mx-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/85 sm:-mx-3 sm:p-3">
+          <div className="sticky top-16 z-20 bg-white/95 pb-2 backdrop-blur supports-[backdrop-filter]:bg-white/85">
             <Input
-              label="Search templates"
+              aria-label="Search templates"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search church, clinic, menu, admissions, warranty, property, audio"
+              placeholder="Search templates"
               leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
+              className="min-h-11 rounded-md shadow-none"
             />
-            <p className="mt-3 text-sm text-slate-600" aria-live="polite">
-              {filteredTemplates.length} template
-              {filteredTemplates.length === 1 ? "" : "s"} found
-            </p>
           </div>
 
           {filteredTemplates.length === 0 ? (

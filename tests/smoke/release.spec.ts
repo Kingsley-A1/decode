@@ -266,7 +266,6 @@ test.describe("phase 8 release quality gate", () => {
           name: new RegExp(`^${escapeRegExp(item.expected)} template thumbnail`),
         })
       ).toBeVisible();
-      await expect(page.getByText(/templates? found/)).toBeVisible();
       await expectNoDocumentOverflow(page);
     }
 

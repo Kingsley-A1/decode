@@ -29,6 +29,7 @@ const pageCapabilities = [
 export default function LandingPagesPage() {
   return (
     <PageShell
+      variant="workspace"
       eyebrow="Pages"
       title="Landing pages"
       description="Create polished, editable public pages for dynamic QR campaigns with templates, media uploads, and mobile-first preview."
