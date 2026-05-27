@@ -25,7 +25,7 @@ export const SOURCE_CONFIDENCE: Readonly<Record<EvidenceSource, number>> = {
   dns: 0.8,
   probe: 0.85,
   tls: 0.85,
-  safe_browsing: 1.0,
+  web_risk: 1.0,
   threat_feed: 0.95,
   cache: 0.7,
 };
@@ -55,17 +55,16 @@ export const HARD_BLOCK_CODES: ReadonlySet<string> = new Set([
  *  high-confidence categorical signals from corroborated external sources.
  *  A single one is enough — they short-circuit scoring. */
 export const MALICIOUS_CODES: ReadonlySet<string> = new Set([
-  "safe_browsing_malware",
-  "safe_browsing_social_engineering",
-  "safe_browsing_unwanted_software",
-  "safe_browsing_potentially_harmful",
+  "web_risk_malware",
+  "web_risk_social_engineering",
+  "web_risk_unwanted_software",
   "redirect_to_private_network",
 ]);
 
 /** Evidence codes that contribute positively to a SAFE verdict's
  *  confidence rather than penalising it. They never produce risk. */
 export const POSITIVE_EVIDENCE_CODES: ReadonlySet<string> = new Set([
-  "safe_browsing_clean",
+  "web_risk_clean",
   "probe_clean_response",
   "tls_valid",
   "dns_resolved",

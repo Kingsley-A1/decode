@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LINK_VERDICT } from "@/server/links/constants";
 import type { ProbeSummary } from "@/server/links/evidence";
-import type { SafeBrowsingResult } from "@/server/links/safeBrowsing";
+import type { WebRiskResult } from "@/server/links/webRisk";
 import {
   verifyLink,
   type ProbeRunner,
-  type SafeBrowsingRunner,
+  type WebRiskRunner,
 } from "@/server/links/service";
 import type {
   LinkCheckRecord,
@@ -13,11 +13,11 @@ import type {
   LinkCheckTiming,
 } from "@/server/links/repository";
 
-// Keep Safe Browsing unconfigured by default so the probe-focused tests are
-// deterministic and never touch the network. SB-specific tests inject their
-// own runner.
+// Keep Web Risk unconfigured by default so the probe-focused tests are
+// deterministic and never touch the network. Web-Risk-specific tests inject
+// their own runner.
 beforeEach(() => {
-  delete process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+  delete process.env.GOOGLE_WEB_RISK_API_KEY;
 });
 
 describe("verifyLink", () => {
@@ -205,10 +205,10 @@ describe("verifyLink", () => {
     expect(result.verdict).toBe("malicious");
   });
 
-  it("escalates to malicious on a Safe Browsing match", async () => {
+  it("escalates to malicious on a Web Risk match", async () => {
     const now = new Date("2026-05-18T00:00:00.000Z");
     const probe = vi.fn<ProbeRunner>(async () => cleanProbe());
-    const safeBrowsing = vi.fn<SafeBrowsingRunner>(async () => sbMalware());
+    const webRisk = vi.fn<WebRiskRunner>(async () => webRiskMalware());
     const repository: LinkCheckRepository = {
       findFreshByNormalizedUrl: vi.fn(async () => null),
       upsertVerdict: vi.fn(async () => getLinkCheckRecord(now)),
@@ -216,19 +216,19 @@ describe("verifyLink", () => {
 
     const result = await verifyLink(
       { url: "https://example.com", now },
-      { repository, probe, safeBrowsing }
+      { repository, probe, webRisk }
     );
 
     expect(result.verdict).toBe("malicious");
     expect(result.evidence.map((e) => e.code)).toContain(
-      "safe_browsing_malware"
+      "web_risk_malware"
     );
   });
 
-  it("includes a clean Safe Browsing signal and persists its TTL", async () => {
+  it("includes a clean Web Risk signal and persists its TTL", async () => {
     const now = new Date("2026-05-18T00:00:00.000Z");
     const probe = vi.fn<ProbeRunner>(async () => cleanProbe());
-    const safeBrowsing = vi.fn<SafeBrowsingRunner>(async () => sbClean());
+    const webRisk = vi.fn<WebRiskRunner>(async () => webRiskClean());
     const persistedTiming: { current: LinkCheckTiming | null } = {
       current: null,
     };
@@ -246,17 +246,17 @@ describe("verifyLink", () => {
 
     const result = await verifyLink(
       { url: "https://example.com", now },
-      { repository, probe, safeBrowsing }
+      { repository, probe, webRisk }
     );
 
-    expect(result.evidence.map((e) => e.code)).toContain("safe_browsing_clean");
-    expect(persistedTiming.current?.safeBrowsingTtl).toBeInstanceOf(Date);
+    expect(result.evidence.map((e) => e.code)).toContain("web_risk_clean");
+    expect(persistedTiming.current?.threatIntelTtl).toBeInstanceOf(Date);
   });
 
-  it("does not query Safe Browsing for private hosts", async () => {
+  it("does not query Web Risk for private hosts", async () => {
     const now = new Date("2026-05-18T00:00:00.000Z");
     const probe = vi.fn<ProbeRunner>(async () => cleanProbe());
-    const safeBrowsing = vi.fn<SafeBrowsingRunner>(async () => sbClean());
+    const webRisk = vi.fn<WebRiskRunner>(async () => webRiskClean());
     const repository: LinkCheckRepository = {
       findFreshByNormalizedUrl: vi.fn(async () => null),
       upsertVerdict: vi.fn(),
@@ -264,17 +264,17 @@ describe("verifyLink", () => {
 
     const result = await verifyLink(
       { url: "http://192.168.1.10/admin", now },
-      { repository, probe, safeBrowsing }
+      { repository, probe, webRisk }
     );
 
     expect(result.verdict).toBe(LINK_VERDICT.SUSPICIOUS);
-    expect(safeBrowsing).not.toHaveBeenCalled();
+    expect(webRisk).not.toHaveBeenCalled();
     expect(probe).not.toHaveBeenCalled();
   });
 
-  it("skips Safe Browsing when skipProbe is set", async () => {
+  it("skips Web Risk when skipProbe is set", async () => {
     const now = new Date("2026-05-18T00:00:00.000Z");
-    const safeBrowsing = vi.fn<SafeBrowsingRunner>(async () => sbClean());
+    const webRisk = vi.fn<WebRiskRunner>(async () => webRiskClean());
     const repository: LinkCheckRepository = {
       findFreshByNormalizedUrl: vi.fn(async () => null),
       upsertVerdict: vi.fn(),
@@ -282,16 +282,16 @@ describe("verifyLink", () => {
 
     await verifyLink(
       { url: "https://example.com", now, skipProbe: true },
-      { repository, safeBrowsing }
+      { repository, webRisk }
     );
 
-    expect(safeBrowsing).not.toHaveBeenCalled();
+    expect(webRisk).not.toHaveBeenCalled();
   });
 
-  it("queries Safe Browsing on a suspicious public URL without probing it", async () => {
+  it("queries Web Risk on a suspicious public URL without probing it", async () => {
     const now = new Date("2026-05-18T00:00:00.000Z");
     const probe = vi.fn<ProbeRunner>(async () => cleanProbe());
-    const safeBrowsing = vi.fn<SafeBrowsingRunner>(async () => sbMalware());
+    const webRisk = vi.fn<WebRiskRunner>(async () => webRiskMalware());
     const repository: LinkCheckRepository = {
       findFreshByNormalizedUrl: vi.fn(async () => null),
       upsertVerdict: vi.fn(async () => getLinkCheckRecord(now)),
@@ -299,11 +299,11 @@ describe("verifyLink", () => {
 
     const result = await verifyLink(
       { url: "https://paypal-secure.example.com/login", now },
-      { repository, probe, safeBrowsing }
+      { repository, probe, webRisk }
     );
 
     expect(probe).not.toHaveBeenCalled();
-    expect(safeBrowsing).toHaveBeenCalledOnce();
+    expect(webRisk).toHaveBeenCalledOnce();
     expect(result.verdict).toBe("malicious");
   });
 });
@@ -355,22 +355,22 @@ function getLinkCheckRecord(now: Date): LinkCheckRecord {
     reasons: [],
     evidence: [],
     probeSummary: cleanProbe() as unknown as LinkCheckRecord["probeSummary"],
-    safeBrowsingTtl: null,
+    threatIntelTtl: null,
     checkedAt: now,
     expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
   };
 }
 
-function sbClean(): SafeBrowsingResult {
+function webRiskClean(): WebRiskResult {
   return {
     configured: true,
     checked: true,
     evidence: [
       {
-        code: "safe_browsing_clean",
-        source: "safe_browsing",
+        code: "web_risk_clean",
+        source: "web_risk",
         severity: "info",
-        message: "No record in Safe Browsing.",
+        message: "No record in Web Risk.",
         observedAt: "2026-05-18T00:00:00.000Z",
       },
     ],
@@ -379,14 +379,14 @@ function sbClean(): SafeBrowsingResult {
   };
 }
 
-function sbMalware(): SafeBrowsingResult {
+function webRiskMalware(): WebRiskResult {
   return {
     configured: true,
     checked: true,
     evidence: [
       {
-        code: "safe_browsing_malware",
-        source: "safe_browsing",
+        code: "web_risk_malware",
+        source: "web_risk",
         severity: "critical",
         message: "Flagged for malware.",
         observedAt: "2026-05-18T00:00:00.000Z",

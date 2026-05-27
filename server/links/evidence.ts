@@ -15,7 +15,7 @@ export type EvidenceSource =
   | "dns"
   | "probe"
   | "tls"
-  | "safe_browsing"
+  | "web_risk"
   | "threat_feed"
   | "cache";
 

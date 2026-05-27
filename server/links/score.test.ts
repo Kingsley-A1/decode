@@ -43,8 +43,8 @@ describe("scoreEvidence", () => {
         severity: "info",
       }),
       makeEvidence({
-        code: "safe_browsing_clean",
-        source: "safe_browsing",
+        code: "web_risk_clean",
+        source: "web_risk",
         severity: "info",
       }),
       makeEvidence({
@@ -98,11 +98,11 @@ describe("scoreEvidence", () => {
     expect(result.confidence).toBe(CONFIDENCE_BOUNDS.HARD_BLOCK);
   });
 
-  it("returns malicious when Safe Browsing reports a threat", () => {
+  it("returns malicious when Web Risk reports a threat", () => {
     const result = scoreEvidence([
       makeEvidence({
-        code: "safe_browsing_malware",
-        source: "safe_browsing",
+        code: "web_risk_malware",
+        source: "web_risk",
         severity: "critical",
       }),
     ]);
@@ -127,7 +127,7 @@ describe("scoreEvidence", () => {
 
   it("returns sources in canonical order", () => {
     const result = scoreEvidence([
-      makeEvidence({ source: "safe_browsing", code: "safe_browsing_clean" }),
+      makeEvidence({ source: "web_risk", code: "web_risk_clean" }),
       makeEvidence({ source: "heuristic", code: "info" }),
       makeEvidence({ source: "probe", code: "probe_clean_response" }),
     ]);
@@ -135,7 +135,7 @@ describe("scoreEvidence", () => {
     expect(result.sourcesPresent).toEqual([
       "heuristic",
       "probe",
-      "safe_browsing",
+      "web_risk",
     ]);
   });
 

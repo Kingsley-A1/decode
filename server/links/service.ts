@@ -14,9 +14,9 @@ import {
 import { probeUrl } from "@/server/links/probe";
 import { getProbeEvidence } from "@/server/links/probeEvidence";
 import {
-  checkSafeBrowsing,
-  type SafeBrowsingResult,
-} from "@/server/links/safeBrowsing";
+  checkWebRisk,
+  type WebRiskResult,
+} from "@/server/links/webRisk";
 import {
   prismaLinkCheckRepository,
   type LinkCheckRecord,
@@ -27,22 +27,22 @@ import { scoreEvidence } from "@/server/links/score";
 export interface VerifyLinkInput {
   readonly url: string;
   readonly now?: Date;
-  /** Skip the network probe and Safe Browsing lookup; return the instant
+  /** Skip the network probe and Web Risk lookup; return the instant
    *  heuristic-only verdict. Used for the UI's optimistic first paint. */
   readonly skipProbe?: boolean;
 }
 
 export type ProbeRunner = (url: string) => Promise<ProbeSummary>;
-export type SafeBrowsingRunner = (url: string) => Promise<SafeBrowsingResult>;
+export type WebRiskRunner = (url: string) => Promise<WebRiskResult>;
 
 export interface VerifyLinkDeps {
   readonly repository?: LinkCheckRepository;
   readonly probe?: ProbeRunner;
-  readonly safeBrowsing?: SafeBrowsingRunner;
+  readonly webRisk?: WebRiskRunner;
 }
 
 // Heuristic codes that mean the host is not a public destination. We never
-// probe or send these to Safe Browsing — they are internal / malformed.
+// probe or send these to Web Risk — they are internal / malformed.
 const HOST_BLOCKING_CODES: ReadonlySet<string> = new Set([
   "private_network_host",
   "localhost_host",
@@ -79,7 +79,7 @@ export async function verifyLink(
 ): Promise<LinkVerificationResult> {
   const repository = deps.repository ?? prismaLinkCheckRepository;
   const probeRunner = deps.probe ?? probeUrl;
-  const safeBrowsingRunner = deps.safeBrowsing ?? checkSafeBrowsing;
+  const webRiskRunner = deps.webRisk ?? checkWebRisk;
   const now = input.now ?? new Date();
   const analysis = analyzeLink(input.url);
 
@@ -104,55 +104,55 @@ export async function verifyLink(
   const publicHost = !hasHostBlockingEvidence(analysis.evidence);
 
   // The probe is additionally skipped when heuristics already condemned the
-  // URL — fetching a likely-phishing page buys nothing. Safe Browsing still
-  // runs on suspicious public URLs: authoritative intel can upgrade a
-  // heuristic "suspicious" to a confirmed "malicious".
+  // URL — fetching a likely-phishing page buys nothing. Web Risk still runs
+  // on suspicious public URLs: authoritative intel can upgrade a heuristic
+  // "suspicious" to a confirmed "malicious".
   const wantProbe =
     external &&
     publicHost &&
     analysis.verdict !== "suspicious" &&
     analysis.verdict !== "malicious";
-  const wantSafeBrowsing = external && publicHost;
+  const wantWebRisk = external && publicHost;
 
-  const [probe, safeBrowsing] = await Promise.all([
+  const [probe, webRisk] = await Promise.all([
     wantProbe
       ? probeRunner(analysis.normalizedUrl)
       : Promise.resolve<ProbeSummary | null>(null),
-    wantSafeBrowsing
-      ? safeBrowsingRunner(analysis.normalizedUrl)
-      : Promise.resolve<SafeBrowsingResult | null>(null),
+    wantWebRisk
+      ? webRiskRunner(analysis.normalizedUrl)
+      : Promise.resolve<WebRiskResult | null>(null),
   ]);
 
   let evidence = analysis.evidence;
   if (probe) {
     evidence = mergeEvidence(evidence, getProbeEvidence(probe));
   }
-  if (safeBrowsing && safeBrowsing.evidence.length > 0) {
-    evidence = mergeEvidence(evidence, safeBrowsing.evidence);
+  if (webRisk && webRisk.evidence.length > 0) {
+    evidence = mergeEvidence(evidence, webRisk.evidence);
   }
 
   const wire = toWire(evidence, analysis.normalizedUrl, analysis.host, probe);
 
   // Cache only verdicts backed by external evidence. A probe result, or a
-  // completed Safe Browsing lookup, qualifies. Heuristic-only verdicts are
-  // free to recompute and caching them would shadow a later full check.
+  // completed Web Risk lookup, qualifies. Heuristic-only verdicts are free
+  // to recompute and caching them would shadow a later full check.
   const hasExternalEvidence =
     probe !== null ||
-    Boolean(safeBrowsing?.checked && safeBrowsing.evidence.length > 0);
+    Boolean(webRisk?.checked && webRisk.evidence.length > 0);
   if (!hasExternalEvidence) {
     return buildResult(wire, uncacheable(now));
   }
 
   try {
     const expiresAt = new Date(now.getTime() + LINK_CHECK_CACHE_TTL_MS);
-    const safeBrowsingTtl =
-      safeBrowsing?.checked && safeBrowsing.cacheTtlMs !== null
-        ? new Date(now.getTime() + safeBrowsing.cacheTtlMs)
+    const threatIntelTtl =
+      webRisk?.checked && webRisk.cacheTtlMs !== null
+        ? new Date(now.getTime() + webRisk.cacheTtlMs)
         : null;
     const stored = await repository.upsertVerdict(wire, {
       checkedAt: now,
       expiresAt,
-      safeBrowsingTtl,
+      threatIntelTtl,
     });
 
     return buildResult(wire, {

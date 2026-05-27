@@ -39,7 +39,7 @@ type EvidenceSource =
   | "dns"
   | "probe"
   | "tls"
-  | "safe_browsing"
+  | "web_risk"
   | "threat_feed"
   | "cache";
 
@@ -861,7 +861,7 @@ interface EvidenceGroup {
 }
 
 const SOURCE_ORDER: readonly EvidenceSource[] = [
-  "safe_browsing",
+  "web_risk",
   "threat_feed",
   "probe",
   "tls",
@@ -889,8 +889,8 @@ const SOURCE_META: Readonly<
     label: "TLS certificate",
     icon: <Lock className="h-4 w-4" aria-hidden="true" />,
   },
-  safe_browsing: {
-    label: "Google Safe Browsing",
+  web_risk: {
+    label: "Google Web Risk",
     icon: <ShieldCheck className="h-4 w-4" aria-hidden="true" />,
   },
   threat_feed: {

@@ -220,7 +220,7 @@ model LinkCheck {
   reasons         Json
   evidence        Json?
   probeSummary    Json?
-  safeBrowsingTtl DateTime?
+  threatIntelTtl  DateTime?
   checkedAt       DateTime  @default(now())
   expiresAt       DateTime
   createdAt       DateTime  @default(now())

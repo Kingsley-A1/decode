@@ -22,9 +22,13 @@ import { inspectTls } from "@/server/net/tlsInspect";
 // can translate them into structured evidence.
 
 const MAX_HOPS = 5;
-const DEFAULT_TOTAL_BUDGET_MS = 4000;
-const DEFAULT_PER_HOP_TIMEOUT_MS = 2000;
-const DEFAULT_TLS_TIMEOUT_MS = 1500;
+// Probe budget tuned for a responsive verifier UI: under 3s the user
+// perceives the verdict as snapping in, beyond 4s it feels broken. We run
+// in parallel with Web Risk (≤2.5s) under Promise.all, so the 3s probe
+// ceiling effectively caps end-to-end verification at ~3s for a fresh URL.
+const DEFAULT_TOTAL_BUDGET_MS = 3000;
+const DEFAULT_PER_HOP_TIMEOUT_MS = 1500;
+const DEFAULT_TLS_TIMEOUT_MS = 1200;
 const MIN_TLS_BUDGET_MS = 200;
 
 export type ProbeFetchImpl = (
