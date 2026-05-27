@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   BriefcaseBusiness,
@@ -54,6 +55,7 @@ import {
 } from "@/components/ui";
 import type { SegmentedControlOption } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { withReturnTo } from "@/lib/redirects";
 
 interface ApiResponse<TData> {
   readonly ok: boolean;
@@ -95,6 +97,20 @@ interface DynamicQRCodeOption {
     readonly title: string;
     readonly status: LandingPageStatus;
   } | null;
+}
+
+interface LandingPageBuilderDraft {
+  readonly version: 1;
+  readonly type: LandingPageType;
+  readonly title: string;
+  readonly qrCodeId: string;
+  readonly landingPageId: string;
+  readonly status: LandingPageStatus;
+  readonly activeTemplateKey: string;
+  readonly selectedPresetKey: string;
+  readonly content: LandingPageContent;
+  readonly hasEditedContent: boolean;
+  readonly hasEditedTitle: boolean;
 }
 
 type DynamicQRCodeLoadStatus =
@@ -179,8 +195,11 @@ const templateSearchSynonyms: Record<string, readonly string[]> = {
 
 const defaultTemplateKey =
   defaultLandingPageTemplatePresets[0]?.key ?? "personal-profile";
+const landingPageBuilderDraftStorageKey =
+  "decode:landing-page-builder:draft:v1";
 
 export function LandingPageBuilder() {
+  const searchParams = useSearchParams();
   const [templates, setTemplates] = useState<readonly LandingPageTemplatePreset[]>(
     defaultLandingPageTemplatePresets
   );
@@ -210,8 +229,10 @@ export function LandingPageBuilder() {
     null
   );
   const [notice, setNotice] = useState<string | null>(null);
+  const [isTemplateExplorerVisible, setIsTemplateExplorerVisible] = useState(true);
   const builderSectionRef = useRef<HTMLDivElement>(null);
   const builderHeadingRef = useRef<HTMLHeadingElement>(null);
+  const incomingQRCodeAppliedRef = useRef(false);
 
   const selectedTemplate = useMemo(
     () =>
@@ -263,6 +284,47 @@ export function LandingPageBuilder() {
     Boolean(title.trim()) &&
     Boolean(qrCodeId.trim()) &&
     status !== "archived";
+
+  const createDynamicQRHref = withReturnTo(
+    "/generate?mode=dynamic",
+    "/landing-pages"
+  );
+  const signInHref = withReturnTo("/me?intent=login", "/landing-pages");
+
+  useEffect(() => {
+    const draft = readLandingPageBuilderDraft();
+    if (!draft) return;
+
+    setType(draft.type);
+    setTitle(draft.title);
+    setQrCodeId(draft.qrCodeId);
+    setLandingPageId(draft.landingPageId);
+    setStatus(draft.status);
+    setActiveTemplateKey(draft.activeTemplateKey);
+    setSelectedPresetKey(draft.selectedPresetKey);
+    setContent(draft.content);
+    setHasEditedContent(draft.hasEditedContent);
+    setHasEditedTitle(draft.hasEditedTitle);
+    setIsTemplateExplorerVisible(false);
+    setNotice("Restored your landing page draft.");
+  }, []);
+
+  useEffect(() => {
+    if (incomingQRCodeAppliedRef.current) return;
+
+    const incomingQRCodeId = searchParams.get("qrCodeId");
+    if (!incomingQRCodeId) return;
+
+    incomingQRCodeAppliedRef.current = true;
+    setQrCodeId(incomingQRCodeId);
+    setIsTemplateExplorerVisible(false);
+    setNotice(
+      searchParams.get("qrCreated") === "1"
+        ? "Dynamic QR created and attached. Review the page, then save or publish."
+        : "Dynamic QR attached. Review the page, then save or publish."
+    );
+    window.requestAnimationFrame(() => focusBuilder());
+  }, [searchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -375,15 +437,35 @@ export function LandingPageBuilder() {
     setHasEditedContent(false);
     setHasEditedTitle(false);
     setPendingTemplate(null);
+    setIsTemplateExplorerVisible(false);
     setNotice(
       mode === "preserve"
         ? `${preset.label} template loaded with shared fields preserved. Review the required checklist before publishing.`
         : `${preset.label} template loaded. Edit the content, attach a dynamic QR code, then save or publish.`
     );
-    window.requestAnimationFrame(() => {
-      builderSectionRef.current?.scrollIntoView({ block: "start" });
-      builderHeadingRef.current?.focus({ preventScroll: true });
+    window.requestAnimationFrame(() => focusBuilder());
+  };
+
+  function focusBuilder() {
+    builderSectionRef.current?.scrollIntoView({ block: "start" });
+    builderHeadingRef.current?.focus({ preventScroll: true });
+  }
+
+  const persistDraftBeforeExit = () => {
+    persistLandingPageBuilderDraft({
+      version: 1,
+      type,
+      title,
+      qrCodeId,
+      landingPageId,
+      status,
+      activeTemplateKey,
+      selectedPresetKey,
+      content,
+      hasEditedContent,
+      hasEditedTitle,
     });
+    setNotice("Your landing page draft is saved in this browser.");
   };
 
   const handleUseTemplate = (preset: LandingPageTemplatePreset) => {
@@ -506,13 +588,21 @@ export function LandingPageBuilder() {
 
   return (
     <div className="space-y-6">
-      <TemplateExplorer
-        templates={templates}
-        selectedPresetKey={selectedTemplate.key}
-        activeTemplateKey={activeTemplate.key}
-        onSelectPreset={setSelectedPresetKey}
-        onUseTemplate={handleUseTemplate}
-      />
+      {isTemplateExplorerVisible ? (
+        <TemplateExplorer
+          templates={templates}
+          selectedPresetKey={selectedTemplate.key}
+          activeTemplateKey={activeTemplate.key}
+          onSelectPreset={setSelectedPresetKey}
+          onUseTemplate={handleUseTemplate}
+        />
+      ) : (
+        <ActiveTemplateSummary
+          template={activeTemplate}
+          onChangeTemplate={() => setIsTemplateExplorerVisible(true)}
+          onFocusBuilder={focusBuilder}
+        />
+      )}
 
       <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)]">
         <div className="min-w-0 space-y-5">
@@ -580,6 +670,9 @@ export function LandingPageBuilder() {
                   loadStatus={dynamicQRCodeStatus}
                   loadError={dynamicQRCodeError}
                   landingPageId={landingPageId}
+                  createHref={createDynamicQRHref}
+                  signInHref={signInHref}
+                  onBeforeNavigate={persistDraftBeforeExit}
                   onChange={setQrCodeId}
                 />
                 <Input
@@ -628,7 +721,8 @@ export function LandingPageBuilder() {
                       sign in and attach a dynamic QR code.
                     </p>
                     <Link
-                      href="/me"
+                      href={signInHref}
+                      onClick={persistDraftBeforeExit}
                       className="inline-flex min-h-11 items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
                     >
                       Sign in to save
@@ -798,12 +892,58 @@ function TemplateSwitchDialog({
   );
 }
 
+function ActiveTemplateSummary({
+  template,
+  onChangeTemplate,
+  onFocusBuilder,
+}: {
+  readonly template: LandingPageTemplatePreset;
+  readonly onChangeTemplate: () => void;
+  readonly onFocusBuilder: () => void;
+}) {
+  const Icon = templateIcons[template.type];
+
+  return (
+    <section className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-sky-100">
+            <Icon className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold uppercase text-sky-800">
+              Editing template
+            </p>
+            <h2 className="mt-0.5 text-lg font-semibold text-slate-950">
+              {template.label}
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              The template library is hidden while this page is in edit mode.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={onFocusBuilder}>
+            Continue editing
+          </Button>
+          <Button variant="secondary" onClick={onChangeTemplate}>
+            Change template
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function DynamicQRCodeSelector({
   qrCodes,
   selectedQRCodeId,
   loadStatus,
   loadError,
   landingPageId,
+  createHref,
+  signInHref,
+  onBeforeNavigate,
   onChange,
 }: {
   readonly qrCodes: readonly DynamicQRCodeOption[];
@@ -811,6 +951,9 @@ function DynamicQRCodeSelector({
   readonly loadStatus: DynamicQRCodeLoadStatus;
   readonly loadError: string | null;
   readonly landingPageId: string;
+  readonly createHref: string;
+  readonly signInHref: string;
+  readonly onBeforeNavigate: () => void;
   readonly onChange: (qrCodeId: string) => void;
 }) {
   const selectedQRCodeLoaded = qrCodes.some(
@@ -855,7 +998,8 @@ function DynamicQRCodeSelector({
       </Select>
       <div className="flex flex-wrap gap-2">
         <Link
-          href="/generate?mode=dynamic"
+          href={createHref}
+          onClick={onBeforeNavigate}
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -863,7 +1007,8 @@ function DynamicQRCodeSelector({
         </Link>
         {loadStatus === "unauthenticated" && (
           <Link
-            href="/me"
+            href={signInHref}
+            onClick={onBeforeNavigate}
             className="inline-flex min-h-11 items-center justify-center rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
           >
             Sign in
@@ -2873,6 +3018,56 @@ async function fetchDynamicQRCodes(): Promise<{
   return {
     qrCodes: qrCodes.filter(isDynamicQRCodeOption),
   };
+}
+
+function persistLandingPageBuilderDraft(draft: LandingPageBuilderDraft): void {
+  try {
+    window.localStorage.setItem(
+      landingPageBuilderDraftStorageKey,
+      JSON.stringify(draft)
+    );
+  } catch {
+    // The user can still continue manually if storage is unavailable.
+  }
+}
+
+function readLandingPageBuilderDraft(): LandingPageBuilderDraft | null {
+  try {
+    const rawDraft = window.localStorage.getItem(landingPageBuilderDraftStorageKey);
+    if (!rawDraft) return null;
+
+    const draft = JSON.parse(rawDraft) as unknown;
+    if (!isLandingPageBuilderDraft(draft)) return null;
+
+    window.localStorage.removeItem(landingPageBuilderDraftStorageKey);
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function isLandingPageBuilderDraft(
+  value: unknown
+): value is LandingPageBuilderDraft {
+  if (!isRecord(value)) return false;
+
+  return (
+    value.version === 1 &&
+    isLandingPageType(value.type) &&
+    typeof value.title === "string" &&
+    typeof value.qrCodeId === "string" &&
+    typeof value.landingPageId === "string" &&
+    isLandingPageStatus(value.status) &&
+    typeof value.activeTemplateKey === "string" &&
+    typeof value.selectedPresetKey === "string" &&
+    isRecord(value.content) &&
+    typeof value.hasEditedContent === "boolean" &&
+    typeof value.hasEditedTitle === "boolean"
+  );
+}
+
+function isLandingPageStatus(value: unknown): value is LandingPageStatus {
+  return value === "draft" || value === "published" || value === "archived";
 }
 
 async function fetchJson<TData>(

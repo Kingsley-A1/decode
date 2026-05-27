@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -37,6 +38,7 @@ import {
 import { useQRCode, type QROptions } from "@/hooks/useQRCode";
 import { OAuthSignInPanel } from "@/components/auth/OAuthSignInPanel";
 import { getFreshClientSession } from "@/lib/client-auth";
+import { addSearchParams, sanitizeReturnTo } from "@/lib/redirects";
 import { PageHeader } from "./PageHeader";
 import {
   Alert,
@@ -110,6 +112,7 @@ type ScanabilityState = "ready" | "needs-attention" | "blocked";
 interface QRGeneratorProps {
   showHeader?: boolean;
   initialMode?: QRMode;
+  returnTo?: string | null;
 }
 
 interface FormState {
@@ -761,7 +764,9 @@ const qrGeneratorAuthDraftStorageKey = "decode:qr-generator:auth-draft:v1";
 export function QRGenerator({
   showHeader = true,
   initialMode = "static",
+  returnTo = null,
 }: QRGeneratorProps) {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("content");
   const [mode, setMode] = useState<QRMode>(initialMode);
   const [type, setType] = useState<QRType>("url");
@@ -788,6 +793,7 @@ export function QRGenerator({
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousStepRef = useRef(currentStep);
   const logoSelectionRequestRef = useRef(0);
+  const safeReturnTo = returnTo ? sanitizeReturnTo(returnTo, "/landing-pages") : null;
 
   const refreshAuthSession = useCallback(async () => {
     const session = await getFreshClientSession();
@@ -1305,6 +1311,15 @@ export function QRGenerator({
       setAuthPromptVisible(false);
       setAuthPromptMessage(null);
       setPublishStatus(`Published dynamic QR: ${payloadValue}`);
+
+      if (safeReturnTo) {
+        router.push(
+          addSearchParams(safeReturnTo, {
+            qrCodeId,
+            qrCreated: "1",
+          })
+        );
+      }
     } catch (error) {
       setPublishError(
         error instanceof Error ? error.message : "Could not publish QR code."
@@ -2543,7 +2558,6 @@ function ExportStep({
       {authPromptVisible && (
         <div ref={authPromptRef}>
           <OAuthSignInPanel
-            callbackUrl="/generate"
             title="Sign in to finish export"
             description={
               authPromptMessage ??

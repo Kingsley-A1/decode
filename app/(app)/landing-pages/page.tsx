@@ -33,14 +33,6 @@ export default function LandingPagesPage() {
       eyebrow="Pages"
       title="Landing pages"
       description="Create polished, editable public pages for dynamic QR campaigns with templates, media uploads, and mobile-first preview."
-      actions={
-        <Link
-          href="/demo"
-          className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900"
-        >
-          View demo
-        </Link>
-      }
     >
       <div className="space-y-6">
         <LandingPageBuilderIsland />
@@ -70,6 +62,15 @@ export default function LandingPagesPage() {
             );
           })}
         </section>
+
+        <div className="flex justify-end">
+          <Link
+            href="/demo"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900"
+          >
+            View demo
+          </Link>
+        </div>
       </div>
     </PageShell>
   );
