@@ -16,6 +16,8 @@ import { ShortLinkError } from "@/server/short-links/errors";
 import {
   prismaShortLinkRepository,
   type ShortLinkCreatedRow,
+  type ShortLinkDetailRow,
+  type ShortLinkListRow,
   type ShortLinkRepository,
 } from "@/server/short-links/repository";
 import {
@@ -207,6 +209,60 @@ export async function recordShortLinkScan(
 ): Promise<void> {
   const repository = deps.repository ?? prismaShortLinkRepository;
   await repository.recordScan(input.shortLinkId, input.telemetry);
+}
+
+export const SHORT_LINK_LIST_DEFAULT_TAKE = 25;
+export const SHORT_LINK_LIST_MAX_TAKE = 100;
+
+export interface ListShortLinksInput {
+  readonly ownerId: string;
+  readonly workspaceId?: string;
+  readonly take?: number;
+  readonly cursorId?: string;
+}
+
+export interface ListShortLinksResult {
+  readonly shortLinks: readonly ShortLinkListRow[];
+  readonly nextCursor: string | null;
+}
+
+export async function listShortLinks(
+  input: ListShortLinksInput,
+  deps: ShortLinkServiceDeps = {}
+): Promise<ListShortLinksResult> {
+  const repository = deps.repository ?? prismaShortLinkRepository;
+  const take = clampTake(input.take ?? SHORT_LINK_LIST_DEFAULT_TAKE);
+
+  const rows = await repository.listForOwner({
+    ownerId: input.ownerId,
+    workspaceId: input.workspaceId,
+    take,
+    cursorId: input.cursorId,
+  });
+
+  return {
+    shortLinks: rows,
+    nextCursor:
+      rows.length < take ? null : (rows[rows.length - 1]?.id ?? null),
+  };
+}
+
+export async function getShortLinkDetail(
+  input: { readonly id: string; readonly ownerId: string },
+  deps: ShortLinkServiceDeps = {}
+): Promise<ShortLinkDetailRow | null> {
+  const repository = deps.repository ?? prismaShortLinkRepository;
+
+  return repository.findDetailForOwner({
+    id: input.id,
+    ownerId: input.ownerId,
+  });
+}
+
+function clampTake(value: number): number {
+  if (!Number.isFinite(value) || value < 1) return SHORT_LINK_LIST_DEFAULT_TAKE;
+
+  return Math.min(Math.floor(value), SHORT_LINK_LIST_MAX_TAKE);
 }
 
 function summarizeVerification(

@@ -3,16 +3,22 @@ import type { LinkVerificationResult } from "@/server/links/service";
 import { SHORT_LINK_ERROR_CODE } from "@/server/short-links/constants";
 import { ShortLinkError } from "@/server/short-links/errors";
 import type {
+  ShortLinkDetailRow,
+  ShortLinkListRow,
   ShortLinkRepository,
   ShortLinkResolveRow,
 } from "@/server/short-links/repository";
 import {
+  SHORT_LINK_LIST_MAX_TAKE,
   createShortLink,
+  getShortLinkDetail,
+  listShortLinks,
   recordShortLinkScan,
   resolveShortLink,
   type ShortLinkVerifier,
 } from "@/server/short-links/service";
 import { isValidShortLinkSlug } from "@/server/short-links/slugs";
+import { getShortLinkErrorStatus } from "@/server/short-links/errors";
 
 const LONG_URL = `https://example.com/${"a".repeat(100)}`; // 120 chars
 
@@ -43,12 +49,16 @@ function repo(overrides: Partial<ShortLinkRepository> = {}): ShortLinkRepository
       normalizedUrl: data.normalizedUrl,
       status: data.status,
       verdictAtCreate: data.verdictAtCreate,
+      lastVerdict: data.lastVerdict,
       scanCount: 0,
       expiresAt: data.expiresAt ?? null,
       createdAt: new Date("2026-05-25T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-25T00:00:00.000Z"),
     })),
     findResolvable: vi.fn(async () => null),
     recordScan: vi.fn(async () => undefined),
+    listForOwner: vi.fn(async () => []),
+    findDetailForOwner: vi.fn(async () => null),
     ...overrides,
   };
 }
@@ -176,8 +186,8 @@ describe("createShortLink", () => {
         confidence: 95,
         evidence: [
           {
-            code: "safe_browsing_malware",
-            source: "safe_browsing",
+            code: "web_risk_malware",
+            source: "web_risk",
             severity: "critical",
             message: "Flagged for malware.",
             observedAt: "2026-05-25T00:00:00.000Z",
@@ -257,6 +267,127 @@ describe("resolveShortLink", () => {
 
     expect(result.status).toBe("blocked");
     if (result.status === "blocked") expect(result.reason).toBe("disabled");
+  });
+});
+
+function listRow(
+  overrides: Partial<ShortLinkListRow> = {}
+): ShortLinkListRow {
+  return {
+    id: "sl_1",
+    slug: "aB3xK",
+    destinationUrl: LONG_URL,
+    normalizedUrl: LONG_URL,
+    status: "active",
+    verdictAtCreate: "safe",
+    lastVerdict: "safe",
+    scanCount: 0,
+    expiresAt: null,
+    createdAt: new Date("2026-05-25T00:00:00.000Z"),
+    updatedAt: new Date("2026-05-25T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function detailRow(
+  overrides: Partial<ShortLinkDetailRow> = {}
+): ShortLinkDetailRow {
+  return {
+    ...listRow(),
+    scans: [],
+    ...overrides,
+  };
+}
+
+describe("listShortLinks", () => {
+  it("filters to the caller's owner id and orders by the repository", async () => {
+    const rows = [listRow({ id: "sl_1" }), listRow({ id: "sl_2" })];
+    const listForOwner = vi.fn(async () => rows);
+    const repository = repo({ listForOwner });
+
+    const result = await listShortLinks(
+      { ownerId: "user_42" },
+      { repository }
+    );
+
+    expect(listForOwner).toHaveBeenCalledWith({
+      ownerId: "user_42",
+      workspaceId: undefined,
+      take: 25,
+      cursorId: undefined,
+    });
+    expect(result.shortLinks).toHaveLength(2);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("returns a nextCursor when the page is full", async () => {
+    const rows = Array.from({ length: 25 }, (_, i) =>
+      listRow({ id: `sl_${i}` })
+    );
+    const repository = repo({ listForOwner: vi.fn(async () => rows) });
+
+    const result = await listShortLinks(
+      { ownerId: "user_42", take: 25 },
+      { repository }
+    );
+
+    expect(result.nextCursor).toBe("sl_24");
+  });
+
+  it("clamps an over-large take to the max", async () => {
+    const listForOwner = vi.fn(async () => []);
+    const repository = repo({ listForOwner });
+
+    await listShortLinks(
+      { ownerId: "user_42", take: 9999 },
+      { repository }
+    );
+
+    expect(listForOwner).toHaveBeenCalledWith(
+      expect.objectContaining({ take: SHORT_LINK_LIST_MAX_TAKE })
+    );
+  });
+});
+
+describe("getShortLinkDetail", () => {
+  it("returns the detail row when the caller owns it", async () => {
+    const repository = repo({
+      findDetailForOwner: vi.fn(async () => detailRow({ id: "sl_x" })),
+    });
+
+    const result = await getShortLinkDetail(
+      { id: "sl_x", ownerId: "user_42" },
+      { repository }
+    );
+
+    expect(result?.id).toBe("sl_x");
+  });
+
+  it("returns null when the caller does not own the row", async () => {
+    const repository = repo({
+      findDetailForOwner: vi.fn(async () => null),
+    });
+
+    const result = await getShortLinkDetail(
+      { id: "sl_x", ownerId: "user_42" },
+      { repository }
+    );
+
+    expect(result).toBeNull();
+  });
+});
+
+describe("getShortLinkErrorStatus", () => {
+  it("maps each error code to a stable HTTP status", () => {
+    expect(getShortLinkErrorStatus(SHORT_LINK_ERROR_CODE.INVALID_URL)).toBe(400);
+    expect(getShortLinkErrorStatus(SHORT_LINK_ERROR_CODE.URL_ALREADY_SHORT)).toBe(
+      422
+    );
+    expect(getShortLinkErrorStatus(SHORT_LINK_ERROR_CODE.BLOCKED)).toBe(409);
+    expect(
+      getShortLinkErrorStatus(SHORT_LINK_ERROR_CODE.REQUIRES_OVERRIDE)
+    ).toBe(409);
+    expect(getShortLinkErrorStatus(SHORT_LINK_ERROR_CODE.MINT_FAILED)).toBe(503);
   });
 });
 

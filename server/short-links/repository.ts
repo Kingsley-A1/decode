@@ -25,13 +25,56 @@ const shortLinkCreatedSelect = {
   normalizedUrl: true,
   status: true,
   verdictAtCreate: true,
+  lastVerdict: true,
   scanCount: true,
   expiresAt: true,
   createdAt: true,
+  updatedAt: true,
 } satisfies Prisma.ShortLinkSelect;
 
 export type ShortLinkCreatedRow = Prisma.ShortLinkGetPayload<{
   select: typeof shortLinkCreatedSelect;
+}>;
+
+const shortLinkListSelect = {
+  id: true,
+  slug: true,
+  destinationUrl: true,
+  normalizedUrl: true,
+  status: true,
+  verdictAtCreate: true,
+  lastVerdict: true,
+  scanCount: true,
+  expiresAt: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.ShortLinkSelect;
+
+export type ShortLinkListRow = Prisma.ShortLinkGetPayload<{
+  select: typeof shortLinkListSelect;
+}>;
+
+const shortLinkScanSelect = {
+  id: true,
+  scannedAt: true,
+  deviceClass: true,
+  browser: true,
+  operatingSystem: true,
+  country: true,
+  region: true,
+} satisfies Prisma.ShortLinkScanSelect;
+
+const shortLinkDetailSelect = {
+  ...shortLinkListSelect,
+  scans: {
+    select: shortLinkScanSelect,
+    orderBy: { scannedAt: "desc" as const },
+    take: 50,
+  },
+} satisfies Prisma.ShortLinkSelect;
+
+export type ShortLinkDetailRow = Prisma.ShortLinkGetPayload<{
+  select: typeof shortLinkDetailSelect;
 }>;
 
 export interface CreateShortLinkData {
@@ -47,6 +90,18 @@ export interface CreateShortLinkData {
   readonly expiresAt?: Date | null;
 }
 
+export interface ListShortLinksForOwnerInput {
+  readonly ownerId: string;
+  readonly workspaceId?: string;
+  readonly take: number;
+  readonly cursorId?: string;
+}
+
+export interface FindShortLinkForOwnerInput {
+  readonly id: string;
+  readonly ownerId: string;
+}
+
 export interface ShortLinkRepository {
   readonly isSlugAvailable: (slug: string) => Promise<boolean>;
   readonly create: (data: CreateShortLinkData) => Promise<ShortLinkCreatedRow>;
@@ -57,6 +112,12 @@ export interface ShortLinkRepository {
     shortLinkId: string,
     telemetry: ScanTelemetry
   ) => Promise<void>;
+  readonly listForOwner: (
+    input: ListShortLinksForOwnerInput
+  ) => Promise<readonly ShortLinkListRow[]>;
+  readonly findDetailForOwner: (
+    input: FindShortLinkForOwnerInput
+  ) => Promise<ShortLinkDetailRow | null>;
 }
 
 export const prismaShortLinkRepository: ShortLinkRepository = {
@@ -64,6 +125,8 @@ export const prismaShortLinkRepository: ShortLinkRepository = {
   create,
   findResolvable,
   recordScan,
+  listForOwner,
+  findDetailForOwner,
 };
 
 async function isSlugAvailable(slug: string): Promise<boolean> {
@@ -96,6 +159,35 @@ function findResolvable(slug: string): Promise<ShortLinkResolveRow | null> {
   return prisma.shortLink.findFirst({
     where: { slug, deletedAt: null },
     select: shortLinkResolveSelect,
+  });
+}
+
+function listForOwner(
+  input: ListShortLinksForOwnerInput
+): Promise<readonly ShortLinkListRow[]> {
+  return prisma.shortLink.findMany({
+    where: {
+      ownerId: input.ownerId,
+      deletedAt: null,
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    },
+    orderBy: { updatedAt: "desc" },
+    take: input.take,
+    ...(input.cursorId ? { cursor: { id: input.cursorId }, skip: 1 } : {}),
+    select: shortLinkListSelect,
+  });
+}
+
+function findDetailForOwner(
+  input: FindShortLinkForOwnerInput
+): Promise<ShortLinkDetailRow | null> {
+  return prisma.shortLink.findFirst({
+    where: {
+      id: input.id,
+      ownerId: input.ownerId,
+      deletedAt: null,
+    },
+    select: shortLinkDetailSelect,
   });
 }
 
