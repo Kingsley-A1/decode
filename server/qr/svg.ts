@@ -253,7 +253,7 @@ function composeWithFrame({
   const border = Math.max(Math.round(qrPx * 0.022), 6);
   const pad = Math.round(qrPx * 0.045);
   const captionHeight = Math.round(qrPx * 0.15);
-  const radius = Math.round(qrPx * 0.05);
+  const radius = 0;
   const fontSize = Math.round(captionHeight * 0.4);
   const gap = border + pad;
   const caption = getFrameCaption(frameStyle, title);
@@ -280,7 +280,7 @@ function composeWithFrame({
       gap - pad / 2,
       qrPx + pad,
       qrPx + pad,
-      Math.round(radius * 0.7),
+      0,
       "#FFFFFF",
       accent,
       2
@@ -320,7 +320,7 @@ function composeWithFrame({
       gap + qrPx + (captionHeight - chipHeight) / 2,
       chipWidth,
       chipHeight,
-      chipHeight / 2,
+      0,
       accent,
       accent,
       0

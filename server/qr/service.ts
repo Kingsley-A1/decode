@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
+import sharp from "sharp";
 import { prisma } from "@/server/db/prisma";
 import { ASSET_PURPOSE, ASSET_STATUS } from "@/server/assets/constants";
 import {
@@ -214,6 +215,9 @@ export async function createQRCode({
     await assertDynamicDestinationAllowed(request.content.url);
   }
 
+  // Bound the logo once up front so it is stored small and consistent.
+  const normalizedLogo = await normalizeLogoDataUrl(request.design.logo);
+
   const requestedSlug = getRequestedDynamicQRCodeSlug(request);
   const attempts =
     isDynamic && !requestedSlug ? GENERATED_DYNAMIC_SLUG_ATTEMPTS : 1;
@@ -224,6 +228,7 @@ export async function createQRCode({
       : null;
     const preparedQRCode = prepareQRCode(request, { dynamicSlug: slug });
     const title = request.title ?? getDefaultQRCodeTitle(preparedQRCode.payload);
+    const storedDesign = { ...preparedQRCode.design, logo: normalizedLogo };
 
     try {
       const qrCode = await createQRCodeRecord({
@@ -233,11 +238,11 @@ export async function createQRCode({
         title,
         slug,
         payload: preparedQRCode.payload,
-        design: preparedQRCode.design,
+        design: storedDesign,
         isDynamic,
       });
 
-      return { qrCode, ...preparedQRCode };
+      return { qrCode, ...preparedQRCode, design: storedDesign };
     } catch (error) {
       if (
         !requestedSlug &&
@@ -742,6 +747,7 @@ export async function renderSavedQRCode({
     design,
     format: request.format,
     title: qrCode.title,
+    logo: design.logo ? { dataUrl: design.logo } : null,
   });
   const bodyBuffer = getRenderedBodyBuffer(renderedQRCode.body);
   const uploadedObject = await putR2Object({
@@ -985,6 +991,55 @@ function getRenderDesignHash({
 
 function getSha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
+}
+
+const MAX_LOGO_INPUT_BYTES = 3 * 1024 * 1024;
+const LOGO_OUTPUT_SIZE = 256;
+
+/**
+ * Normalizes an uploaded logo data URL into a small, consistent PNG data URL so
+ * it can be persisted inside the design config without bloating the row. Returns
+ * undefined for missing/invalid input so a bad logo never blocks a save.
+ */
+async function normalizeLogoDataUrl(
+  logo: string | undefined
+): Promise<string | undefined> {
+  if (!logo) return undefined;
+
+  // Accept both base64 (uploaded files) and percent-encoded (preset SVG) data
+  // URLs. Everything is rasterized to a small PNG for consistent, bounded size.
+  const match = /^data:(image\/[a-z0-9.+-]+)([^,]*),([\s\S]*)$/i.exec(logo.trim());
+  if (!match) return undefined;
+
+  const isBase64 = /;base64/i.test(match[2] ?? "");
+  const payload = match[3] ?? "";
+
+  let input: Buffer;
+  try {
+    input = isBase64
+      ? Buffer.from(payload, "base64")
+      : Buffer.from(decodeURIComponent(payload), "utf8");
+  } catch {
+    return undefined;
+  }
+
+  if (input.byteLength === 0 || input.byteLength > MAX_LOGO_INPUT_BYTES) {
+    return undefined;
+  }
+
+  try {
+    const png = await sharp(input)
+      .resize(LOGO_OUTPUT_SIZE, LOGO_OUTPUT_SIZE, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .png()
+      .toBuffer();
+
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch {
+    return undefined;
+  }
 }
 
 function removeUndefinedValues(

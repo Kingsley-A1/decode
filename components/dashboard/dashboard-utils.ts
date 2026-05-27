@@ -142,6 +142,7 @@ function readDesignConfig(value: unknown): DashboardQRDesignConfig | null {
     errorCorrectionLevel,
     size: readNumber(value.size) || 1024,
     frameStyle: readString(value.frameStyle) || "none",
+    logo: readString(value.logo) || undefined,
   };
 }
 

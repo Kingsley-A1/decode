@@ -88,6 +88,10 @@ const baseCreateQRCodeSchema = z.object({
       frameStyle: z
         .enum(["none", "scan-me", "classic", "ticket", "badge", "minimal"])
         .default("none"),
+      // Optional centered logo as a data URL. Bounded in size at the schema
+      // boundary; the service downscales it before persisting so rows stay
+      // small and the export/preview stay consistent.
+      logo: z.string().max(4_000_000).optional(),
     })
     .default(defaultQRDesignConfig),
 });

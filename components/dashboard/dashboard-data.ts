@@ -30,6 +30,7 @@ export interface DashboardQRDesignConfig {
   readonly errorCorrectionLevel: "L" | "M" | "Q" | "H";
   readonly size: number;
   readonly frameStyle: string;
+  readonly logo?: string;
 }
 
 export interface DashboardScanEvent {

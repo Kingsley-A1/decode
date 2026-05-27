@@ -184,6 +184,7 @@ interface LogoChoiceOption {
   iconColor?: string;
   initials: string;
   logoSvg?: string;
+  logoAssetPath?: string;
   qrTypes?: readonly QRType[];
   ariaLabel?: string;
 }
@@ -490,61 +491,15 @@ const uploadedLogoChoice: LogoChoiceOption = {
   ariaLabel: "Use uploaded logo",
 };
 
-type BrandLogoKey =
-  | "facebook"
-  | "instagram"
-  | "linkedin"
-  | "youtube"
-  | "whatsapp";
 type UtilityLogoKey = "email" | "link" | "phone" | "sms" | "vcard" | "wifi";
 
-const brandLogoSvgByKey: Record<BrandLogoKey, string> = {
-  facebook: [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#1877F2" fill-opacity="0.1"/>`,
-    `<path fill="#1877F2" d="M72 46h12V28H70c-16 0-26 10-26 27v10H32v18h12v37h20V83h16l3-18H64V55c0-6 3-9 8-9Z"/>`,
-    `</svg>`,
-  ].join(""),
-  instagram: [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
-    `<defs><linearGradient id="ig" x1="24" y1="104" x2="104" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#F58529"/><stop offset=".45" stop-color="#DD2A7B"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs>`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
-    `<rect x="29" y="29" width="70" height="70" rx="20" fill="none" stroke="url(#ig)" stroke-width="10"/>`,
-    `<circle cx="64" cy="64" r="16" fill="none" stroke="url(#ig)" stroke-width="10"/>`,
-    `<circle cx="84" cy="44" r="6" fill="#DD2A7B"/>`,
-    `</svg>`,
-  ].join(""),
-  linkedin: [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#0A66C2" fill-opacity="0.1"/>`,
-    `<rect x="34" y="54" width="16" height="43" rx="4" fill="#0A66C2"/>`,
-    `<circle cx="42" cy="38" r="9" fill="#0A66C2"/>`,
-    `<path fill="#0A66C2" d="M60 54h15v6c3-5 8-8 17-8 13 0 22 9 22 28v17H98V82c0-10-4-15-11-15-8 0-11 6-11 15v15H60V54Z"/>`,
-    `</svg>`,
-  ].join(""),
-  youtube: [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FF0000" fill-opacity="0.1"/>`,
-    `<path fill="#FF0000" d="M101 43c-1-7-5-12-12-13-7-1-18-2-25-2s-18 1-25 2c-7 1-11 6-12 13-1 6-1 15-1 21s0 15 1 21c1 7 5 12 12 13 7 1 18 2 25 2s18-1 25-2c7-1 11-6 12-13 1-6 1-15 1-21s0-15-1-21Z"/>`,
-    `<path fill="#FFFFFF" d="M56 78V50l27 14-27 14Z"/>`,
-    `</svg>`,
-  ].join(""),
-  whatsapp: [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#25D366" fill-opacity="0.1"/>`,
-    `<path fill="#25D366" d="M31 101l5-19a39 39 0 1 1 15 13l-20 6Zm22-21c6 4 13 6 20 4 14-3 23-16 20-30S77 31 63 34 40 50 43 64c1 5 3 9 6 13l-3 10 7-7Z"/>`,
-    `<path fill="#25D366" d="M56 47c2-1 4-1 5 1l4 9c1 2 0 4-2 5l-2 1c2 5 6 9 11 11l2-2c1-2 3-2 5-1l8 4c2 1 2 3 1 5-2 4-6 7-10 7-10-1-26-13-30-27-2-5 2-11 8-13Z"/>`,
-    `</svg>`,
-  ].join(""),
-};
-
-function createBrandLogoSvg(key: BrandLogoKey): string {
-  return brandLogoSvgByKey[key];
-}
+const socialLogoAssetPaths = {
+  facebook: "/assets/socials/facebook.jpeg",
+  instagram: "/assets/socials/instagram.jpeg",
+  linkedin: "/assets/socials/linkedin.jpeg",
+  youtube: "/assets/socials/youtube.jpeg",
+  whatsapp: "/assets/socials/whatsapp.jpeg",
+} as const;
 
 const utilityLogoSvgByKey: Record<UtilityLogoKey, string> = {
   email: createUtilityLogoSvg({
@@ -608,7 +563,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     color: "#E1306C",
     iconColor: "#C13584",
     initials: "IG",
-    logoSvg: createBrandLogoSvg("instagram"),
+    logoAssetPath: socialLogoAssetPaths.instagram,
     qrTypes: ["url"],
     ariaLabel: "Use Instagram logo",
   },
@@ -620,7 +575,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     color: "#1877F2",
     iconColor: "#1877F2",
     initials: "FB",
-    logoSvg: createBrandLogoSvg("facebook"),
+    logoAssetPath: socialLogoAssetPaths.facebook,
     qrTypes: ["url"],
     ariaLabel: "Use Facebook logo",
   },
@@ -632,7 +587,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     color: "#FF0000",
     iconColor: "#FF0000",
     initials: "YT",
-    logoSvg: createBrandLogoSvg("youtube"),
+    logoAssetPath: socialLogoAssetPaths.youtube,
     qrTypes: ["url"],
     ariaLabel: "Use YouTube logo",
   },
@@ -644,7 +599,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     color: "#0A66C2",
     iconColor: "#0A66C2",
     initials: "IN",
-    logoSvg: createBrandLogoSvg("linkedin"),
+    logoAssetPath: socialLogoAssetPaths.linkedin,
     qrTypes: ["url"],
     ariaLabel: "Use LinkedIn logo",
   },
@@ -686,7 +641,7 @@ const logoPresetOptions: readonly LogoChoiceOption[] = [
     color: "#25D366",
     iconColor: "#16A34A",
     initials: "WA",
-    logoSvg: createBrandLogoSvg("whatsapp"),
+    logoAssetPath: socialLogoAssetPaths.whatsapp,
     qrTypes: ["whatsapp"],
     ariaLabel: "Use WhatsApp logo",
   },
@@ -832,6 +787,7 @@ export function QRGenerator({
   const builderTopRef = useRef<HTMLDivElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousStepRef = useRef(currentStep);
+  const logoSelectionRequestRef = useRef(0);
 
   const refreshAuthSession = useCallback(async () => {
     const session = await getFreshClientSession();
@@ -856,7 +812,7 @@ export function QRGenerator({
       getDynamicPublishSignature({
         form,
         design,
-        hasLogo: Boolean(logoUrl),
+        logoUrl,
       }),
     [form, design, logoUrl]
   );
@@ -1098,15 +1054,21 @@ export function QRGenerator({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const requestId = ++logoSelectionRequestRef.current;
     setSelectedPreset("custom");
     setLogoChoice("upload");
     const reader = new FileReader();
-    reader.onloadend = () => setLogoUrl(reader.result as string);
+    reader.onloadend = () => {
+      if (logoSelectionRequestRef.current === requestId) {
+        setLogoUrl(reader.result as string);
+      }
+    };
     reader.readAsDataURL(file);
     applyLogoSafeDesign();
   };
 
   const handleRemoveLogo = () => {
+    logoSelectionRequestRef.current += 1;
     setSelectedPreset("custom");
     setLogoUrl("");
     setLogoChoice("none");
@@ -1116,7 +1078,7 @@ export function QRGenerator({
     }
   };
 
-  const handleLogoChoiceChange = (nextChoice: LogoChoiceValue) => {
+  const handleLogoChoiceChange = async (nextChoice: LogoChoiceValue) => {
     setSelectedPreset("custom");
 
     if (nextChoice === "upload") return;
@@ -1129,8 +1091,12 @@ export function QRGenerator({
     const option = logoPresetOptions.find((item) => item.value === nextChoice);
     if (!option) return;
 
+    const requestId = ++logoSelectionRequestRef.current;
     setLogoChoice(nextChoice);
-    setLogoUrl(createLogoPresetDataUrl(option));
+    const nextLogoUrl = await createLogoPresetDataUrl(option);
+    if (logoSelectionRequestRef.current !== requestId) return;
+
+    setLogoUrl(nextLogoUrl);
     applyLogoSafeDesign();
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -1291,7 +1257,7 @@ export function QRGenerator({
           title: form.title || "Dynamic QR Code",
           save: true,
           content: { url: form.url },
-          design: getApiDesign(design, Boolean(logoUrl)),
+          design: getApiDesign(design, logoUrl),
         }),
       });
       const result = (await response.json()) as ApiResponse<{
@@ -1371,7 +1337,7 @@ export function QRGenerator({
           title: form.title || `${getTypeLabel(type)} QR Code`,
           save: true,
           content: buildApiContent(type, form),
-          design: getApiDesign(design, Boolean(logoUrl)),
+          design: getApiDesign(design, logoUrl),
         }),
       });
       const result = (await response.json()) as ApiResponse<{
@@ -1525,7 +1491,7 @@ export function QRGenerator({
             <QRPreviewPanel
               isLoading={hasPreviewPayload && !isReady}
               variant="bare"
-              previewClassName="max-w-[300px] p-4 shadow-[0_12px_36px_rgba(15,23,42,0.08)]"
+              previewClassName="max-w-[300px] rounded-none p-4 shadow-[0_12px_36px_rgba(15,23,42,0.08)]"
             >
               {hasPreviewPayload ? (
                 <QRFrame
@@ -1536,7 +1502,7 @@ export function QRGenerator({
                 >
                   <div
                     ref={qrRef}
-                    className="w-full overflow-hidden rounded-lg [&_canvas]:!h-auto [&_canvas]:!w-full"
+                    className="w-full overflow-hidden [&_canvas]:!h-auto [&_canvas]:!w-full"
                   />
                 </QRFrame>
               ) : (
@@ -2318,7 +2284,17 @@ function LogoChoicePreview({
       style={isNone ? undefined : { color: option.iconColor ?? option.color }}
       aria-hidden="true"
     >
-      <Icon className="h-5 w-5" />
+      {option.logoAssetPath ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={option.logoAssetPath}
+          alt=""
+          className="h-8 w-8 object-contain"
+          loading="lazy"
+        />
+      ) : (
+        <Icon className="h-5 w-5" />
+      )}
     </span>
   );
 }
@@ -2677,7 +2653,7 @@ function FrameThumbnail({
   readonly frameColor: string;
 }) {
   return (
-    <div className="flex h-20 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-white p-1.5">
+    <div className="flex h-20 items-center justify-center overflow-hidden border border-slate-100 bg-white p-1.5">
       <QRFrame
         frameStyle={frameStyle}
         frameColor={frameColor}
@@ -2692,14 +2668,14 @@ function FrameThumbnail({
 
 function MiniQRCode() {
   return (
-    <div className="grid aspect-square w-full grid-cols-9 gap-0.5 rounded-md bg-white p-1 shadow-sm ring-1 ring-slate-100">
+    <div className="grid aspect-square w-full grid-cols-9 gap-0.5 bg-white p-1 shadow-sm ring-1 ring-slate-100">
       {Array.from({ length: 81 }, (_, index) => (
         <span
           key={index}
           className={
             thumbnailQrActiveCells.has(index)
-              ? "rounded-[1px] bg-slate-950"
-              : "rounded-[1px] bg-slate-100"
+              ? "bg-slate-950"
+              : "bg-slate-100"
           }
         />
       ))}
@@ -2783,8 +2759,8 @@ function QRFrame({
       <div
         className={
           isThumbnail
-            ? "mx-auto w-14 rounded-md bg-white p-1 ring-1 ring-slate-100"
-            : "mx-auto w-full max-w-[232px] rounded-xl bg-white p-1 ring-1 ring-slate-100"
+            ? "mx-auto w-14 bg-white p-1 ring-1 ring-slate-100"
+            : "mx-auto w-full max-w-[232px] bg-white p-1 ring-1 ring-slate-100"
         }
       >
         {children}
@@ -2795,7 +2771,7 @@ function QRFrame({
   if (frameStyle === "scan-me") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-2xl border-4 bg-white text-center shadow-sm`}
+        className={`${frameWidthClass} mx-auto border-4 bg-white text-center shadow-sm`}
         style={{ borderColor: accentColor }}
       >
         <div className={isThumbnail ? "px-3 pt-2" : "px-4 pt-4"}>
@@ -2804,8 +2780,8 @@ function QRFrame({
         <p
           className={
             isThumbnail
-              ? "mx-auto my-1 inline-flex rounded-full px-2 py-0.5 text-[7px] font-semibold uppercase"
-              : "mx-auto my-2.5 inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-normal"
+              ? "mx-auto my-1 inline-flex px-2 py-0.5 text-[7px] font-semibold uppercase"
+              : "mx-auto my-2.5 inline-flex px-3 py-1 text-[11px] font-semibold uppercase tracking-normal"
           }
           style={{ backgroundColor: accentColor, color: "#FFFFFF" }}
         >
@@ -2818,7 +2794,7 @@ function QRFrame({
   if (frameStyle === "classic") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto overflow-hidden rounded-2xl border-4 bg-white text-center shadow-sm`}
+        className={`${frameWidthClass} mx-auto overflow-hidden border-4 bg-white text-center shadow-sm`}
         style={{ borderColor: accentColor }}
       >
         <p
@@ -2842,7 +2818,7 @@ function QRFrame({
   if (frameStyle === "ticket") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-2xl border-4 bg-white text-center shadow-sm`}
+        className={`${frameWidthClass} mx-auto border-4 bg-white text-center shadow-sm`}
         style={{ borderColor: accentColor }}
       >
         <div className={isThumbnail ? "px-3 pt-2" : "px-4 pt-4"}>
@@ -2860,8 +2836,8 @@ function QRFrame({
         <p
           className={
             isThumbnail
-              ? "rounded-b-xl px-3 py-1 text-[7px] font-bold uppercase"
-              : "rounded-b-xl px-5 py-2 text-[11px] font-bold uppercase tracking-normal"
+              ? "px-3 py-1 text-[7px] font-bold uppercase"
+              : "px-5 py-2 text-[11px] font-bold uppercase tracking-normal"
           }
           style={{ backgroundColor: accentColor, color: "#FFFFFF" }}
         >
@@ -2874,12 +2850,12 @@ function QRFrame({
   if (frameStyle === "badge") {
     return (
       <div
-        className={`${frameWidthClass} mx-auto rounded-2xl border bg-white text-center shadow-sm`}
+        className={`${frameWidthClass} mx-auto border bg-white text-center shadow-sm`}
         style={{ borderColor: accentSoft, backgroundColor: accentSofter }}
       >
         <div className={isThumbnail ? "p-2 pb-1" : "p-4 pb-2"}>
           <div
-            className="rounded-xl bg-white p-2 ring-1"
+            className="bg-white p-2 ring-1"
             style={{ boxShadow: `inset 0 0 0 1px ${accentSoft}` }}
           >
             <div className={qrSlotClass}>{children}</div>
@@ -2902,7 +2878,7 @@ function QRFrame({
 
   return (
     <div
-      className={`${frameWidthClass} mx-auto rounded-2xl border bg-white text-center shadow-sm`}
+      className={`${frameWidthClass} mx-auto border bg-white text-center shadow-sm`}
       style={{ borderColor: accentSoft }}
     >
       <p
@@ -3232,21 +3208,58 @@ function getLogoChoiceOptions(
   ];
 }
 
-function createLogoPresetDataUrl(option: LogoChoiceOption): string {
+async function createLogoPresetDataUrl(option: LogoChoiceOption): Promise<string> {
+  if (option.logoAssetPath) {
+    try {
+      return await getAssetDataUrl(option.logoAssetPath);
+    } catch {
+      return createInitialsLogoDataUrl(option);
+    }
+  }
+
   if (option.logoSvg) {
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(option.logoSvg)}`;
   }
 
+  return createInitialsLogoDataUrl(option);
+}
+
+function createInitialsLogoDataUrl(option: LogoChoiceOption): string {
   const safeText = option.initials.replace(/[<>&]/g, "");
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="#FFFFFF"/>`,
-    `<rect x="8" y="8" width="112" height="112" rx="28" fill="${option.color}" fill-opacity="0.1"/>`,
+    `<rect x="8" y="8" width="112" height="112" fill="#FFFFFF"/>`,
+    `<rect x="8" y="8" width="112" height="112" fill="${option.color}" fill-opacity="0.1"/>`,
     `<text x="64" y="75" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${safeText.length > 2 ? 26 : 34}" font-weight="700" fill="${option.color}">${safeText}</text>`,
     `</svg>`,
   ].join("");
 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+async function getAssetDataUrl(path: string): Promise<string> {
+  const response = await fetch(path);
+
+  if (!response.ok) {
+    throw new Error(`Logo asset failed to load: ${path}`);
+  }
+
+  const blob = await response.blob();
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error(`Logo asset failed to read: ${path}`));
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error(`Logo asset produced no data URL: ${path}`));
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 function buildApiContent(
@@ -3297,7 +3310,9 @@ function buildApiContent(
   }
 }
 
-function getApiDesign(design: DesignState, hasLogo: boolean) {
+function getApiDesign(design: DesignState, logoUrl: string) {
+  const hasLogo = Boolean(logoUrl);
+
   return {
     foregroundColor: getSafeHex(
       design.foregroundColor,
@@ -3315,6 +3330,7 @@ function getApiDesign(design: DesignState, hasLogo: boolean) {
     errorCorrectionLevel: design.errorCorrectionLevel,
     size: design.size,
     frameStyle: design.frameStyle,
+    ...(hasLogo ? { logo: logoUrl } : {}),
   };
 }
 
@@ -3461,16 +3477,18 @@ function normalizePhone(value: string): string {
 function getDynamicPublishSignature({
   form,
   design,
-  hasLogo,
+  logoUrl,
 }: {
   readonly form: FormState;
   readonly design: DesignState;
-  readonly hasLogo: boolean;
+  readonly logoUrl: string;
 }): string | null {
   try {
     return JSON.stringify({
       destinationUrl: normalizeHttpUrl(form.url),
-      design: getApiDesign(design, hasLogo),
+      // Use a presence marker rather than the full data URL so the memoized
+      // signature stays small even with a large uploaded logo.
+      design: getApiDesign(design, logoUrl ? "x" : ""),
     });
   } catch {
     return null;
