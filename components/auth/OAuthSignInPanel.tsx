@@ -3,8 +3,14 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Github, Loader2, ShieldCheck } from "lucide-react";
 import { getFreshClientSession } from "@/lib/client-auth";
+import {
+  getCurrentRelativeUrl,
+  getReturnToFromSearchParams,
+  sanitizeReturnTo,
+} from "@/lib/redirects";
 import { cn } from "@/lib/utils";
 
 interface OAuthSignInPanelProps {
@@ -55,13 +61,15 @@ const providerOptions: readonly ProviderOption[] = [
 ];
 
 export function OAuthSignInPanel({
-  callbackUrl = "/me",
+  callbackUrl,
   title = "Sign in to continue",
   description = "Use Google or GitHub to access your Decode workspace.",
   className,
   hideWhenAuthenticated = true,
   onBeforeSignIn,
 }: OAuthSignInPanelProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(
     null
   );
@@ -69,6 +77,10 @@ export function OAuthSignInPanel({
   const [sessionState, setSessionState] = useState<
     "checking" | "authenticated" | "anonymous"
   >("checking");
+  const currentUrl = getCurrentRelativeUrl({ pathname, search: searchParams });
+  const resolvedCallbackUrl = callbackUrl
+    ? sanitizeReturnTo(callbackUrl, currentUrl)
+    : getReturnToFromSearchParams(searchParams, currentUrl);
 
   useEffect(() => {
     let isMounted = true;
@@ -91,7 +103,7 @@ export function OAuthSignInPanel({
 
     try {
       onBeforeSignIn?.();
-      await signIn(provider, { callbackUrl });
+      await signIn(provider, { callbackUrl: resolvedCallbackUrl });
     } catch {
       setErrorMessage(
         "We could not start the provider sign-in. Check your connection and try again."

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Menu, Plus, UserRound, X } from "lucide-react";
 import { getFreshClientSession } from "@/lib/client-auth";
+import { getCurrentRelativeUrl, withReturnTo } from "@/lib/redirects";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 import {
@@ -23,6 +24,7 @@ const knownUserStorageKey = "decode:auth:known-user:v1";
 
 export function NavBar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [authState, setAuthState] = useState<HeaderAuthState>("checking");
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -113,6 +115,9 @@ export function NavBar() {
       first.focus();
     }
   };
+  const currentUrl = getCurrentRelativeUrl({ pathname, search: searchParams });
+  const loginHref = withReturnTo("/me?intent=login", currentUrl);
+  const signupHref = withReturnTo("/me?intent=signup", currentUrl);
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
@@ -158,14 +163,14 @@ export function NavBar() {
             </Link>
           ) : authState === "registered" ? (
             <Link
-              href="/me?intent=login"
+              href={loginHref}
               className="inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-800"
             >
               Login
             </Link>
           ) : authState === "new" ? (
             <Link
-              href="/me?intent=signup"
+              href={signupHref}
               className="inline-flex min-h-11 items-center rounded-lg bg-sky-700 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-sky-700/20 transition-colors hover:bg-sky-800"
             >
               Sign up
@@ -283,7 +288,7 @@ export function NavBar() {
                 </Link>
               ) : authState === "registered" ? (
                 <Link
-                  href="/me?intent=login"
+                  href={loginHref}
                   onClick={() => setIsMenuOpen(false)}
                   className="mb-2 inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-sky-300 hover:text-sky-800"
                 >
@@ -291,7 +296,7 @@ export function NavBar() {
                 </Link>
               ) : authState === "new" ? (
                 <Link
-                  href="/me?intent=signup"
+                  href={signupHref}
                   onClick={() => setIsMenuOpen(false)}
                   className="mb-2 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-sky-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-800"
                 >

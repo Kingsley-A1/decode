@@ -15,6 +15,7 @@ import { auth } from "@/auth";
 import { OAuthSignInPanel } from "@/components/auth/OAuthSignInPanel";
 import { PageShell } from "@/components/PageShell";
 import { Alert, Badge } from "@/components/ui";
+import { sanitizeReturnTo } from "@/lib/redirects";
 import { prisma } from "@/server/db/prisma";
 import { QR_CODE_MODE } from "@/server/qr/constants";
 import { getDefaultWorkspaceForUser } from "@/server/workspaces/repository";
@@ -30,12 +31,17 @@ interface AccountKpi {
 interface MePageProps {
   readonly searchParams?: Promise<{
     readonly intent?: string | string[];
+    readonly returnTo?: string | string[];
   }>;
 }
 
 export default async function MePage({ searchParams }: MePageProps) {
   const params = await searchParams;
   const authIntent = params?.intent === "signup" ? "signup" : "login";
+  const returnToParam = Array.isArray(params?.returnTo)
+    ? params.returnTo[0]
+    : params?.returnTo;
+  const callbackUrl = sanitizeReturnTo(returnToParam, "/me");
   const session = await getSafeSession();
 
   if (!session?.user?.id) {
@@ -54,6 +60,7 @@ export default async function MePage({ searchParams }: MePageProps) {
         }
       >
         <OAuthSignInPanel
+          callbackUrl={callbackUrl}
           title={
             authIntent === "signup"
               ? "Sign up with OAuth"
