@@ -39,6 +39,7 @@ export function AppShell({ children, chrome = "default" }: AppShellProps) {
   const pathname = usePathname();
   const activeChrome = getRouteChrome(pathname, chrome);
   const isWorkspace = activeChrome === "workspace";
+  const isWideDocumentation = pathname === "/api";
 
   return (
     <div
@@ -55,7 +56,7 @@ export function AppShell({ children, chrome = "default" }: AppShellProps) {
       <div
         className={cn(
           "mx-auto w-full px-4 sm:px-6 lg:px-8",
-          isWorkspace
+          isWorkspace || isWideDocumentation
             ? "max-w-none py-4 sm:py-5 lg:py-6"
             : "max-w-7xl py-6 sm:py-8 lg:py-10"
         )}

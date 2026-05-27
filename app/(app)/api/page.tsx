@@ -638,6 +638,7 @@ export default function ApiDocsPage() {
 
   return (
     <PageShell
+      className="mx-auto w-full max-w-[1500px]"
       eyebrow="API"
       title="Decode API documentation"
       description="A compact integration reference for QR codes, redirects, landing pages, scans, link checks, reviews, and admin workflows."
@@ -653,9 +654,9 @@ export default function ApiDocsPage() {
         </>
       }
     >
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[220px_minmax(0,1fr)] 2xl:gap-6 2xl:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="hidden xl:block">
-          <div className="sticky top-24 space-y-4">
+          <div className="sticky top-24 w-[220px] space-y-4 2xl:w-[240px]">
             <nav
               aria-label="API documentation sections"
               className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
@@ -711,7 +712,7 @@ export default function ApiDocsPage() {
 
           <section
             id="response-shape"
-            className="grid scroll-mt-28 gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]"
+            className="grid scroll-mt-28 gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]"
           >
             <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2">
