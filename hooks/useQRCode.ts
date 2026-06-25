@@ -83,7 +83,10 @@ export function useQRCode(options: QROptions) {
         imageOptions: {
           crossOrigin: "anonymous",
           margin: 10,
-          imageSize: options.logoSize || 0.4,
+          // Only fall back to a default ratio when a logo is actually present;
+          // an unset/zero ratio must not silently render an oversized logo.
+          imageSize:
+            options.logoSize && options.logoSize > 0 ? options.logoSize : 0.25,
         },
         image: options.logoUrl || undefined,
       });
@@ -126,10 +129,13 @@ export function useQRCode(options: QROptions) {
   ]);
 
   const download = useCallback(
-    async (extension: "png" | "jpeg" | "webp" | "svg" = "png") => {
+    async (
+      extension: "png" | "jpeg" | "webp" | "svg" = "png",
+      name?: string
+    ) => {
       if (qrCodeRef.current) {
         await qrCodeRef.current.download({
-          name: `decode-qr-${Date.now()}`,
+          name: resolveDownloadName(name),
           extension,
         });
       }
@@ -154,11 +160,22 @@ export function useQRCode(options: QROptions) {
     });
     triggerDownload({
       blob: pdfBlob,
-      fileName: `decode-qr-${Date.now()}.pdf`,
+      fileName: `${resolveDownloadName(title)}.pdf`,
     });
   }, [options.width]);
 
   return { ref, download, downloadPdf, isReady };
+}
+
+function resolveDownloadName(title?: string): string {
+  const safeName = (title ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+
+  return safeName || `decode-qr-${Date.now()}`;
 }
 
 function preloadLogoImage(source: string): Promise<void> {
