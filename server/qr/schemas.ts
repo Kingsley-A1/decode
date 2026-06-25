@@ -218,6 +218,21 @@ export const renderQRCodeRequestSchema = z.object({
   ]),
 });
 
+// Stateless render of an unsaved QR code. Used so static/anonymous downloads go
+// through the same styled SVG renderer as saved/dynamic codes — keeping the
+// frame, frame color, and the rest of the design consistent across every path.
+export const renderUnsavedQRCodeRequestSchema = z.object({
+  value: z.string().trim().min(1).max(4096),
+  title: z.string().trim().min(1).max(120).optional(),
+  format: z.enum([
+    QR_EXPORT_FORMAT.PNG,
+    QR_EXPORT_FORMAT.JPG,
+    QR_EXPORT_FORMAT.SVG,
+    QR_EXPORT_FORMAT.PDF,
+  ]),
+  design: baseCreateQRCodeSchema.shape.design,
+});
+
 export const updateQRCodeDestinationRequestSchema = z.object({
   workspaceId: z.string().trim().min(1).optional(),
   destinationUrl: z.string().trim().min(1).max(2048),
@@ -244,6 +259,9 @@ export const qrDesignSchema = baseCreateQRCodeSchema.shape.design;
 export type CreateQRCodeRequest = z.infer<typeof createQRCodeRequestSchema>;
 export type QRDesignConfig = z.infer<typeof qrDesignSchema>;
 export type RenderQRCodeRequest = z.infer<typeof renderQRCodeRequestSchema>;
+export type RenderUnsavedQRCodeRequest = z.infer<
+  typeof renderUnsavedQRCodeRequestSchema
+>;
 export type UpdateQRCodeDestinationRequest = z.infer<
   typeof updateQRCodeDestinationRequestSchema
 >;

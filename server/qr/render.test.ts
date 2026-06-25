@@ -67,4 +67,17 @@ describe("renderQRCode", () => {
 
     expect(rendered.body as string).toContain("SCAN ME");
   });
+
+  it.each(["scan-me", "classic", "ticket", "badge", "minimal"] as const)(
+    "applies the chosen frame color into the %s frame SVG",
+    async (frameStyle) => {
+      const rendered = await renderQRCode({
+        value: "https://decode.example.com",
+        design: { ...design, frameStyle, frameColor: "#D01616" },
+        format: QR_EXPORT_FORMAT.SVG,
+      });
+
+      expect(rendered.body as string).toContain("#D01616");
+    }
+  );
 });

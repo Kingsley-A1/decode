@@ -189,7 +189,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     [qrOptions]
   );
 
-  const { ref: qrRef, download, downloadPdf, isReady } = useQRCode(qrOptions);
+  const { ref: qrRef, isReady } = useQRCode(qrOptions);
   const { ref: mobileQrRef, isReady: isMobilePreviewReady } =
     useQRCode(mobileQrOptions);
 
@@ -426,18 +426,40 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     goToStep("design");
   };
 
+  // Static (and anonymous) downloads render through the same server SVG pipeline
+  // as saved/dynamic codes, so the frame and frame color are baked into the
+  // exported file exactly as shown in the preview.
   const downloadStaticQRCode = async (format: ExportFormat) => {
-    const fileName = form.title || "Decode QR Code";
+    const value = payload?.value;
+    if (!value) {
+      throw new Error("Add content before downloading this QR code.");
+    }
 
-    if (format === "png") {
-      await download("png", fileName);
-      return;
+    const response = await fetch("/api/qr-codes/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        value,
+        title: form.title || "Decode QR Code",
+        format,
+        design: getApiDesign(design, logoUrl),
+      }),
+    });
+    const result = (await response.json()) as ApiResponse<{
+      base64: string;
+      contentType: string;
+      extension: string;
+    }>;
+
+    if (!result.ok || !result.data) {
+      throw new Error(result.error?.message ?? "Could not render QR code export.");
     }
-    if (format === "svg") {
-      await download("svg", fileName);
-      return;
-    }
-    await downloadPdf(fileName);
+
+    triggerBase64Download({
+      base64: result.data.base64,
+      contentType: result.data.contentType,
+      fileName: `${form.title || "Decode QR Code"}.${result.data.extension}`,
+    });
   };
 
   const downloadSavedDynamicQRCode = async ({
@@ -747,4 +769,31 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     handleSaveStatic,
     persistAuthDraft,
   };
+}
+
+function triggerBase64Download({
+  base64,
+  contentType,
+  fileName,
+}: {
+  readonly base64: string;
+  readonly contentType: string;
+  readonly fileName: string;
+}) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  const blob = new Blob([bytes], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.rel = "noopener noreferrer";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

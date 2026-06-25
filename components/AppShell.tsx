@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Footer } from "@/components/Footer";
 import { NavBar } from "@/components/NavBar";
-import { TrustedBy } from "@/components/TrustedBy";
 import { cn } from "@/lib/utils";
 
 export type AppShellChrome = "default" | "workspace";
@@ -65,14 +64,7 @@ export function AppShell({ children, chrome = "default" }: AppShellProps) {
           {children}
         </main>
       </div>
-      {isWorkspace ? (
-        <Footer variant="compact" />
-      ) : (
-        <>
-          <TrustedBy />
-          <Footer />
-        </>
-      )}
+      {isWorkspace ? <Footer variant="compact" /> : <Footer />}
     </div>
   );
 }
