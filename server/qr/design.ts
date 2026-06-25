@@ -3,6 +3,7 @@ import type { QRDesignConfig } from "@/server/qr/schemas";
 export interface QRDesignWarning {
   readonly code:
     | "LOW_CONTRAST"
+    | "INVERTED_CONTRAST"
     | "QUIET_ZONE_TOO_SMALL"
     | "LOGO_TOO_LARGE"
     | "LOW_ERROR_CORRECTION_WITH_LOGO";
@@ -15,6 +16,7 @@ export function getQRDesignWarnings(
 ): QRDesignWarning[] {
   return [
     getContrastWarning(design),
+    getInvertedContrastWarning(design),
     getQuietZoneWarning(design),
     getLogoSizeWarning(design),
     getLogoErrorCorrectionWarning(design),
@@ -36,6 +38,25 @@ function getContrastWarning(
     severity: "warning",
     message:
       "Foreground and background colors may not have enough contrast for reliable scanning.",
+  };
+}
+
+function getInvertedContrastWarning(
+  design: QRDesignConfig
+): QRDesignWarning | null {
+  // Many scanners assume dark modules on a light background. A code whose dots
+  // are lighter than the canvas can scan unreliably even when the absolute
+  // contrast is acceptable, so surface it as its own warning.
+  const foregroundLuminance = getRelativeLuminance(design.foregroundColor);
+  const backgroundLuminance = getRelativeLuminance(design.backgroundColor);
+
+  if (foregroundLuminance <= backgroundLuminance) return null;
+
+  return {
+    code: "INVERTED_CONTRAST",
+    severity: "warning",
+    message:
+      "QR dots are lighter than the background. Use dark dots on a lighter background for reliable scanning.",
   };
 }
 

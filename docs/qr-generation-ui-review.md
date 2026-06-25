@@ -1,7 +1,13 @@
 # QR Generation UI — Code Review
 
 **Scope:** `app/(app)/generate/page.tsx`, `components/QRGenerator.tsx` (3,599 lines), `hooks/useQRCode.ts`
-**Type:** Written review only — no code changes applied.
+
+> **Status: Resolved.** All findings below have been addressed. `components/QRGenerator.tsx`
+> was split into a focused `components/qr-generator/` module set (logic, step views, an
+> orchestration hook, and a thin container) with unit tests, and the correctness/UX fixes
+> (#1–#8) were implemented. The inverted-contrast guardrail (#3) was also mirrored in the
+> server's `getQRDesignWarnings` for cross-layer parity. This document is retained as the
+> original point-in-time review.
 
 The builder is well-structured for a single file: a clean 3-step flow (Content → Design → Export),
 good focus management on step changes, `aria-live` status regions, sensible payload/preview memoization,
