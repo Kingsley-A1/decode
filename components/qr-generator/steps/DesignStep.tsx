@@ -31,6 +31,8 @@ import type {
   DesignPreset,
   DesignState,
   DesignTab,
+  ErrorCorrectionLevel,
+  ErrorCorrectionSource,
   LogoChoiceOption,
   LogoChoiceValue,
   ScanabilityResult,
@@ -39,6 +41,8 @@ import type {
 export function DesignStep({
   headingRef,
   design,
+  ecSource,
+  effectiveErrorCorrectionLevel,
   logoUrl,
   logoChoice,
   logoChoices,
@@ -47,6 +51,7 @@ export function DesignStep({
   logoInputRef,
   onPresetChange,
   onDesignChange,
+  onErrorCorrectionChange,
   onLogoChoiceChange,
   onLogoUpload,
   onRemoveLogo,
@@ -56,6 +61,8 @@ export function DesignStep({
 }: {
   readonly headingRef: React.RefObject<HTMLHeadingElement | null>;
   readonly design: DesignState;
+  readonly ecSource: ErrorCorrectionSource;
+  readonly effectiveErrorCorrectionLevel: ErrorCorrectionLevel;
   readonly logoUrl: string;
   readonly logoChoice: LogoChoiceValue;
   readonly logoChoices: readonly LogoChoiceOption[];
@@ -64,6 +71,9 @@ export function DesignStep({
   readonly logoInputRef: React.RefObject<HTMLInputElement | null>;
   readonly onPresetChange: (preset: DesignPreset) => void;
   readonly onDesignChange: React.Dispatch<React.SetStateAction<DesignState>>;
+  readonly onErrorCorrectionChange: (
+    level: ErrorCorrectionLevel | "auto"
+  ) => void;
   readonly onLogoChoiceChange: (value: LogoChoiceValue) => void;
   readonly onLogoUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   readonly onRemoveLogo: () => void;
@@ -359,16 +369,17 @@ export function DesignStep({
           <div className="grid gap-4 lg:grid-cols-2">
             <Select
               label="Error correction"
-              value={design.errorCorrectionLevel}
+              value={ecSource === "auto" ? "auto" : design.errorCorrectionLevel}
               onChange={(event) =>
-                onDesignChange((previous) => ({
-                  ...previous,
-                  errorCorrectionLevel:
-                    event.target.value as DesignState["errorCorrectionLevel"],
-                }))
+                onErrorCorrectionChange(
+                  event.target.value as ErrorCorrectionLevel | "auto"
+                )
               }
-              hint="Higher correction recovers more if the QR is covered or damaged."
+              hint="Auto picks High (30%) for dynamic codes, logos, and short content. Higher correction recovers more if the QR is covered or damaged."
             >
+              <option value="auto">
+                Auto — {getErrorCorrectionLabel(effectiveErrorCorrectionLevel)}
+              </option>
               {errorCorrectionOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -444,5 +455,12 @@ export function DesignStep({
         }
       />
     </div>
+  );
+}
+
+function getErrorCorrectionLabel(level: ErrorCorrectionLevel): string {
+  return (
+    errorCorrectionOptions.find((option) => option.value === level)?.label ??
+    level
   );
 }

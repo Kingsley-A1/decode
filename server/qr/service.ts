@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import sharp from "sharp";
 import { prisma } from "@/server/db/prisma";
@@ -14,7 +14,10 @@ import { AUDIT_ACTION, AUDIT_ENTITY_TYPE } from "@/server/audit/constants";
 import { createAuditLog } from "@/server/audit/repository";
 import { verifyLink } from "@/server/links/service";
 import { QR_CODE_MODE, QR_CODE_STATUS, QR_CODE_TYPE } from "@/server/qr/constants";
-import { getQRDesignWarnings } from "@/server/qr/design";
+import {
+  getQRDesignWarnings,
+  resolveQRDesignErrorCorrection,
+} from "@/server/qr/design";
 import {
   QRCodeConflictError,
   QRCodeNotFoundError,
@@ -31,6 +34,7 @@ import {
   qrDesignSchema,
   type ArchiveQRCodeRequest,
   type CreateQRCodeRequest,
+  type QRDesignConfig,
   type RenderQRCodeRequest,
   type UpdateQRCodeDestinationRequest,
   type UpdateQRCodeRequest,
@@ -40,6 +44,7 @@ import {
   type QRCodeDashboardRecord,
 } from "@/server/qr/selectors";
 import {
+  createGeneratedDynamicSlug,
   getDynamicQRCodeRedirectUrl,
   isReservedDynamicSlug,
   normalizeDynamicSlug,
@@ -53,7 +58,7 @@ import { createDefaultWorkspaceForUser } from "@/server/workspaces/service";
 
 export interface PreparedQRCode {
   readonly payload: BuiltQRPayload;
-  readonly design: CreateQRCodeRequest["design"];
+  readonly design: QRDesignConfig;
   readonly warnings: ReturnType<typeof getQRDesignWarnings>;
 }
 
@@ -184,9 +189,16 @@ export function prepareQRCode(
   options: PrepareQRCodeOptions = {}
 ): PreparedQRCode {
   const payload = getPreparedPayload(request, options.dynamicSlug);
-  const warnings = getQRDesignWarnings(request.design);
+  // Resolve an omitted error-correction level adaptively and persist the
+  // concrete result so re-exports and redirects stay deterministic.
+  const design = resolveQRDesignErrorCorrection({
+    design: request.design,
+    isDynamic: request.mode === QR_CODE_MODE.DYNAMIC,
+    payloadLength: payload.value.length,
+  });
+  const warnings = getQRDesignWarnings(design);
 
-  return { payload, design: request.design, warnings };
+  return { payload, design, warnings };
 }
 
 export async function createQRCode({
@@ -716,7 +728,13 @@ export async function renderSavedQRCode({
   }
 
   const payloadValue = getStoredPayloadValue(qrCode.payload);
-  const design = qrDesignSchema.parse(qrCode.designConfig);
+  // Stored designs always carry a concrete error-correction level; resolving
+  // again is a no-op safety net for any legacy row that predates it.
+  const design = resolveQRDesignErrorCorrection({
+    design: qrDesignSchema.parse(qrCode.designConfig),
+    isDynamic: false,
+    payloadLength: payloadValue.length,
+  });
   const warnings = getQRDesignWarnings(design);
 
   // Cache renders by a deterministic design hash so re-downloading the same
@@ -855,10 +873,6 @@ function getAssignedDynamicQRCodeSlug(
   return getRequestedDynamicQRCodeSlug(request) ?? dynamicSlug ?? null;
 }
 
-function createGeneratedDynamicSlug(): string {
-  return `qr-${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-}
-
 async function assertDynamicSlugAvailable(
   slug: string,
   client: DynamicSlugLookupClient
@@ -971,7 +985,7 @@ function getRenderDesignHash({
   title,
 }: {
   readonly payloadValue: string;
-  readonly design: CreateQRCodeRequest["design"];
+  readonly design: QRDesignConfig;
   readonly format: string;
   readonly title: string;
 }): string {

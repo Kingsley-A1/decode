@@ -1,4 +1,30 @@
-import type { QRDesignConfig } from "@/server/qr/schemas";
+import { getAdaptiveErrorCorrectionLevel } from "@/lib/qr/error-correction";
+import type { QRDesignConfig, QRDesignInput } from "@/server/qr/schemas";
+
+/**
+ * Fills an omitted error-correction level using the shared adaptive policy
+ * (H for dynamic codes, logos, and short payloads; Q for long static
+ * payloads). An explicit level from the request always wins.
+ */
+export function resolveQRDesignErrorCorrection({
+  design,
+  isDynamic,
+  payloadLength,
+}: {
+  readonly design: QRDesignInput;
+  readonly isDynamic: boolean;
+  readonly payloadLength: number;
+}): QRDesignConfig {
+  const errorCorrectionLevel =
+    design.errorCorrectionLevel ??
+    getAdaptiveErrorCorrectionLevel({
+      isDynamic,
+      hasLogo: Boolean(design.logo) || design.logoSizeRatio > 0,
+      payloadLength,
+    });
+
+  return { ...design, errorCorrectionLevel };
+}
 
 export interface QRDesignWarning {
   readonly code:

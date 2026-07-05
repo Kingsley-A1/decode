@@ -167,6 +167,9 @@ export const backgroundColorPresets = [
   { name: "Warm", value: "#FFFBEB" },
 ];
 
+// Presets deliberately do not pin errorCorrectionLevel: it is resolved
+// adaptively unless the user chooses a level, and a visual preset must not
+// silently override that choice.
 export type PresetDesignState = Pick<
   DesignState,
   | "foregroundColor"
@@ -175,7 +178,6 @@ export type PresetDesignState = Pick<
   | "dotStyle"
   | "cornerStyle"
   | "margin"
-  | "errorCorrectionLevel"
   | "frameStyle"
 >;
 
@@ -234,7 +236,6 @@ export const designPresets: Record<
     dotStyle: "square",
     cornerStyle: "square",
     margin: 4,
-    errorCorrectionLevel: "Q",
     frameStyle: "none",
   },
   corporate: {
@@ -244,7 +245,6 @@ export const designPresets: Record<
     dotStyle: "square",
     cornerStyle: "square",
     margin: 4,
-    errorCorrectionLevel: "Q",
     frameStyle: "classic",
   },
   event: {
@@ -254,7 +254,6 @@ export const designPresets: Record<
     dotStyle: "dots",
     cornerStyle: "dot",
     margin: 4,
-    errorCorrectionLevel: "Q",
     frameStyle: "ticket",
   },
   menu: {
@@ -264,7 +263,6 @@ export const designPresets: Record<
     dotStyle: "rounded",
     cornerStyle: "rounded",
     margin: 4,
-    errorCorrectionLevel: "Q",
     frameStyle: "minimal",
   },
   social: {
@@ -274,7 +272,6 @@ export const designPresets: Record<
     dotStyle: "classy",
     cornerStyle: "dot",
     margin: 4,
-    errorCorrectionLevel: "Q",
     frameStyle: "scan-me",
   },
   coupon: {
@@ -284,7 +281,6 @@ export const designPresets: Record<
     dotStyle: "extra-rounded",
     cornerStyle: "rounded",
     margin: 4,
-    errorCorrectionLevel: "Q",
     frameStyle: "badge",
   },
 };

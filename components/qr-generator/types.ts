@@ -14,6 +14,11 @@ export type QRType =
 export type DotStyle = "square" | "rounded" | "dots" | "classy" | "extra-rounded";
 export type CornerStyle = "square" | "rounded" | "dot";
 export type ErrorCorrectionLevel = "L" | "M" | "Q" | "H";
+/**
+ * "auto" derives the level from mode/logo/payload (see
+ * lib/qr/error-correction.ts); "user" pins design.errorCorrectionLevel.
+ */
+export type ErrorCorrectionSource = "auto" | "user";
 export type ExportFormat = "png" | "svg" | "pdf";
 export type FrameStyle =
   | "none"
@@ -151,4 +156,6 @@ export interface QRGeneratorAuthDraft {
   readonly selectedPreset: DesignPreset;
   readonly logoUrl: string;
   readonly logoChoice: LogoChoiceValue;
+  /** Optional for drafts written before adaptive error correction shipped. */
+  readonly ecSource?: ErrorCorrectionSource;
 }

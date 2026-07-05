@@ -50,6 +50,7 @@ export function readQRGeneratorAuthDraft(): QRGeneratorAuthDraft | null {
       logoChoice: isLogoChoiceValue(draft.logoChoice)
         ? draft.logoChoice
         : "none",
+      ecSource: draft.ecSource === "user" ? "user" : "auto",
     };
   } catch {
     return null;

@@ -34,6 +34,8 @@ export function QRGenerator({
     type,
     form,
     design,
+    ecSource,
+    effectiveErrorCorrectionLevel,
     selectedPreset,
     logoUrl,
     logoChoice,
@@ -69,6 +71,7 @@ export function QRGenerator({
     handleContinueToDesign,
     handlePresetChange,
     handleDesignChange,
+    handleErrorCorrectionChange,
     handleLogoChoiceChange,
     handleLogoUpload,
     handleRemoveLogo,
@@ -148,6 +151,8 @@ export function QRGenerator({
             <DesignStep
               headingRef={stepHeadingRef}
               design={design}
+              ecSource={ecSource}
+              effectiveErrorCorrectionLevel={effectiveErrorCorrectionLevel}
               logoUrl={logoUrl}
               logoChoice={logoChoice}
               logoChoices={logoChoices}
@@ -155,6 +160,7 @@ export function QRGenerator({
               scanability={scanability}
               onPresetChange={handlePresetChange}
               onDesignChange={handleDesignChange}
+              onErrorCorrectionChange={handleErrorCorrectionChange}
               onLogoChoiceChange={handleLogoChoiceChange}
               onLogoUpload={handleLogoUpload}
               onRemoveLogo={handleRemoveLogo}

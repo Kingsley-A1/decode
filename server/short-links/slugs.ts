@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import { getPublicAppBaseUrl } from "@/server/config/public-url";
+import { generateRandomSlug } from "@/server/slugs/random";
 
 // Short-link slug minting. The exported constants and helpers are the
 // canonical home for slug rules so the API layer and any future bulk
@@ -197,20 +198,9 @@ function generateSlug(
   length: number,
   rb: (size: number) => Buffer
 ): string {
-  // Rejection sampling: only accept bytes that fall within an integer
-  // multiple of the alphabet size, so the distribution stays uniform.
-  const alphabetSize = SHORT_LINK_SLUG_ALPHABET.length;
-  const ceiling = Math.floor(256 / alphabetSize) * alphabetSize;
-  const out: string[] = [];
-
-  while (out.length < length) {
-    const bytes = rb(length * 2);
-    for (let i = 0; i < bytes.length && out.length < length; i++) {
-      const value = bytes[i];
-      if (value === undefined || value >= ceiling) continue;
-      out.push(SHORT_LINK_SLUG_ALPHABET[value % alphabetSize] ?? "");
-    }
-  }
-
-  return out.join("");
+  return generateRandomSlug({
+    alphabet: SHORT_LINK_SLUG_ALPHABET,
+    length,
+    randomBytesImpl: rb,
+  });
 }

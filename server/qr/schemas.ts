@@ -32,6 +32,8 @@ const dynamicSlugSchema = z
     message: "This slug is reserved by Decode.",
   });
 
+// No errorCorrectionLevel here: an omitted level is resolved adaptively by
+// the service (see `resolveQRDesignErrorCorrection`).
 export const defaultQRDesignConfig = {
   foregroundColor: "#0F172A",
   backgroundColor: "#FFFFFF",
@@ -40,7 +42,6 @@ export const defaultQRDesignConfig = {
   logoSizeRatio: 0,
   dotStyle: QR_DOT_STYLE.SQUARE,
   cornerStyle: QR_CORNER_STYLE.SQUARE,
-  errorCorrectionLevel: QR_ERROR_CORRECTION_LEVEL.QUARTILE,
   size: 1024,
   frameStyle: "none",
 } as const;
@@ -76,6 +77,9 @@ const baseCreateQRCodeSchema = z.object({
           QR_CORNER_STYLE.DOT,
         ])
         .default(QR_CORNER_STYLE.SQUARE),
+      // Optional at the boundary: when omitted, the service resolves it
+      // adaptively (H for dynamic codes, logos, and short payloads; Q for
+      // long static payloads) and stores the concrete result.
       errorCorrectionLevel: z
         .enum([
           QR_ERROR_CORRECTION_LEVEL.LOW,
@@ -83,7 +87,7 @@ const baseCreateQRCodeSchema = z.object({
           QR_ERROR_CORRECTION_LEVEL.QUARTILE,
           QR_ERROR_CORRECTION_LEVEL.HIGH,
         ])
-        .default(QR_ERROR_CORRECTION_LEVEL.QUARTILE),
+        .optional(),
       size: z.number().int().min(128).max(4096).default(1024),
       frameStyle: z
         .enum(["none", "scan-me", "classic", "ticket", "badge", "minimal"])
@@ -257,7 +261,17 @@ export const archiveQRCodeRequestSchema = z.object({
 export const qrDesignSchema = baseCreateQRCodeSchema.shape.design;
 
 export type CreateQRCodeRequest = z.infer<typeof createQRCodeRequestSchema>;
-export type QRDesignConfig = z.infer<typeof qrDesignSchema>;
+/** Design as accepted at the API boundary — error correction may be omitted. */
+export type QRDesignInput = z.infer<typeof qrDesignSchema>;
+/**
+ * Design with the error-correction level resolved to a concrete value. The
+ * renderers require this shape; `resolveQRDesignErrorCorrection` produces it.
+ */
+export type QRDesignConfig = QRDesignInput & {
+  readonly errorCorrectionLevel: NonNullable<
+    QRDesignInput["errorCorrectionLevel"]
+  >;
+};
 export type RenderQRCodeRequest = z.infer<typeof renderQRCodeRequestSchema>;
 export type RenderUnsavedQRCodeRequest = z.infer<
   typeof renderUnsavedQRCodeRequestSchema

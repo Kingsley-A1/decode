@@ -5,6 +5,7 @@ import {
   apiValidationError,
   createRequestId,
 } from "@/server/api/response";
+import { resolveQRDesignErrorCorrection } from "@/server/qr/design";
 import { renderQRCode } from "@/server/qr/render";
 import { renderUnsavedQRCodeRequestSchema } from "@/server/qr/schemas";
 import { enforceRateLimit } from "@/server/security/rate-limit";
@@ -30,15 +31,20 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const renderRequest = renderUnsavedQRCodeRequestSchema.parse(body);
+    // Unsaved renders encode the final value directly (never a dynamic
+    // redirect), so adaptive resolution keys off the value length + logo.
+    const design = resolveQRDesignErrorCorrection({
+      design: renderRequest.design,
+      isDynamic: false,
+      payloadLength: renderRequest.value.length,
+    });
 
     const rendered = await renderQRCode({
       value: renderRequest.value,
-      design: renderRequest.design,
+      design,
       format: renderRequest.format,
       title: renderRequest.title,
-      logo: renderRequest.design.logo
-        ? { dataUrl: renderRequest.design.logo }
-        : null,
+      logo: design.logo ? { dataUrl: design.logo } : null,
     });
 
     const bodyBuffer =

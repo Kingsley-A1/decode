@@ -25,6 +25,26 @@ describe("renderUnsavedQRCodeRequestSchema", () => {
     expect(parsed.design.margin).toBe(4);
   });
 
+  it("leaves an omitted error-correction level undefined for adaptive resolution", () => {
+    const parsed = renderUnsavedQRCodeRequestSchema.parse({
+      value: "https://decode.example.com",
+      format: QR_EXPORT_FORMAT.PNG,
+      design: {},
+    });
+
+    expect(parsed.design.errorCorrectionLevel).toBeUndefined();
+  });
+
+  it("preserves an explicit error-correction level", () => {
+    const parsed = renderUnsavedQRCodeRequestSchema.parse({
+      value: "https://decode.example.com",
+      format: QR_EXPORT_FORMAT.PNG,
+      design: { errorCorrectionLevel: "M" },
+    });
+
+    expect(parsed.design.errorCorrectionLevel).toBe("M");
+  });
+
   it("preserves an explicit frame color and style", () => {
     const parsed = renderUnsavedQRCodeRequestSchema.parse({
       value: "https://decode.example.com",

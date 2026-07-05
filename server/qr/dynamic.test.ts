@@ -61,6 +61,49 @@ describe("dynamic QR service", () => {
     );
   });
 
+  it("resolves an omitted error-correction level to H for dynamic codes", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://decode.example";
+    const request = createQRCodeRequestSchema.parse({
+      mode: QR_CODE_MODE.DYNAMIC,
+      save: true,
+      type: QR_CODE_TYPE.URL,
+      content: { url: "https://brand.example/promo" },
+      design: {},
+    });
+
+    const preparedQRCode = prepareQRCode(request, { dynamicSlug: "qr123456" });
+
+    expect(preparedQRCode.design.errorCorrectionLevel).toBe("H");
+  });
+
+  it("resolves an omitted error-correction level to Q for long static payloads", () => {
+    const request = createQRCodeRequestSchema.parse({
+      mode: QR_CODE_MODE.STATIC,
+      save: false,
+      type: QR_CODE_TYPE.TEXT,
+      content: { text: "x".repeat(400) },
+      design: {},
+    });
+
+    const preparedQRCode = prepareQRCode(request);
+
+    expect(preparedQRCode.design.errorCorrectionLevel).toBe("Q");
+  });
+
+  it("never overrides an explicit error-correction level", () => {
+    const request = createQRCodeRequestSchema.parse({
+      mode: QR_CODE_MODE.STATIC,
+      save: false,
+      type: QR_CODE_TYPE.TEXT,
+      content: { text: "short note" },
+      design: { errorCorrectionLevel: "M" },
+    });
+
+    const preparedQRCode = prepareQRCode(request);
+
+    expect(preparedQRCode.design.errorCorrectionLevel).toBe("M");
+  });
+
   it("updates destination without changing the stored QR redirect value and writes an audit log", async () => {
     const createdAt = new Date("2026-05-18T00:00:00.000Z");
     const updatedAt = new Date("2026-05-18T01:00:00.000Z");

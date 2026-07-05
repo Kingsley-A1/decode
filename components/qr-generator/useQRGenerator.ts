@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useQRCode, type QROptions } from "@/hooks/useQRCode";
 import { getFreshClientSession } from "@/lib/client-auth";
+import { getAdaptiveErrorCorrectionLevel } from "@/lib/qr/error-correction";
 import { addSearchParams, sanitizeReturnTo } from "@/lib/redirects";
 import {
   defaultLogoSizeRatio,
@@ -37,6 +38,8 @@ import type {
   ClientAuthState,
   DesignPreset,
   DesignState,
+  ErrorCorrectionLevel,
+  ErrorCorrectionSource,
   ExportFormat,
   FormState,
   LogoChoiceValue,
@@ -60,6 +63,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
   const [type, setType] = useState<QRType>("url");
   const [form, setForm] = useState<FormState>(initialFormState);
   const [design, setDesign] = useState<DesignState>(initialDesignState);
+  const [ecSource, setEcSource] = useState<ErrorCorrectionSource>("auto");
   const [selectedPreset, setSelectedPreset] = useState<DesignPreset>("clean");
   const [logoUrl, setLogoUrl] = useState("");
   const [logoChoice, setLogoChoice] = useState<LogoChoiceValue>("none");
@@ -101,9 +105,34 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     () => validateContent({ type, mode, form }),
     [type, mode, form]
   );
+  // Adaptive error correction: derive from mode/logo/content length. For the
+  // payload length we build the static payload with neutral publish inputs —
+  // dynamic codes resolve to H regardless, which breaks the memo cycle with
+  // the publish signature below.
+  const autoErrorCorrectionLevel = useMemo(() => {
+    const staticPayloadLength =
+      mode === "dynamic"
+        ? 0
+        : buildPayload({ type, mode, form })?.value.length ?? 0;
+
+    return getAdaptiveErrorCorrectionLevel({
+      isDynamic: mode === "dynamic",
+      hasLogo: Boolean(logoUrl),
+      payloadLength: staticPayloadLength,
+    });
+  }, [mode, type, form, logoUrl]);
+  // The design that previews, scanability, and API payloads all consume.
+  // "auto" applies the adaptive level; "user" keeps the explicit choice.
+  const resolvedDesign = useMemo<DesignState>(
+    () =>
+      ecSource === "user"
+        ? design
+        : { ...design, errorCorrectionLevel: autoErrorCorrectionLevel },
+    [design, ecSource, autoErrorCorrectionLevel]
+  );
   const dynamicPublishSignature = useMemo(
-    () => getDynamicPublishSignature({ form, design, logoUrl }),
-    [form, design, logoUrl]
+    () => getDynamicPublishSignature({ form, design: resolvedDesign, logoUrl }),
+    [form, resolvedDesign, logoUrl]
   );
   const payload = useMemo(
     () =>
@@ -118,22 +147,25 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
   );
   const renderableDesign = useMemo(
     () => ({
-      ...design,
+      ...resolvedDesign,
       foregroundColor: getSafeHex(
-        design.foregroundColor,
+        resolvedDesign.foregroundColor,
         initialDesignState.foregroundColor
       ),
       backgroundColor: getSafeHex(
-        design.backgroundColor,
+        resolvedDesign.backgroundColor,
         initialDesignState.backgroundColor
       ),
-      frameColor: getSafeHex(design.frameColor, initialDesignState.frameColor),
+      frameColor: getSafeHex(
+        resolvedDesign.frameColor,
+        initialDesignState.frameColor
+      ),
     }),
-    [design]
+    [resolvedDesign]
   );
   const scanability = useMemo(
-    () => getScanability({ design, hasLogo: Boolean(logoUrl) }),
-    [design, logoUrl]
+    () => getScanability({ design: resolvedDesign, hasLogo: Boolean(logoUrl) }),
+    [resolvedDesign, logoUrl]
   );
   const logoChoices = useMemo(
     () => getLogoChoiceOptions(type, logoChoice),
@@ -202,6 +234,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     setType(draft.type);
     setForm(draft.form);
     setDesign(draft.design);
+    setEcSource(draft.ecSource ?? "auto");
     setSelectedPreset(draft.selectedPreset);
     setLogoUrl(draft.logoUrl);
     setLogoChoice(draft.logoChoice);
@@ -255,7 +288,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     setSavedQRCodeId(null);
     setPublishStatus(null);
     setPublishError(null);
-  }, [mode, type, form, design, logoUrl]);
+  }, [mode, type, form, resolvedDesign, logoUrl]);
 
   const goToStep = (nextStep: WorkflowStep) => {
     setCurrentStep(nextStep);
@@ -283,6 +316,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
       selectedPreset,
       logoUrl,
       logoChoice,
+      ecSource,
     };
 
     // localStorage has a small quota (~5MB) and an uploaded logo data URL can be
@@ -342,9 +376,23 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     setLogoUrl("");
     setLogoChoice("none");
     setDesign(initialDesignState);
+    setEcSource("auto");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  const handleErrorCorrectionChange = (
+    level: ErrorCorrectionLevel | "auto"
+  ) => {
+    if (level === "auto") {
+      setEcSource("auto");
+      return;
+    }
+
+    setEcSource("user");
+    setSelectedPreset("custom");
+    setDesign((previous) => ({ ...previous, errorCorrectionLevel: level }));
   };
 
   const applyLogoSafeDesign = () => {
@@ -442,7 +490,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
         value,
         title: form.title || "Decode QR Code",
         format,
-        design: getApiDesign(design, logoUrl),
+        design: getApiDesign(resolvedDesign, logoUrl),
       }),
     });
     const result = (await response.json()) as ApiResponse<{
@@ -590,7 +638,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
           title: form.title || "Dynamic QR Code",
           save: true,
           content: { url: form.url },
-          design: getApiDesign(design, logoUrl),
+          design: getApiDesign(resolvedDesign, logoUrl),
         }),
       });
       const result = (await response.json()) as ApiResponse<{
@@ -676,7 +724,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
           title: form.title || `${getTypeLabel(type)} QR Code`,
           save: true,
           content: buildApiContent(type, form),
-          design: getApiDesign(design, logoUrl),
+          design: getApiDesign(resolvedDesign, logoUrl),
         }),
       });
       const result = (await response.json()) as ApiResponse<{
@@ -718,6 +766,8 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     type,
     form,
     design,
+    ecSource,
+    effectiveErrorCorrectionLevel: resolvedDesign.errorCorrectionLevel,
     selectedPreset,
     logoUrl,
     logoChoice,
@@ -759,6 +809,7 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     handleContinueToDesign,
     handlePresetChange,
     handleDesignChange,
+    handleErrorCorrectionChange,
     handleLogoChoiceChange,
     handleLogoUpload,
     handleRemoveLogo,
