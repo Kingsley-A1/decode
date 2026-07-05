@@ -15,6 +15,16 @@ describe("renderUnsavedQRCodeRequestSchema", () => {
     expect(parsed.design.frameStyle).toBe("none");
   });
 
+  it("defaults the quiet-zone margin to the 4-module spec value", () => {
+    const parsed = renderUnsavedQRCodeRequestSchema.parse({
+      value: "https://decode.example.com",
+      format: QR_EXPORT_FORMAT.PNG,
+      design: {},
+    });
+
+    expect(parsed.design.margin).toBe(4);
+  });
+
   it("preserves an explicit frame color and style", () => {
     const parsed = renderUnsavedQRCodeRequestSchema.parse({
       value: "https://decode.example.com",

@@ -36,7 +36,7 @@ export const defaultQRDesignConfig = {
   foregroundColor: "#0F172A",
   backgroundColor: "#FFFFFF",
   frameColor: "#2563EB",
-  margin: 16,
+  margin: 4,
   logoSizeRatio: 0,
   dotStyle: QR_DOT_STYLE.SQUARE,
   cornerStyle: QR_CORNER_STYLE.SQUARE,
@@ -58,7 +58,7 @@ const baseCreateQRCodeSchema = z.object({
       foregroundColor: hexColorSchema.default("#0F172A"),
       backgroundColor: hexColorSchema.default("#FFFFFF"),
       frameColor: hexColorSchema.default("#2563EB"),
-      margin: z.number().int().min(0).max(16).default(16),
+      margin: z.number().int().min(0).max(16).default(4),
       logoSizeRatio: z.number().min(0).max(0.35).default(0),
       dotStyle: z
         .enum([
