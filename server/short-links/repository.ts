@@ -110,7 +110,8 @@ export interface ShortLinkRepository {
   ) => Promise<ShortLinkResolveRow | null>;
   readonly recordScan: (
     shortLinkId: string,
-    telemetry: ScanTelemetry
+    telemetry: ScanTelemetry,
+    countsTowardScanCount: boolean
   ) => Promise<void>;
   readonly listForOwner: (
     input: ListShortLinksForOwnerInput
@@ -193,14 +194,25 @@ function findDetailForOwner(
 
 async function recordScan(
   shortLinkId: string,
-  telemetry: ScanTelemetry
+  telemetry: ScanTelemetry,
+  countsTowardScanCount: boolean
 ): Promise<void> {
-  await prisma.$transaction([
-    prisma.shortLink.update({
-      where: { id: shortLinkId },
-      data: { scanCount: { increment: 1 } },
-      select: { id: true },
-    }),
+  // The event row is always written (deviceClass preserves "bot" for
+  // transparency), but crawlers and link-preview fetchers must never inflate
+  // the human-facing scan count — mirrors the dynamic QR scan pipeline.
+  const operations: Prisma.PrismaPromise<unknown>[] = [];
+
+  if (countsTowardScanCount) {
+    operations.push(
+      prisma.shortLink.update({
+        where: { id: shortLinkId },
+        data: { scanCount: { increment: 1 } },
+        select: { id: true },
+      })
+    );
+  }
+
+  operations.push(
     prisma.shortLinkScan.create({
       data: {
         shortLinkId,
@@ -214,6 +226,8 @@ async function recordScan(
         userAgentHash: telemetry.userAgentHash,
       },
       select: { id: true },
-    }),
-  ]);
+    })
+  );
+
+  await prisma.$transaction(operations);
 }

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { SCAN_BOT_DEVICE_CLASS } from "@/server/analytics/constants";
+import { logStructured } from "@/server/observability/logging";
 
 export interface ScanTelemetry {
   readonly deviceClass: string;
@@ -15,17 +16,34 @@ export interface ScanTelemetry {
 export function buildScanTelemetry(request: Request): ScanTelemetry {
   const userAgent = request.headers.get("user-agent") ?? "";
   const ipAddress = getClientIpAddress(request);
+  const salt = getTelemetrySalt();
 
   return {
     deviceClass: getDeviceClass(userAgent),
     browser: getBrowser(userAgent),
     operatingSystem: getOperatingSystem(userAgent),
-    referrer: getBoundedHeader(request, "referer", 2048),
+    referrer: getReferrerOrigin(request),
     country: getBoundedHeader(request, "x-vercel-ip-country", 64),
     region: getBoundedHeader(request, "x-vercel-ip-country-region", 128),
-    ipHash: ipAddress ? hashTelemetryValue(ipAddress) : null,
-    userAgentHash: userAgent ? hashTelemetryValue(userAgent) : null,
+    ipHash: ipAddress && salt ? hashTelemetryValue(ipAddress, salt) : null,
+    userAgentHash: userAgent && salt ? hashTelemetryValue(userAgent, salt) : null,
   };
+}
+
+// Only the referrer's origin is kept: paths and query strings can carry
+// session tokens or personal data that analytics has no business storing.
+function getReferrerOrigin(request: Request): string | null {
+  const raw = request.headers.get("referer")?.trim();
+  if (!raw) return null;
+
+  try {
+    const origin = new URL(raw).origin;
+    if (origin === "null") return null;
+
+    return origin.slice(0, 256);
+  } catch {
+    return null;
+  }
 }
 
 function getClientIpAddress(request: Request): string | null {
@@ -87,11 +105,34 @@ function getOperatingSystem(userAgent: string): string {
   return "unknown";
 }
 
-function hashTelemetryValue(value: string): string {
-  const salt =
-    process.env.AUTH_SECRET ??
-    process.env.NEXTAUTH_SECRET ??
-    "decode-local-scan-analytics-salt";
+let warnedMissingTelemetrySalt = false;
 
+/**
+ * Returns the salt used to hash IP/user-agent values, or null when running in
+ * production without a configured secret. Hashing with a publicly known
+ * fallback salt would make the hashes trivially reversible by dictionary, so
+ * production stores nothing instead. Development keeps a local fallback.
+ */
+function getTelemetrySalt(): string | null {
+  const configured = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (configured) return configured;
+
+  if (process.env.NODE_ENV === "production") {
+    if (!warnedMissingTelemetrySalt) {
+      warnedMissingTelemetrySalt = true;
+      logStructured({
+        level: "warn",
+        event: "scan_telemetry.salt_missing",
+        code: "TELEMETRY_SALT_MISSING",
+      });
+    }
+
+    return null;
+  }
+
+  return "decode-local-scan-analytics-salt";
+}
+
+function hashTelemetryValue(value: string, salt: string): string {
   return createHash("sha256").update(`${salt}:${value}`).digest("hex");
 }

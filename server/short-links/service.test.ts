@@ -392,7 +392,7 @@ describe("getShortLinkErrorStatus", () => {
 });
 
 describe("recordShortLinkScan", () => {
-  it("delegates to the repository", async () => {
+  it("counts human scans toward the scan count", async () => {
     const repository = repo();
     const telemetry = {
       deviceClass: "desktop",
@@ -410,7 +410,32 @@ describe("recordShortLinkScan", () => {
       { repository }
     );
 
-    expect(repository.recordScan).toHaveBeenCalledWith("sl_1", telemetry);
+    expect(repository.recordScan).toHaveBeenCalledWith("sl_1", telemetry, true);
+  });
+
+  it("records bot scans without inflating the scan count", async () => {
+    const repository = repo();
+    const telemetry = {
+      deviceClass: "bot",
+      browser: "unknown",
+      operatingSystem: "unknown",
+      referrer: null,
+      country: null,
+      region: null,
+      ipHash: null,
+      userAgentHash: null,
+    };
+
+    await recordShortLinkScan(
+      { shortLinkId: "sl_1", telemetry },
+      { repository }
+    );
+
+    expect(repository.recordScan).toHaveBeenCalledWith(
+      "sl_1",
+      telemetry,
+      false
+    );
   });
 });
 

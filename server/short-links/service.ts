@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPublicAppBaseUrl } from "@/server/config/public-url";
+import { SCAN_BOT_DEVICE_CLASS } from "@/server/analytics/constants";
 import type { ScanTelemetry } from "@/server/analytics/scan";
 import type {
   Evidence,
@@ -208,7 +209,16 @@ export async function recordShortLinkScan(
   deps: ShortLinkServiceDeps = {}
 ): Promise<void> {
   const repository = deps.repository ?? prismaShortLinkRepository;
-  await repository.recordScan(input.shortLinkId, input.telemetry);
+  // Bots are recorded for transparency but excluded from the human-facing
+  // scan count, matching the dynamic QR scan pipeline.
+  const countsTowardScanCount =
+    input.telemetry.deviceClass !== SCAN_BOT_DEVICE_CLASS;
+
+  await repository.recordScan(
+    input.shortLinkId,
+    input.telemetry,
+    countsTowardScanCount
+  );
 }
 
 export const SHORT_LINK_LIST_DEFAULT_TAKE = 25;
