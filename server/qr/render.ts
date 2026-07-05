@@ -1,11 +1,12 @@
 import "server-only";
 
-import PDFDocument from "pdfkit";
 import sharp from "sharp";
 import {
   QR_EXPORT_FORMAT,
   type QRExportFormat,
 } from "@/server/qr/constants";
+import { buildQRRenderPlan } from "@/server/qr/geometry";
+import { renderQRPdf } from "@/server/qr/pdf";
 import type { QRDesignConfig } from "@/server/qr/schemas";
 import { buildStyledQRSvg, type StyledQRLogo } from "@/server/qr/svg";
 
@@ -31,8 +32,21 @@ export async function renderQRCode({
   title,
   logo,
 }: RenderQRCodeInput): Promise<RenderedQRCode> {
-  // One styled SVG drives every format so PNG, JPG, SVG, and PDF are identical
-  // and honour the full design (dot style, corners, colors, logo, frame).
+  // One render plan drives every format so PNG, JPG, SVG, and PDF are
+  // identical and honour the full design (dot style, corners, colors, logo,
+  // frame). The PDF is drawn as vectors and its page equals the artwork.
+  if (format === QR_EXPORT_FORMAT.PDF) {
+    const body = await renderQRPdf(
+      buildQRRenderPlan({ value, design, title, logo })
+    );
+
+    return {
+      body,
+      contentType: "application/pdf",
+      extension: QR_EXPORT_FORMAT.PDF,
+    };
+  }
+
   const svg = buildStyledQRSvg({ value, design, title, logo });
 
   if (format === QR_EXPORT_FORMAT.SVG) {
@@ -43,90 +57,24 @@ export async function renderQRCode({
     };
   }
 
-  const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+  if (format === QR_EXPORT_FORMAT.JPG) {
+    const body = await sharp(Buffer.from(svg))
+      .flatten({ background: "#FFFFFF" })
+      .jpeg({ quality: 92 })
+      .toBuffer();
 
-  if (format === QR_EXPORT_FORMAT.PNG) {
     return {
-      body: pngBuffer,
-      contentType: "image/png",
-      extension: QR_EXPORT_FORMAT.PNG,
+      body,
+      contentType: "image/jpeg",
+      extension: QR_EXPORT_FORMAT.JPG,
     };
   }
 
-  if (format === QR_EXPORT_FORMAT.JPG) {
-    return renderJpgQRCode(svg);
-  }
-
-  return renderPdfQRCode(pngBuffer, title);
-}
-
-async function renderJpgQRCode(svg: string): Promise<RenderedQRCode> {
-  const body = await sharp(Buffer.from(svg))
-    .flatten({ background: "#FFFFFF" })
-    .jpeg({ quality: 92 })
-    .toBuffer();
+  const body = await sharp(Buffer.from(svg)).png().toBuffer();
 
   return {
     body,
-    contentType: "image/jpeg",
-    extension: QR_EXPORT_FORMAT.JPG,
+    contentType: "image/png",
+    extension: QR_EXPORT_FORMAT.PNG,
   };
-}
-
-async function renderPdfQRCode(
-  pngBuffer: Buffer,
-  title = "Decode QR Code"
-): Promise<RenderedQRCode> {
-  const { width, height } = await sharp(pngBuffer).metadata();
-  const body = await createPdfBuffer({
-    pngBuffer,
-    title,
-    imageWidth: width ?? 1024,
-    imageHeight: height ?? 1024,
-  });
-
-  return {
-    body,
-    contentType: "application/pdf",
-    extension: QR_EXPORT_FORMAT.PDF,
-  };
-}
-
-function createPdfBuffer({
-  pngBuffer,
-  title,
-  imageWidth,
-  imageHeight,
-}: {
-  readonly pngBuffer: Buffer;
-  readonly title: string;
-  readonly imageWidth: number;
-  readonly imageHeight: number;
-}): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const document = new PDFDocument({ size: "A4", margin: 72 });
-    const chunks: Buffer[] = [];
-
-    document.on("data", (chunk: Buffer) => chunks.push(chunk));
-    document.on("end", () => resolve(Buffer.concat(chunks)));
-    document.on("error", reject);
-
-    document.fontSize(18).text(title, { align: "center" });
-    document.moveDown(2);
-
-    // Fit the rendered QR (which may include a non-square frame) into a centered
-    // box while preserving its aspect ratio.
-    const box = 360;
-    const aspect = imageWidth / imageHeight;
-    const drawWidth = aspect >= 1 ? box : box * aspect;
-    const drawHeight = aspect >= 1 ? box / aspect : box;
-    const pageWidth = document.page.width - document.page.margins.left * 2;
-    const offsetX = document.page.margins.left + (pageWidth - drawWidth) / 2;
-
-    document.image(pngBuffer, offsetX, document.y, {
-      width: drawWidth,
-      height: drawHeight,
-    });
-    document.end();
-  });
 }

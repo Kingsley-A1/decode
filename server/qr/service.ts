@@ -976,8 +976,9 @@ function getRenderDesignHash({
   readonly title: string;
 }): string {
   // Canonical, order-stable representation of everything that affects output.
+  // v2: print-ready vector PDF replaced the A4 raster sheet.
   const canonical = JSON.stringify({
-    v: 1,
+    v: 2,
     payloadValue,
     format,
     title,

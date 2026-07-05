@@ -144,7 +144,7 @@ export const exportFormatOptions: {
   {
     value: "pdf",
     label: "PDF",
-    description: "A4 sheet with the QR code embedded.",
+    description: "Print-ready vector PDF sized to your QR.",
   },
 ];
 

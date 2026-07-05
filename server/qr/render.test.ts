@@ -80,4 +80,64 @@ describe("renderQRCode", () => {
       expect(rendered.body as string).toContain("#D01616");
     }
   );
+
+  it("sizes the PDF page to the artwork instead of an A4 sheet", async () => {
+    const rendered = await renderQRCode({
+      value: "https://decode.example.com",
+      design,
+      format: QR_EXPORT_FORMAT.PDF,
+      title: "Decode QR",
+    });
+    const pdf = (rendered.body as Buffer).toString("latin1");
+
+    // 256px artwork at 72dpi/96dpi = 192pt — not 595.28x841.89 (A4).
+    expect(pdf).toContain("/MediaBox [0 0 192 192]");
+    expect(pdf).not.toContain("841.89");
+  });
+
+  it("renders a logo-less PDF as pure vectors with no embedded raster", async () => {
+    const rendered = await renderQRCode({
+      value: "https://decode.example.com",
+      design,
+      format: QR_EXPORT_FORMAT.PDF,
+    });
+    const pdf = (rendered.body as Buffer).toString("latin1");
+
+    expect(pdf.startsWith("%PDF-")).toBe(true);
+    expect(pdf).not.toContain("/Subtype /Image");
+  });
+
+  it("embeds only the logo as an image when a logo is present", async () => {
+    const rendered = await renderQRCode({
+      value: "https://decode.example.com",
+      design: { ...design, logoSizeRatio: 0.2 },
+      format: QR_EXPORT_FORMAT.PDF,
+      logo: { dataUrl: `data:image/png;base64,${ONE_BY_ONE_PNG_BASE64}` },
+    });
+    const pdf = (rendered.body as Buffer).toString("latin1");
+    const imageCount = pdf.match(/\/Subtype \/Image/g)?.length ?? 0;
+
+    // pdfkit stores an RGBA PNG as the image plus its alpha SMask — both
+    // count as image XObjects, and both belong to the single logo.
+    expect(imageCount).toBeGreaterThanOrEqual(1);
+    expect(imageCount).toBeLessThanOrEqual(2);
+  });
+
+  it("sizes a framed PDF to the frame footprint and includes the caption font", async () => {
+    const rendered = await renderQRCode({
+      value: "https://decode.example.com",
+      design: { ...design, frameStyle: "scan-me", size: 512 },
+      format: QR_EXPORT_FORMAT.PDF,
+    });
+    const pdf = (rendered.body as Buffer).toString("latin1");
+
+    // 512px QR: border=11, pad=23, gap=34, captionHeight=77 →
+    // 580x657px artwork → 435x492.75pt page.
+    expect(pdf).toContain("/MediaBox [0 0 435 492.75]");
+    expect(pdf).toContain("Helvetica-Bold");
+  });
 });
+
+// A valid 1x1 PNG so the logo path exercises the native PNG embed.
+const ONE_BY_ONE_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
