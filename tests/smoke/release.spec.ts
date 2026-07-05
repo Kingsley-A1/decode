@@ -928,6 +928,11 @@ test.describe("phase 8 release quality gate", () => {
     await expect(
       page.locator("#main-content").getByRole("link", { name: "Links" })
     ).toHaveAttribute("href", new RegExp(`/links\\?url=${encodeURIComponent(qrText)}`));
+
+    // Device-local history keeps the scan across a reload.
+    await page.reload();
+    await expect(page.getByText("Recent scans")).toBeVisible();
+    await expect(page.getByText(qrText)).toBeVisible();
   });
 
   test("links page verifies a URL and renders the verdict", async ({

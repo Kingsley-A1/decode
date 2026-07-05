@@ -10,8 +10,10 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { useToolHistory } from "@/components/history/useToolHistory";
 import { useQRCode, type QROptions } from "@/hooks/useQRCode";
 import { getFreshClientSession } from "@/lib/client-auth";
+import type { ToolHistoryEntry } from "@/lib/history/types";
 import { getAdaptiveErrorCorrectionLevel } from "@/lib/qr/error-correction";
 import { addSearchParams, sanitizeReturnTo } from "@/lib/redirects";
 import {
@@ -58,6 +60,9 @@ interface UseQRGeneratorOptions {
 
 export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions) {
   const router = useRouter();
+  const history = useToolHistory("generate", {
+    loadAccountEntries: loadSavedQRCodeHistory,
+  });
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("content");
   const [mode, setMode] = useState<QRMode>(initialMode);
   const [type, setType] = useState<QRType>("url");
@@ -561,6 +566,11 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
       setPublishError(null);
       try {
         await downloadStaticQRCode(format);
+        history.append({
+          title: form.title || "Decode QR Code",
+          subtitle: `${getTypeLabel(type)} · ${format.toUpperCase()} download`,
+          dedupeKey: `download:${payload.value}:${format}`,
+        });
       } catch (error) {
         setPublishError(
           error instanceof Error ? error.message : "Could not download QR code."
@@ -596,6 +606,12 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
       await downloadSavedDynamicQRCode({
         qrCodeId: publishedDynamicPayload.qrCodeId,
         format,
+      });
+      history.append({
+        title: form.title || "Dynamic QR Code",
+        subtitle: `Dynamic · ${format.toUpperCase()} download`,
+        href: `/dashboard/qr/${publishedDynamicPayload.qrCodeId}`,
+        dedupeKey: `download:${publishedDynamicPayload.qrCodeId}:${format}`,
       });
       setPublishStatus(`Download ready for ${format.toUpperCase()} export.`);
     } catch (error) {
@@ -682,6 +698,12 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
         destinationUrl,
         signature: dynamicPublishSignature,
       });
+      history.append({
+        title: form.title || "Dynamic QR Code",
+        subtitle: "Published dynamic QR",
+        href: `/dashboard/qr/${qrCodeId}`,
+        dedupeKey: qrCodeId,
+      });
       setAuthState("authenticated");
       setAuthPromptVisible(false);
       setAuthPromptMessage(null);
@@ -744,7 +766,16 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
         throw new Error(result.error?.message ?? "Could not save QR code.");
       }
 
-      setSavedQRCodeId(result.data?.qrCode?.id ?? null);
+      const savedId = result.data?.qrCode?.id ?? null;
+      setSavedQRCodeId(savedId);
+      if (savedId) {
+        history.append({
+          title: form.title || `${getTypeLabel(type)} QR Code`,
+          subtitle: "Saved to workspace",
+          href: `/dashboard/qr/${savedId}`,
+          dedupeKey: savedId,
+        });
+      }
       setAuthState("authenticated");
       setAuthPromptVisible(false);
       setAuthPromptMessage(null);
@@ -819,7 +850,53 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     handlePublishDynamic,
     handleSaveStatic,
     persistAuthDraft,
+    // history
+    history,
   };
+}
+
+// Account-backed history for signed-in users: the workspace's most recent
+// saved QR codes, read from the same API the dashboard uses. Anonymous
+// visitors (or a failed load) keep the device-local history instead.
+async function loadSavedQRCodeHistory(): Promise<
+  readonly ToolHistoryEntry[] | null
+> {
+  const session = await getFreshClientSession();
+  if (!session?.user) return null;
+
+  const response = await fetch("/api/qr-codes?take=10", {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!response.ok) return null;
+
+  const result = (await response.json()) as ApiResponse<{
+    qrCodes?: readonly Record<string, unknown>[];
+  }>;
+  if (!result.ok || !Array.isArray(result.data?.qrCodes)) return null;
+
+  return result.data.qrCodes.flatMap((row) => {
+    if (typeof row.id !== "string" || row.id.length === 0) return [];
+
+    const createdAt =
+      typeof row.createdAt === "string" ? row.createdAt : new Date().toISOString();
+    const mode = typeof row.mode === "string" ? row.mode : "static";
+    const type = typeof row.type === "string" ? row.type : "url";
+
+    return [
+      {
+        id: row.id,
+        tool: "generate" as const,
+        at: createdAt,
+        title:
+          typeof row.title === "string" && row.title.length > 0
+            ? row.title
+            : "Untitled QR code",
+        subtitle: `${mode === "dynamic" ? "Dynamic" : "Static"} · ${type}`,
+        href: `/dashboard/qr/${row.id}`,
+      },
+    ];
+  });
 }
 
 function triggerBase64Download({

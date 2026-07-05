@@ -81,6 +81,7 @@ export function QRGenerator({
     handlePublishDynamic,
     handleSaveStatic,
     persistAuthDraft,
+    history,
   } = builder;
 
   return (
@@ -195,6 +196,9 @@ export function QRGenerator({
               onSaveStatic={handleSaveStatic}
               savedQRCodeId={savedQRCodeId}
               onBeforeSignIn={persistAuthDraft}
+              historyEntries={history.entries}
+              historySource={history.source}
+              onClearHistory={history.clear}
             />
           )}
         </section>

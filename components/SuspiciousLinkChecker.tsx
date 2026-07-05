@@ -33,6 +33,8 @@ import {
   Input,
   Skeleton,
 } from "@/components/ui";
+import { HistoryPanel } from "@/components/history/HistoryPanel";
+import { useToolHistory } from "@/components/history/useToolHistory";
 
 type EvidenceSource =
   | "heuristic"
@@ -122,6 +124,22 @@ export function SuspiciousLinkChecker() {
   const [copied, setCopied] = useState(false);
   const [isOpenDialogVisible, setIsOpenDialogVisible] = useState(false);
   const runIdRef = useRef(0);
+  const verifyHistory = useToolHistory("verify");
+
+  function appendVerifyHistory(
+    outcome: LinkVerificationResult,
+    rawUrl: string
+  ) {
+    const target = outcome.normalizedUrl ?? rawUrl.trim();
+    if (!target) return;
+
+    verifyHistory.append({
+      title: target,
+      subtitle: `${getVerdictTone(outcome.verdict).label} · ${outcome.confidence}%`,
+      dedupeKey: target,
+      meta: { url: target, verdict: outcome.verdict },
+    });
+  }
 
   const normalizedUrl = result?.normalizedUrl ?? "";
   const verdictTone = result ? getVerdictTone(result.verdict) : null;
@@ -163,6 +181,7 @@ export function SuspiciousLinkChecker() {
     // A malformed URL has nothing more to learn from a network probe.
     if (!instant.normalizedUrl) {
       setStatus("done");
+      appendVerifyHistory(instant, url);
       return;
     }
 
@@ -173,11 +192,13 @@ export function SuspiciousLinkChecker() {
       if (runId !== runIdRef.current) return;
       setResult(full);
       setStatus("done");
+      appendVerifyHistory(full, url);
     } catch {
       if (runId !== runIdRef.current) return;
       // Keep the instant verdict; surface the deep-check failure non-fatally.
       setDeepCheckFailed(true);
       setStatus("done");
+      appendVerifyHistory(instant, url);
     }
   }
 
@@ -328,6 +349,17 @@ export function SuspiciousLinkChecker() {
             </div>
           )}
         </section>
+
+        <HistoryPanel
+          title="Verification history"
+          entries={verifyHistory.entries}
+          source={verifyHistory.source}
+          description="Links checked on this device. Select one to verify it again."
+          onClear={verifyHistory.clear}
+          onSelect={(entry) => {
+            void runCheck(entry.meta?.url ?? entry.title);
+          }}
+        />
       </section>
 
       <OpenPolicyAside />

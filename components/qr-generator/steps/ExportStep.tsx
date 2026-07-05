@@ -14,6 +14,9 @@ import {
   ChoiceRail,
 } from "@/components/ui";
 import { OAuthSignInPanel } from "@/components/auth/OAuthSignInPanel";
+import { HistoryPanel } from "@/components/history/HistoryPanel";
+import type { ToolHistorySource } from "@/components/history/useToolHistory";
+import type { ToolHistoryEntry } from "@/lib/history/types";
 import { exportFormatOptions } from "../constants";
 import { getFrameExportLabel, getTypeLabel } from "../labels";
 import type {
@@ -49,6 +52,9 @@ export function ExportStep({
   onSaveStatic,
   savedQRCodeId,
   onBeforeSignIn,
+  historyEntries,
+  historySource,
+  onClearHistory,
 }: {
   readonly headingRef: React.RefObject<HTMLHeadingElement | null>;
   readonly mode: QRMode;
@@ -72,6 +78,9 @@ export function ExportStep({
   readonly onSaveStatic: () => void;
   readonly savedQRCodeId: string | null;
   readonly onBeforeSignIn: () => void;
+  readonly historyEntries: readonly ToolHistoryEntry[];
+  readonly historySource: ToolHistorySource;
+  readonly onClearHistory: () => void;
 }) {
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
   const authPromptRef = useRef<HTMLDivElement>(null);
@@ -221,6 +230,26 @@ export function ExportStep({
           />
         </div>
       )}
+
+      <HistoryPanel
+        title="History"
+        entries={historyEntries}
+        source={historySource}
+        description={
+          historySource === "account"
+            ? "Your workspace's most recent QR codes."
+            : "Recent QR codes from this device."
+        }
+        onClear={onClearHistory}
+        footer={
+          historySource === "local" ? (
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              This history lives in this browser. Sign in to keep your QR
+              codes in your workspace.
+            </p>
+          ) : null
+        }
+      />
 
       <BuilderActionBar
         desktop={

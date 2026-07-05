@@ -39,6 +39,11 @@ import {
   Wifi,
   X,
 } from "lucide-react";
+import {
+  appendToolHistory,
+  clearToolHistory,
+  readToolHistory,
+} from "@/lib/history/local-store";
 import { cn } from "@/lib/utils";
 import { Alert, Badge, Button, Dialog, FileUpload } from "@/components/ui";
 
@@ -132,6 +137,26 @@ export function QRScanner() {
     scannerStateRef.current = scannerState;
   }, [scannerState]);
 
+  // Rehydrate the recent-scans tray from device-local history so scans
+  // survive a reload. Derived fields are recomputed from the stored value.
+  useEffect(() => {
+    const stored = readToolHistory("scan").slice(0, recentScanLimit);
+    if (stored.length === 0) return;
+
+    setRecentScans((current) =>
+      current.length > 0
+        ? current
+        : stored.map((entry) => ({
+            ...createScanResult(
+              entry.meta?.value ?? entry.title,
+              entry.meta?.source === "Image upload" ? "Image upload" : "Camera"
+            ),
+            id: entry.id,
+            scannedAt: entry.at,
+          }))
+    );
+  }, []);
+
   const stopScanner = useCallback(async () => {
     const scanner = qrRef.current;
     qrRef.current = null;
@@ -220,6 +245,16 @@ export function QRScanner() {
         result,
         ...current.filter((item) => item.value !== result.value),
       ].slice(0, recentScanLimit));
+      // Device-local history so recent scans survive a reload.
+      appendToolHistory({
+        id: result.id,
+        tool: "scan",
+        at: result.scannedAt,
+        title: result.value,
+        subtitle: result.label,
+        dedupeKey: result.value,
+        meta: { value: result.value, source },
+      });
       setCopied(false);
       setError(null);
       vibrate();
@@ -566,7 +601,10 @@ export function QRScanner() {
             setCopied(false);
             void verifyUrl(item);
           }}
-          onClear={() => setRecentScans([])}
+          onClear={() => {
+            clearToolHistory("scan");
+            setRecentScans([]);
+          }}
         />
       </section>
 

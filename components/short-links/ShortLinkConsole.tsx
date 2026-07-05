@@ -22,6 +22,9 @@ import {
   X,
 } from "lucide-react";
 import { Alert, Badge, Button, Input, Skeleton } from "@/components/ui";
+import { HistoryPanel } from "@/components/history/HistoryPanel";
+import { useToolHistory } from "@/components/history/useToolHistory";
+import type { ToolHistoryEntry } from "@/lib/history/types";
 
 type Verdict = "safe" | "caution" | "suspicious" | "malicious";
 
@@ -102,6 +105,7 @@ export function ShortLinkConsole() {
 
   const runIdRef = useRef(0);
   const inputLengthSnapshotRef = useRef(0);
+  const localHistory = useToolHistory("shorten");
 
   async function fetchRecents() {
     setRecentsLoading(true);
@@ -181,6 +185,12 @@ export function ShortLinkConsole() {
       setResult(payload.data);
       setStatus("success");
       setAcknowledgeChecked(false);
+      localHistory.append({
+        id: payload.data.shortLink.id,
+        title: payload.data.shortUrl,
+        subtitle: payload.data.shortLink.destinationUrl,
+        dedupeKey: payload.data.shortLink.id,
+      });
       // Prepend the new link to recents so the table reflects it instantly.
       if (!anonymous) {
         setRecents((current) =>
@@ -322,6 +332,8 @@ export function ShortLinkConsole() {
         recents={recents}
         loading={recentsLoading}
         anonymous={anonymous}
+        localEntries={localHistory.entries}
+        onClearLocal={localHistory.clear}
       />
     </div>
   );
@@ -560,12 +572,37 @@ function RecentLinksPanel({
   recents,
   loading,
   anonymous,
+  localEntries,
+  onClearLocal,
 }: {
   readonly recents: readonly ShortLinkSummary[] | null;
   readonly loading: boolean;
   readonly anonymous: boolean;
+  readonly localEntries: readonly ToolHistoryEntry[];
+  readonly onClearLocal: () => void;
 }) {
   if (anonymous) {
+    // Anonymous visitors get a device-local history; before the first link
+    // exists, the section explains what signing in adds.
+    if (localEntries.length > 0) {
+      return (
+        <HistoryPanel
+          title="Your short links"
+          entries={localEntries}
+          source="local"
+          description="Links created on this device."
+          onClear={onClearLocal}
+          footer={
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              This history lives in this browser. Sign in to track
+              destinations, scan counts, and verdict history in your
+              workspace.
+            </p>
+          }
+        />
+      );
+    }
+
     return (
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">
