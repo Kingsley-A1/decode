@@ -55,10 +55,11 @@ const demoFeatures: readonly DemoFeature[] = [
   },
   {
     title: "Links",
-    description: "Link evidence, scoring, and review workflows are coming soon.",
+    description:
+      "Verify a link with evidence-backed verdicts before opening or sharing it.",
     href: "/links",
     icon: Link2,
-    cta: "Preview",
+    cta: "Verify",
   },
   {
     title: "Decode utility",

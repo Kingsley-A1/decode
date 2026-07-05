@@ -41,10 +41,11 @@ const workflowDocs = [
     title: "Links",
     href: "/links",
     icon: Link2,
-    description: "Link evidence and safety workflows are coming soon.",
+    description:
+      "Verify a destination with heuristics, an SSRF-protected probe, and threat intelligence.",
     bullets: [
-      "The evidence, scoring, and review system is still being finalized.",
-      "Use cautious open flows for untrusted destinations until links reopens.",
+      "Every verdict shows its evidence, confidence, and probe summary.",
+      "Suspicious or malicious verdicts gate the open flow behind a confirmation.",
       "Use verification directly from scan results when content is a URL.",
     ],
   },

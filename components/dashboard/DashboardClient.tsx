@@ -88,7 +88,7 @@ const platformActions = [
   },
   {
     title: "Links",
-    description: "Link safety system coming soon.",
+    description: "Verify link safety before you open or share it.",
     href: "/links",
     icon: Link2,
   },

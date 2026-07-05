@@ -6,9 +6,11 @@ import QRCode from "qrcode";
 const primaryRoutes = [
   { path: "/generate", heading: "Generate QR codes" },
   { path: "/scan", heading: "Scan QR codes" },
-  { path: "/links", heading: "Links" },
+  { path: "/links", heading: "Verify a link" },
   { path: "/decode", heading: "Decode utility" },
-  { path: "/dashboard", heading: "Dashboard" },
+  // Anonymous /dashboard redirects to the sign-in surface, so the suite
+  // audits the login page it lands on.
+  { path: "/dashboard", heading: "Log in to Decode" },
   { path: "/landing-pages", heading: "Landing pages" },
   { path: "/privacy", heading: "Privacy Policy" },
   { path: "/terms", heading: "Terms of Service" },
@@ -928,20 +930,51 @@ test.describe("phase 8 release quality gate", () => {
     ).toHaveAttribute("href", new RegExp(`/links\\?url=${encodeURIComponent(qrText)}`));
   });
 
-  test("links page stays disabled while the links system is rebuilt", async ({
+  test("links page verifies a URL and renders the verdict", async ({
     page,
   }) => {
+    await page.route("**/api/links/verify", async (route) => {
+      await route.fulfill({
+        json: {
+          ok: true,
+          data: {
+            verdict: "safe",
+            confidence: 92,
+            normalizedUrl: "https://example.com/login",
+            host: "example.com",
+            evidence: [
+              {
+                code: "https_scheme",
+                source: "heuristic",
+                severity: "info",
+                message: "Destination uses HTTPS.",
+                observedAt: new Date().toISOString(),
+              },
+            ],
+            probe: null,
+            ssrfProtected: true,
+            cache: {
+              hit: false,
+              cacheable: true,
+              checkedAt: new Date().toISOString(),
+              expiresAt: null,
+            },
+          },
+        },
+      });
+    });
+
     await page.goto("/links");
     await expect(
-      page.getByRole("heading", { name: "Links", level: 1 })
+      page.getByRole("heading", { name: "Verify a link", level: 1 })
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", {
-        name: "Link verification is being upgraded.",
-        level: 2,
-      })
-    ).toBeVisible();
-    await expect(page.getByText("Coming soon")).toBeVisible();
+
+    await page.getByLabel("Link to verify").fill("https://example.com/login");
+    await page.getByRole("button", { name: "Check link" }).click();
+
+    await expect(page.getByText("Looks safe").first()).toBeVisible();
+    await expect(page.getByText("Fresh verdict").first()).toBeVisible();
+    await expect(page.getByText("Destination uses HTTPS.")).toBeVisible();
   });
 
   test("decode utility validates UI controls and API algorithms", async ({
@@ -1012,32 +1045,15 @@ test.describe("phase 8 release quality gate", () => {
     expect(invalidBody.error.code).toBe("INVALID_DECODE_INPUT");
   });
 
-  test("dashboard keeps production data honest with empty state CTAs", async ({
+  test("anonymous dashboard visits redirect to sign-in and return after auth", async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/dashboard");
 
+    await expect(page).toHaveURL(/\/me\?intent=login&returnTo=%2Fdashboard/);
     await expect(
-      page.getByRole("heading", { name: "Dashboard", level: 1 })
+      page.getByRole("heading", { name: "Log in to Decode", level: 1 })
     ).toBeVisible();
-    await expect(page.getByText("Workspace command center")).toBeVisible();
-    await expect(page.getByText("No workspace activity yet")).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByText("Dashboard notice")).toHaveCount(0);
-
-    const savedCard = page.locator("a", { hasText: "Saved QR codes" }).first();
-    const scanCard = page.locator("a", { hasText: "Scan events" }).first();
-    const savedBox = await savedCard.boundingBox();
-    const scanBox = await scanCard.boundingBox();
-
-    expect(savedBox).not.toBeNull();
-    expect(scanBox).not.toBeNull();
-    expect(Math.abs((savedBox?.y ?? 0) - (scanBox?.y ?? 0))).toBeLessThan(12);
-    expect((scanBox?.x ?? 0)).toBeGreaterThan(savedBox?.x ?? 0);
-    await expect(savedCard).toHaveAttribute("href", "/generate");
-    await expect(scanCard).toHaveAttribute("href", "/scan");
   });
 
   test("backend smoke APIs stay release-ready", async ({ request }) => {

@@ -58,7 +58,7 @@ export const primaryNavItems: readonly NavigationItem[] = [
     href: "/links",
     icon: Link2,
     label: "Links",
-    description: "Link safety system coming soon.",
+    description: "Verify link safety before you open or share it.",
   },
   {
     href: "/pricing",
