@@ -37,6 +37,8 @@ export function getShortLinkErrorStatus(code: ShortLinkErrorCode): number {
       return 409;
     case SHORT_LINK_ERROR_CODE.MINT_FAILED:
       return 503;
+    case SHORT_LINK_ERROR_CODE.NOT_FOUND:
+      return 404;
     default:
       return 500;
   }

@@ -3,18 +3,22 @@ import type { LinkVerificationResult } from "@/server/links/service";
 import { SHORT_LINK_ERROR_CODE } from "@/server/short-links/constants";
 import { ShortLinkError } from "@/server/short-links/errors";
 import type {
+  ShortLinkCreatedRow,
   ShortLinkDetailRow,
   ShortLinkListRow,
+  ShortLinkOwnerRow,
   ShortLinkRepository,
   ShortLinkResolveRow,
 } from "@/server/short-links/repository";
 import {
   SHORT_LINK_LIST_MAX_TAKE,
   createShortLink,
+  deleteShortLink,
   getShortLinkDetail,
   listShortLinks,
   recordShortLinkScan,
   resolveShortLink,
+  updateShortLink,
   type ShortLinkVerifier,
 } from "@/server/short-links/service";
 import { isValidShortLinkSlug } from "@/server/short-links/slugs";
@@ -39,6 +43,32 @@ function verification(
   };
 }
 
+function createdRow(overrides: Partial<ShortLinkCreatedRow> = {}): ShortLinkCreatedRow {
+  return {
+    id: "sl_1",
+    slug: "aB3xK",
+    destinationUrl: LONG_URL,
+    normalizedUrl: LONG_URL,
+    status: "active",
+    verdictAtCreate: "safe",
+    lastVerdict: "safe",
+    scanCount: 0,
+    expiresAt: null,
+    createdAt: new Date("2026-05-25T00:00:00.000Z"),
+    updatedAt: new Date("2026-05-25T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function ownerRow(overrides: Partial<ShortLinkOwnerRow> = {}): ShortLinkOwnerRow {
+  return {
+    ...createdRow(),
+    ownerId: "user_1",
+    workspaceId: "ws_1",
+    ...overrides,
+  };
+}
+
 function repo(overrides: Partial<ShortLinkRepository> = {}): ShortLinkRepository {
   return {
     isSlugAvailable: vi.fn(async () => true),
@@ -59,6 +89,9 @@ function repo(overrides: Partial<ShortLinkRepository> = {}): ShortLinkRepository
     recordScan: vi.fn(async () => undefined),
     listForOwner: vi.fn(async () => []),
     findDetailForOwner: vi.fn(async () => null),
+    findForOwner: vi.fn(async () => null),
+    updateForOwner: vi.fn(async () => createdRow()),
+    softDeleteForOwner: vi.fn(async () => true),
     ...overrides,
   };
 }
@@ -435,6 +468,190 @@ describe("recordShortLinkScan", () => {
       "sl_1",
       telemetry,
       false
+    );
+  });
+});
+
+describe("updateShortLink", () => {
+  it("re-verifies a destination change and writes a destination audit", async () => {
+    const repository = repo({
+      findForOwner: vi.fn(async () => ownerRow()),
+    });
+    const verify = vi.fn<ShortLinkVerifier>(async () =>
+      verification({ normalizedUrl: "https://next.example/promo" })
+    );
+
+    await updateShortLink(
+      {
+        id: "sl_1",
+        ownerId: "user_1",
+        destinationUrl: "https://next.example/promo",
+      },
+      { repository, verify }
+    );
+
+    expect(verify).toHaveBeenCalledWith({
+      url: "https://next.example/promo",
+    });
+    expect(repository.updateForOwner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "sl_1",
+        ownerId: "user_1",
+        data: expect.objectContaining({
+          destinationUrl: "https://next.example/promo",
+          normalizedUrl: "https://next.example/promo",
+          lastVerdict: "safe",
+        }),
+        audit: expect.objectContaining({
+          workspaceId: "ws_1",
+          actorUserId: "user_1",
+          action: "destination.change",
+          metadata: expect.objectContaining({
+            previousUrl: LONG_URL,
+            nextUrl: "https://next.example/promo",
+            slug: "aB3xK",
+          }),
+        }),
+      })
+    );
+  });
+
+  it("blocks a malicious new destination", async () => {
+    const repository = repo({
+      findForOwner: vi.fn(async () => ownerRow()),
+    });
+    const verify = vi.fn<ShortLinkVerifier>(async () =>
+      verification({ verdict: "malicious" })
+    );
+
+    await expectError(
+      () =>
+        updateShortLink(
+          {
+            id: "sl_1",
+            ownerId: "user_1",
+            destinationUrl: "https://evil.example/",
+          },
+          { repository, verify }
+        ),
+      SHORT_LINK_ERROR_CODE.BLOCKED
+    );
+    expect(repository.updateForOwner).not.toHaveBeenCalled();
+  });
+
+  it("requires an acknowledgement for a suspicious new destination", async () => {
+    const repository = repo({
+      findForOwner: vi.fn(async () => ownerRow()),
+    });
+    const verify = vi.fn<ShortLinkVerifier>(async () =>
+      verification({ verdict: "suspicious" })
+    );
+
+    await expectError(
+      () =>
+        updateShortLink(
+          {
+            id: "sl_1",
+            ownerId: "user_1",
+            destinationUrl: "https://sketchy.example/",
+          },
+          { repository, verify }
+        ),
+      SHORT_LINK_ERROR_CODE.REQUIRES_OVERRIDE
+    );
+
+    await updateShortLink(
+      {
+        id: "sl_1",
+        ownerId: "user_1",
+        destinationUrl: "https://sketchy.example/",
+        acknowledgedSuspicious: true,
+      },
+      { repository, verify }
+    );
+    expect(repository.updateForOwner).toHaveBeenCalledOnce();
+  });
+
+  it("refuses to manually re-enable a flagged link", async () => {
+    const repository = repo({
+      findForOwner: vi.fn(async () => ownerRow({ status: "flagged" })),
+    });
+
+    await expectError(
+      () =>
+        updateShortLink(
+          { id: "sl_1", ownerId: "user_1", status: "active" },
+          { repository }
+        ),
+      SHORT_LINK_ERROR_CODE.BLOCKED
+    );
+  });
+
+  it("backfills the workspace for a workspace-less link before auditing", async () => {
+    const repository = repo({
+      findForOwner: vi.fn(async () => ownerRow({ workspaceId: null })),
+    });
+    const resolveAuditWorkspaceId = vi.fn(async () => "ws_default");
+
+    await updateShortLink(
+      { id: "sl_1", ownerId: "user_1", status: "disabled" },
+      { repository, resolveAuditWorkspaceId }
+    );
+
+    expect(resolveAuditWorkspaceId).toHaveBeenCalledWith("user_1");
+    expect(repository.updateForOwner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "disabled",
+          workspaceId: "ws_default",
+        }),
+        audit: expect.objectContaining({ workspaceId: "ws_default" }),
+      })
+    );
+  });
+
+  it("throws NOT_FOUND for another owner's link", async () => {
+    const repository = repo();
+
+    await expectError(
+      () =>
+        updateShortLink(
+          { id: "sl_x", ownerId: "user_1", status: "disabled" },
+          { repository }
+        ),
+      SHORT_LINK_ERROR_CODE.NOT_FOUND
+    );
+    expect(getShortLinkErrorStatus(SHORT_LINK_ERROR_CODE.NOT_FOUND)).toBe(404);
+  });
+});
+
+describe("deleteShortLink", () => {
+  it("soft-deletes with a delete audit entry", async () => {
+    const repository = repo({
+      findForOwner: vi.fn(async () => ownerRow()),
+    });
+
+    await deleteShortLink({ id: "sl_1", ownerId: "user_1" }, { repository });
+
+    expect(repository.softDeleteForOwner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "sl_1",
+        ownerId: "user_1",
+        audit: expect.objectContaining({
+          action: "delete",
+          workspaceId: "ws_1",
+          metadata: expect.objectContaining({ slug: "aB3xK" }),
+        }),
+      })
+    );
+  });
+
+  it("throws NOT_FOUND when the link does not exist for this owner", async () => {
+    const repository = repo();
+
+    await expectError(
+      () => deleteShortLink({ id: "sl_x", ownerId: "user_1" }, { repository }),
+      SHORT_LINK_ERROR_CODE.NOT_FOUND
     );
   });
 });

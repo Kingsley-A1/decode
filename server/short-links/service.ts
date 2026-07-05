@@ -14,13 +14,17 @@ import {
   type ShortLinkEvidenceSummary,
 } from "@/server/short-links/constants";
 import { ShortLinkError } from "@/server/short-links/errors";
+import { AUDIT_ACTION } from "@/server/audit/constants";
 import {
   prismaShortLinkRepository,
   type ShortLinkCreatedRow,
   type ShortLinkDetailRow,
   type ShortLinkListRow,
   type ShortLinkRepository,
+  type UpdateShortLinkData,
 } from "@/server/short-links/repository";
+import { getDefaultWorkspaceForUser } from "@/server/workspaces/repository";
+import { createDefaultWorkspaceForUser } from "@/server/workspaces/service";
 import {
   SHORT_LINK_BASE_PREFIX,
   computeShortLinkLengthPolicy,
@@ -36,6 +40,8 @@ export type ShortLinkVerifier = (input: {
 export interface ShortLinkServiceDeps {
   readonly repository?: ShortLinkRepository;
   readonly verify?: ShortLinkVerifier;
+  /** Resolves the workspace that owns audit entries for this user's links. */
+  readonly resolveAuditWorkspaceId?: (ownerId: string) => Promise<string>;
 }
 
 export interface CreateShortLinkInput {
@@ -220,6 +226,196 @@ export async function recordShortLinkScan(
     countsTowardScanCount
   );
 }
+
+export interface UpdateShortLinkInput {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly destinationUrl?: string;
+  /** Owners may pause or resume a link; `flagged` is verifier-owned. */
+  readonly status?: "active" | "disabled";
+  /** `undefined` leaves the expiry unchanged; `null` clears it. */
+  readonly expiresAt?: Date | null;
+  readonly acknowledgedSuspicious?: boolean;
+  readonly now?: Date;
+}
+
+export async function updateShortLink(
+  input: UpdateShortLinkInput,
+  deps: ShortLinkServiceDeps = {}
+): Promise<ShortLinkCreatedRow> {
+  const repository = deps.repository ?? prismaShortLinkRepository;
+  const verify = deps.verify ?? ((args) => verifyLink(args));
+  const resolveWorkspace =
+    deps.resolveAuditWorkspaceId ?? resolveAuditWorkspaceIdForOwner;
+  const now = input.now ?? new Date();
+
+  const row = await repository.findForOwner({
+    id: input.id,
+    ownerId: input.ownerId,
+  });
+  if (!row) {
+    throw new ShortLinkError(
+      SHORT_LINK_ERROR_CODE.NOT_FOUND,
+      "Short link not found."
+    );
+  }
+
+  const data: Mutable<UpdateShortLinkData> = {};
+  const changes: Record<string, unknown> = {};
+  let action: (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION] =
+    AUDIT_ACTION.UPDATE;
+  let summary: ShortLinkEvidenceSummary | undefined;
+
+  if (input.destinationUrl !== undefined) {
+    const url = input.destinationUrl.trim();
+    // A destination change goes through the same verification gates as
+    // creation. The 3x-shorter policy is deliberately not re-applied: the
+    // slug is already minted and distributed.
+    const verification = await verify({ url });
+    summary = summarizeVerification(verification);
+
+    if (!verification.normalizedUrl) {
+      throw new ShortLinkError(
+        SHORT_LINK_ERROR_CODE.INVALID_URL,
+        "This URL could not be parsed and cannot be used as a destination.",
+        summary
+      );
+    }
+    if (verification.verdict === "malicious") {
+      throw new ShortLinkError(
+        SHORT_LINK_ERROR_CODE.BLOCKED,
+        "This destination was flagged as malicious and cannot be used.",
+        summary
+      );
+    }
+    if (
+      verification.verdict === "suspicious" &&
+      input.acknowledgedSuspicious !== true
+    ) {
+      throw new ShortLinkError(
+        SHORT_LINK_ERROR_CODE.REQUIRES_OVERRIDE,
+        "This destination looks suspicious. Confirm to use it anyway.",
+        summary
+      );
+    }
+
+    data.destinationUrl = url;
+    data.normalizedUrl = verification.normalizedUrl;
+    data.lastVerdict = verification.verdict;
+    data.lastVerifiedAt = now;
+    // A clean destination change reactivates a verifier-flagged link.
+    if (row.status === SHORT_LINK_STATUS.FLAGGED) {
+      data.status = SHORT_LINK_STATUS.ACTIVE;
+    }
+    action = AUDIT_ACTION.DESTINATION_CHANGE;
+    changes.previousUrl = row.destinationUrl;
+    changes.nextUrl = url;
+  }
+
+  if (input.status !== undefined && input.status !== row.status) {
+    // A flagged link cannot be manually re-enabled: only a destination
+    // change (which re-verifies) clears the flag.
+    if (
+      row.status === SHORT_LINK_STATUS.FLAGGED &&
+      data.destinationUrl === undefined
+    ) {
+      throw new ShortLinkError(
+        SHORT_LINK_ERROR_CODE.BLOCKED,
+        "This link was flagged by verification. Change its destination to reactivate it."
+      );
+    }
+
+    data.status = input.status;
+    changes.status = { previous: row.status, next: input.status };
+  }
+
+  if (input.expiresAt !== undefined) {
+    data.expiresAt = input.expiresAt;
+    changes.expiresAt = {
+      previous: row.expiresAt?.toISOString() ?? null,
+      next: input.expiresAt?.toISOString() ?? null,
+    };
+  }
+
+  if (Object.keys(data).length === 0) {
+    return row;
+  }
+
+  const workspaceId = row.workspaceId ?? (await resolveWorkspace(input.ownerId));
+  if (!row.workspaceId) {
+    data.workspaceId = workspaceId;
+  }
+
+  const updated = await repository.updateForOwner({
+    id: input.id,
+    ownerId: input.ownerId,
+    data,
+    audit: {
+      workspaceId,
+      actorUserId: input.ownerId,
+      action,
+      metadata: { slug: row.slug, ...changes },
+    },
+  });
+  if (!updated) {
+    throw new ShortLinkError(
+      SHORT_LINK_ERROR_CODE.NOT_FOUND,
+      "Short link not found."
+    );
+  }
+
+  return updated;
+}
+
+export async function deleteShortLink(
+  input: { readonly id: string; readonly ownerId: string },
+  deps: ShortLinkServiceDeps = {}
+): Promise<void> {
+  const repository = deps.repository ?? prismaShortLinkRepository;
+  const resolveWorkspace =
+    deps.resolveAuditWorkspaceId ?? resolveAuditWorkspaceIdForOwner;
+
+  const row = await repository.findForOwner({
+    id: input.id,
+    ownerId: input.ownerId,
+  });
+  if (!row) {
+    throw new ShortLinkError(
+      SHORT_LINK_ERROR_CODE.NOT_FOUND,
+      "Short link not found."
+    );
+  }
+
+  const workspaceId = row.workspaceId ?? (await resolveWorkspace(input.ownerId));
+  const deleted = await repository.softDeleteForOwner({
+    id: input.id,
+    ownerId: input.ownerId,
+    audit: {
+      workspaceId,
+      actorUserId: input.ownerId,
+      action: AUDIT_ACTION.DELETE,
+      metadata: { slug: row.slug, destinationUrl: row.destinationUrl },
+    },
+  });
+  if (!deleted) {
+    throw new ShortLinkError(
+      SHORT_LINK_ERROR_CODE.NOT_FOUND,
+      "Short link not found."
+    );
+  }
+}
+
+async function resolveAuditWorkspaceIdForOwner(
+  ownerId: string
+): Promise<string> {
+  const workspace =
+    (await getDefaultWorkspaceForUser({ userId: ownerId })) ??
+    (await createDefaultWorkspaceForUser({ userId: ownerId }));
+
+  return workspace.id;
+}
+
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 export const SHORT_LINK_LIST_DEFAULT_TAKE = 25;
 export const SHORT_LINK_LIST_MAX_TAKE = 100;

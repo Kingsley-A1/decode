@@ -16,6 +16,7 @@ export const AUDIT_ENTITY_TYPE = {
   QR_CODE_ASSET: "qr_code_asset",
   LANDING_PAGE: "landing_page",
   USER: "user",
+  SHORT_LINK: "short_link",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];

@@ -3,6 +3,10 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import type { ScanTelemetry } from "@/server/analytics/scan";
+import {
+  AUDIT_ENTITY_TYPE,
+  type AuditAction,
+} from "@/server/audit/constants";
 import type { ShortLinkStatus } from "@/server/short-links/constants";
 
 const shortLinkResolveSelect = {
@@ -102,6 +106,34 @@ export interface FindShortLinkForOwnerInput {
   readonly ownerId: string;
 }
 
+const shortLinkOwnerSelect = {
+  ...shortLinkListSelect,
+  ownerId: true,
+  workspaceId: true,
+} satisfies Prisma.ShortLinkSelect;
+
+export type ShortLinkOwnerRow = Prisma.ShortLinkGetPayload<{
+  select: typeof shortLinkOwnerSelect;
+}>;
+
+export interface UpdateShortLinkData {
+  readonly destinationUrl?: string;
+  readonly normalizedUrl?: string;
+  readonly lastVerdict?: string;
+  readonly lastVerifiedAt?: Date;
+  readonly status?: ShortLinkStatus;
+  readonly expiresAt?: Date | null;
+  /** Backfilled on the first audited mutation of a workspace-less link. */
+  readonly workspaceId?: string;
+}
+
+export interface ShortLinkAuditInput {
+  readonly workspaceId: string;
+  readonly actorUserId: string | null;
+  readonly action: AuditAction;
+  readonly metadata: Prisma.InputJsonValue;
+}
+
 export interface ShortLinkRepository {
   readonly isSlugAvailable: (slug: string) => Promise<boolean>;
   readonly create: (data: CreateShortLinkData) => Promise<ShortLinkCreatedRow>;
@@ -119,6 +151,20 @@ export interface ShortLinkRepository {
   readonly findDetailForOwner: (
     input: FindShortLinkForOwnerInput
   ) => Promise<ShortLinkDetailRow | null>;
+  readonly findForOwner: (
+    input: FindShortLinkForOwnerInput
+  ) => Promise<ShortLinkOwnerRow | null>;
+  readonly updateForOwner: (input: {
+    readonly id: string;
+    readonly ownerId: string;
+    readonly data: UpdateShortLinkData;
+    readonly audit: ShortLinkAuditInput;
+  }) => Promise<ShortLinkCreatedRow | null>;
+  readonly softDeleteForOwner: (input: {
+    readonly id: string;
+    readonly ownerId: string;
+    readonly audit: ShortLinkAuditInput;
+  }) => Promise<boolean>;
 }
 
 export const prismaShortLinkRepository: ShortLinkRepository = {
@@ -128,6 +174,9 @@ export const prismaShortLinkRepository: ShortLinkRepository = {
   recordScan,
   listForOwner,
   findDetailForOwner,
+  findForOwner,
+  updateForOwner,
+  softDeleteForOwner,
 };
 
 async function isSlugAvailable(slug: string): Promise<boolean> {
@@ -231,3 +280,152 @@ async function recordScan(
 
   await prisma.$transaction(operations);
 }
+
+function findForOwner(
+  input: FindShortLinkForOwnerInput
+): Promise<ShortLinkOwnerRow | null> {
+  return prisma.shortLink.findFirst({
+    where: {
+      id: input.id,
+      ownerId: input.ownerId,
+      deletedAt: null,
+    },
+    select: shortLinkOwnerSelect,
+  });
+}
+
+// Mutations are transactional with their audit entry, mirroring the QR
+// service: either the change and its audit record both land, or neither.
+async function updateForOwner(input: {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly data: UpdateShortLinkData;
+  readonly audit: ShortLinkAuditInput;
+}): Promise<ShortLinkCreatedRow | null> {
+  return prisma.$transaction(async (transaction) => {
+    const existing = await transaction.shortLink.findFirst({
+      where: { id: input.id, ownerId: input.ownerId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) return null;
+
+    const row = await transaction.shortLink.update({
+      where: { id: input.id },
+      data: input.data,
+      select: shortLinkCreatedSelect,
+    });
+
+    await createAuditEntry(transaction, input.id, input.audit);
+
+    return row;
+  });
+}
+
+async function softDeleteForOwner(input: {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly audit: ShortLinkAuditInput;
+}): Promise<boolean> {
+  return prisma.$transaction(async (transaction) => {
+    const existing = await transaction.shortLink.findFirst({
+      where: { id: input.id, ownerId: input.ownerId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) return false;
+
+    await transaction.shortLink.update({
+      where: { id: input.id },
+      data: { deletedAt: new Date() },
+      select: { id: true },
+    });
+
+    await createAuditEntry(transaction, input.id, input.audit);
+
+    return true;
+  });
+}
+
+function createAuditEntry(
+  transaction: Prisma.TransactionClient,
+  shortLinkId: string,
+  audit: ShortLinkAuditInput
+) {
+  return transaction.auditLog.create({
+    data: {
+      workspaceId: audit.workspaceId,
+      actorUserId: audit.actorUserId,
+      action: audit.action,
+      entityType: AUDIT_ENTITY_TYPE.SHORT_LINK,
+      entityId: shortLinkId,
+      metadata: audit.metadata,
+    },
+    select: { id: true },
+  });
+}
+
+// --- Re-verification (cron) ---------------------------------------------
+
+const shortLinkReverifySelect = {
+  id: true,
+  slug: true,
+  destinationUrl: true,
+  normalizedUrl: true,
+  status: true,
+  lastVerdict: true,
+  ownerId: true,
+  workspaceId: true,
+} satisfies Prisma.ShortLinkSelect;
+
+export type ShortLinkReverifyRow = Prisma.ShortLinkGetPayload<{
+  select: typeof shortLinkReverifySelect;
+}>;
+
+export interface ShortLinkReverifyRepository {
+  readonly findStaleActive: (input: {
+    readonly staleBefore: Date;
+    readonly take: number;
+  }) => Promise<readonly ShortLinkReverifyRow[]>;
+  readonly applyReverifyResult: (input: {
+    readonly id: string;
+    readonly lastVerdict: string;
+    readonly lastVerifiedAt: Date;
+    readonly status?: ShortLinkStatus;
+    readonly audit?: ShortLinkAuditInput | null;
+  }) => Promise<void>;
+}
+
+export const prismaShortLinkReverifyRepository: ShortLinkReverifyRepository = {
+  findStaleActive({ staleBefore, take }) {
+    return prisma.shortLink.findMany({
+      where: {
+        status: "active",
+        deletedAt: null,
+        OR: [
+          { lastVerifiedAt: null },
+          { lastVerifiedAt: { lt: staleBefore } },
+        ],
+      },
+      // Never-verified rows sort first under ascending order.
+      orderBy: { lastVerifiedAt: "asc" },
+      take,
+      select: shortLinkReverifySelect,
+    });
+  },
+  async applyReverifyResult({ id, lastVerdict, lastVerifiedAt, status, audit }) {
+    await prisma.$transaction(async (transaction) => {
+      await transaction.shortLink.update({
+        where: { id },
+        data: {
+          lastVerdict,
+          lastVerifiedAt,
+          ...(status ? { status } : {}),
+        },
+        select: { id: true },
+      });
+
+      if (audit) {
+        await createAuditEntry(transaction, id, audit);
+      }
+    });
+  },
+};

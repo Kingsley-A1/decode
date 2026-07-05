@@ -9,3 +9,22 @@ export const createShortLinkRequestSchema = z.object({
 });
 
 export type CreateShortLinkRequest = z.infer<typeof createShortLinkRequestSchema>;
+
+export const updateShortLinkRequestSchema = z
+  .object({
+    destinationUrl: z.string().trim().min(1).max(4096).optional(),
+    /** Owners may pause or resume a link; `flagged` is verifier-owned. */
+    status: z.enum(["active", "disabled"]).optional(),
+    acknowledgedSuspicious: z.boolean().optional(),
+    /** ISO-8601 timestamp to set, or null to clear the expiry. */
+    expiresAt: z.string().datetime().nullable().optional(),
+  })
+  .refine(
+    (value) =>
+      value.destinationUrl !== undefined ||
+      value.status !== undefined ||
+      value.expiresAt !== undefined,
+    { message: "Provide at least one field to update." }
+  );
+
+export type UpdateShortLinkRequest = z.infer<typeof updateShortLinkRequestSchema>;

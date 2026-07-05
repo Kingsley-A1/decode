@@ -21,7 +21,7 @@ import {
   Skull,
   X,
 } from "lucide-react";
-import { Alert, Badge, Button, Input, Skeleton } from "@/components/ui";
+import { Alert, Badge, Button, Dialog, Input, Skeleton } from "@/components/ui";
 import { HistoryPanel } from "@/components/history/HistoryPanel";
 import { useToolHistory } from "@/components/history/useToolHistory";
 import type { ToolHistoryEntry } from "@/lib/history/types";
@@ -106,6 +106,142 @@ export function ShortLinkConsole() {
   const runIdRef = useRef(0);
   const inputLengthSnapshotRef = useRef(0);
   const localHistory = useToolHistory("shorten");
+
+  const [manageError, setManageError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<ShortLinkSummary | null>(null);
+  const [editUrl, setEditUrl] = useState("");
+  const [editAck, setEditAck] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isEditBusy, setIsEditBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ShortLinkSummary | null>(
+    null
+  );
+  const [isDeleteBusy, setIsDeleteBusy] = useState(false);
+
+  async function patchShortLink(
+    id: string,
+    body: Record<string, unknown>
+  ): Promise<
+    | { readonly ok: true; readonly shortLink: ShortLinkSummary }
+    | { readonly ok: false; readonly message: string }
+  > {
+    try {
+      const response = await fetch(
+        `/api/short-links/${encodeURIComponent(id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | ApiSuccess<{ shortLink: ShortLinkSummary }>
+        | ApiError
+        | null;
+      if (payload?.ok) {
+        return { ok: true, shortLink: payload.data.shortLink };
+      }
+
+      return {
+        ok: false,
+        message:
+          payload && !payload.ok
+            ? payload.error.message
+            : "Could not update this link.",
+      };
+    } catch {
+      return {
+        ok: false,
+        message: "Could not reach Decode. Check your connection and try again.",
+      };
+    }
+  }
+
+  function replaceRecent(shortLink: ShortLinkSummary) {
+    setRecents((current) =>
+      current
+        ? current.map((item) => (item.id === shortLink.id ? shortLink : item))
+        : current
+    );
+  }
+
+  async function handleToggleStatus(link: ShortLinkSummary) {
+    setManageError(null);
+    const nextStatus = link.status === "disabled" ? "active" : "disabled";
+    const result = await patchShortLink(link.id, { status: nextStatus });
+
+    if (result.ok) {
+      replaceRecent(result.shortLink);
+    } else {
+      setManageError(result.message);
+    }
+  }
+
+  function openEditDialog(link: ShortLinkSummary) {
+    setEditing(link);
+    setEditUrl(link.destinationUrl);
+    setEditAck(false);
+    setEditError(null);
+  }
+
+  async function handleEditSubmit() {
+    if (!editing || !editUrl.trim()) return;
+
+    setIsEditBusy(true);
+    setEditError(null);
+    const result = await patchShortLink(editing.id, {
+      destinationUrl: editUrl.trim(),
+      ...(editAck ? { acknowledgedSuspicious: true } : {}),
+    });
+    setIsEditBusy(false);
+
+    if (result.ok) {
+      replaceRecent(result.shortLink);
+      setEditing(null);
+    } else {
+      setEditError(result.message);
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    if (!pendingDelete) return;
+
+    setIsDeleteBusy(true);
+    setManageError(null);
+    try {
+      const response = await fetch(
+        `/api/short-links/${encodeURIComponent(pendingDelete.id)}`,
+        { method: "DELETE" }
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | ApiSuccess<{ deleted: boolean }>
+        | ApiError
+        | null;
+
+      if (payload?.ok) {
+        setRecents((current) =>
+          current
+            ? current.filter((item) => item.id !== pendingDelete.id)
+            : current
+        );
+        setPendingDelete(null);
+      } else {
+        setManageError(
+          payload && !payload.ok
+            ? payload.error.message
+            : "Could not delete this link."
+        );
+        setPendingDelete(null);
+      }
+    } catch {
+      setManageError(
+        "Could not reach Decode. Check your connection and try again."
+      );
+      setPendingDelete(null);
+    } finally {
+      setIsDeleteBusy(false);
+    }
+  }
 
   async function fetchRecents() {
     setRecentsLoading(true);
@@ -328,13 +464,85 @@ export function ShortLinkConsole() {
         )}
       </section>
 
-      <RecentLinksPanel
-        recents={recents}
-        loading={recentsLoading}
-        anonymous={anonymous}
-        localEntries={localHistory.entries}
-        onClearLocal={localHistory.clear}
-      />
+      <div className="space-y-3">
+        {manageError && <Alert variant="danger">{manageError}</Alert>}
+        <RecentLinksPanel
+          recents={recents}
+          loading={recentsLoading}
+          anonymous={anonymous}
+          localEntries={localHistory.entries}
+          onClearLocal={localHistory.clear}
+          onEdit={openEditDialog}
+          onToggleStatus={(link) => void handleToggleStatus(link)}
+          onDelete={setPendingDelete}
+        />
+      </div>
+
+      <Dialog
+        open={editing !== null}
+        title="Edit destination"
+        description="The short link stays the same; scans redirect to the new destination after it passes verification."
+        onClose={() => setEditing(null)}
+      >
+        <div className="space-y-4">
+          <Input
+            label="New destination URL"
+            value={editUrl}
+            onChange={(event) => setEditUrl(event.target.value)}
+            placeholder="https://example.com/next"
+          />
+          {editError && <Alert variant="danger">{editError}</Alert>}
+          {editError && (
+            <label className="flex items-start gap-2 text-sm leading-6 text-slate-700">
+              <input
+                type="checkbox"
+                checked={editAck}
+                onChange={(event) => setEditAck(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-300"
+              />
+              I understand the warning and want to use this destination anyway.
+            </label>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="secondary" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => void handleEditSubmit()}
+              disabled={!editUrl.trim()}
+              isLoading={isEditBusy}
+            >
+              Save destination
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={pendingDelete !== null}
+        title="Delete short link?"
+        description="The link stops resolving immediately. This cannot be undone from the console."
+        onClose={() => setPendingDelete(null)}
+      >
+        <div className="space-y-4">
+          <p className="break-all rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+            {pendingDelete?.shortUrl}
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="secondary" onClick={() => setPendingDelete(null)}>
+              Keep link
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void handleDeleteConfirm()}
+              isLoading={isDeleteBusy}
+            >
+              Delete link
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
@@ -574,12 +782,18 @@ function RecentLinksPanel({
   anonymous,
   localEntries,
   onClearLocal,
+  onEdit,
+  onToggleStatus,
+  onDelete,
 }: {
   readonly recents: readonly ShortLinkSummary[] | null;
   readonly loading: boolean;
   readonly anonymous: boolean;
   readonly localEntries: readonly ToolHistoryEntry[];
   readonly onClearLocal: () => void;
+  readonly onEdit: (link: ShortLinkSummary) => void;
+  readonly onToggleStatus: (link: ShortLinkSummary) => void;
+  readonly onDelete: (link: ShortLinkSummary) => void;
 }) {
   if (anonymous) {
     // Anonymous visitors get a device-local history; before the first link
@@ -635,7 +849,13 @@ function RecentLinksPanel({
       {!loading && recents && recents.length > 0 && (
         <ul className="mt-3 grid gap-2">
           {recents.map((link) => (
-            <RecentLinkRow key={link.id} link={link} />
+            <RecentLinkRow
+              key={link.id}
+              link={link}
+              onEdit={onEdit}
+              onToggleStatus={onToggleStatus}
+              onDelete={onDelete}
+            />
           ))}
         </ul>
       )}
@@ -643,32 +863,66 @@ function RecentLinksPanel({
   );
 }
 
-function RecentLinkRow({ link }: { readonly link: ShortLinkSummary }) {
+function RecentLinkRow({
+  link,
+  onEdit,
+  onToggleStatus,
+  onDelete,
+}: {
+  readonly link: ShortLinkSummary;
+  readonly onEdit: (link: ShortLinkSummary) => void;
+  readonly onToggleStatus: (link: ShortLinkSummary) => void;
+  readonly onDelete: (link: ShortLinkSummary) => void;
+}) {
   const tone = getVerdictTone(
     (link.lastVerdict || link.verdictAtCreate) as Verdict
   );
+  const isFlagged = link.status === "flagged";
+  const isDisabled = link.status === "disabled";
+
   return (
-    <li className="grid gap-1 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-      <div className="min-w-0">
-        <a
-          href={link.shortUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block break-all text-sm font-semibold text-sky-800 underline-offset-2 hover:underline"
-        >
-          {link.shortUrl}
-        </a>
-        <p className="mt-0.5 truncate text-xs text-slate-500">
-          → {link.destinationUrl}
-        </p>
+    <li className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="min-w-0">
+          <a
+            href={link.shortUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block break-all text-sm font-semibold text-sky-800 underline-offset-2 hover:underline"
+          >
+            {link.shortUrl}
+          </a>
+          <p className="mt-0.5 truncate text-xs text-slate-500">
+            → {link.destinationUrl}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          <Badge variant={tone.variant} icon={tone.icon}>
+            {tone.label}
+          </Badge>
+          {isFlagged && <Badge variant="danger">Flagged</Badge>}
+          {isDisabled && <Badge variant="neutral">Disabled</Badge>}
+          <span>
+            {link.scanCount} scan{link.scanCount === 1 ? "" : "s"}
+          </span>
+        </div>
       </div>
-      <div className="flex items-center gap-3 text-xs text-slate-500">
-        <Badge variant={tone.variant} icon={tone.icon}>
-          {tone.label}
-        </Badge>
-        <span>
-          {link.scanCount} scan{link.scanCount === 1 ? "" : "s"}
-        </span>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" size="sm" onClick={() => onEdit(link)}>
+          Edit destination
+        </Button>
+        {!isFlagged && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onToggleStatus(link)}
+          >
+            {isDisabled ? "Enable" : "Disable"}
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => onDelete(link)}>
+          Delete
+        </Button>
       </div>
     </li>
   );
