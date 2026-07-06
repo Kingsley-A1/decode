@@ -21,12 +21,12 @@ export function Footer({ variant = "default" }: FooterProps) {
           <p>
             Designed and developed by{" "}
             <a
-              href="https://kingtech.com.ng"
+              href="https://bespoketech.com.ng"
               target="_blank"
               rel="noreferrer"
               className="font-semibold text-sky-700 underline-offset-4 hover:underline"
             >
-              King Tech Foundation
+              Bespoke Technologies
             </a>
             .
           </p>
@@ -65,12 +65,12 @@ export function Footer({ variant = "default" }: FooterProps) {
               Terms
             </Link>
             <a
-              href="https://kingtech.com.ng"
+              href="https://bespoketech.com.ng"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 font-medium text-slate-700 hover:text-sky-800"
             >
-              kingtech.com.ng
+              bespoketech.com.ng
               <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
           </nav>
