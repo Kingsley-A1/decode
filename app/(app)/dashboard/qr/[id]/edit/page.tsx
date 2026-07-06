@@ -10,9 +10,8 @@ export default async function QRCodeEditPage({ params }: QRCodeEditPageProps) {
 
   return (
     <PageShell
-      eyebrow="Destination editor"
       title="Edit QR code"
-      description="Update dynamic destinations clearly while keeping static QR behavior explicit and safe."
+      description="Update this QR's destination and design safely."
     >
       <QRCodeEditClient qrCodeId={id} />
     </PageShell>

@@ -61,9 +61,8 @@ const reportChecklist = [
 export default function SupportPage() {
   return (
     <PageShell
-      eyebrow="Support"
       title="Get help with Decode"
-      description="Use the right support path for product questions, bug reports, link safety concerns, and implementation help."
+      description="Get help with questions, bugs, or safety concerns."
       actions={
         <a
           href="mailto:decoder.ng@gmail.com"

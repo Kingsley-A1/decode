@@ -639,9 +639,8 @@ export default function ApiDocsPage() {
   return (
     <PageShell
       className="mx-auto w-full max-w-[1500px]"
-      eyebrow="API"
       title="Decode API documentation"
-      description="A compact integration reference for QR codes, redirects, landing pages, scans, link checks, reviews, and admin workflows."
+      description="Integration reference for QR codes and redirects."
       actions={
         <>
           <Badge variant="info">Base URL https://decode.com.ng</Badge>

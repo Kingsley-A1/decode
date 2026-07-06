@@ -160,9 +160,8 @@ const termsSections = [
 export default function TermsPage() {
   return (
     <PageShell
-      eyebrow="Terms"
       title="Terms of Service"
-      description="These terms keep Decode clear for real QR workflows: what you can build, what you are responsible for, and how the platform may be operated safely."
+      description="What you can build, and your responsibilities."
       actions={
         <a
           href={`mailto:${contactEmail}`}

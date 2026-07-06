@@ -4,9 +4,8 @@ import { ScanClient } from "./scan-client";
 export default function ScanPage() {
   return (
     <PageShell
-      eyebrow="Scanner"
       title="Scan QR codes"
-      description="Scan, verify, and act on QR content without auto-opening unsafe destinations."
+      description="Scan QR codes and act on them safely."
     >
       <ScanClient />
     </PageShell>

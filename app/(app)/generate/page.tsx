@@ -26,7 +26,7 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
       description="Create scan-ready static and dynamic QR codes."
       variant="workspace"
     >
-      <QRGenerator showHeader={false} initialMode={initialMode} returnTo={returnTo} />
+      <QRGenerator initialMode={initialMode} returnTo={returnTo} />
     </PageShell>
   );
 }

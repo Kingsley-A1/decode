@@ -93,7 +93,7 @@ Violet accent:      #7C3AED
 
 Usage rules:
 
-- Primary buttons, active navigation, selected steps, and focus accents use sky.
+- Primary buttons, active navigation, selected steps, focus accents, and page `h1` titles use sky.
 - Neutral surfaces and borders should dominate the UI.
 - Success, warning, and danger colors must always include text or icons; color alone cannot communicate state.
 - Gradients are allowed only for QR design previews or user-generated QR styling, not as the main page background.
@@ -115,6 +115,10 @@ Mono:    code, payload previews, decoded results
 ```
 
 Do not scale text with viewport width. Use responsive layout changes instead of fluid font sizes. Letter spacing should remain normal.
+
+### Page Headers
+
+Every route (except product documentation) uses one shared header pattern via `PageShell`: an `h1` in the sky-dark accent color, and an optional single-line tagline of eight words or fewer directly beneath it. Do not stack additional kicker/eyebrow labels above the title or multi-sentence descriptions below it — navigation already establishes context, so the header only needs to name the page and state its purpose in one line. Body and section headings elsewhere on the page stay ink/neutral; the accent title is reserved for the one `h1` per page.
 
 ### Spacing And Shape
 

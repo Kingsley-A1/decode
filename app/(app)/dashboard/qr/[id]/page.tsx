@@ -12,9 +12,8 @@ export default async function QRCodeDetailPage({
 
   return (
     <PageShell
-      eyebrow="QR detail"
       title="Saved QR code"
-      description="Review destination, mode, scan analytics, and operational controls for a saved QR code."
+      description="Review destination, analytics, and controls for this QR."
     >
       <QRCodeDetailClient qrCodeId={id} />
     </PageShell>

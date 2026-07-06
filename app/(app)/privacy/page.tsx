@@ -147,9 +147,8 @@ const policySections = [
 export default function PrivacyPage() {
   return (
     <PageShell
-      eyebrow="Privacy"
       title="Privacy Policy"
-      description="Decode is built as a practical QR workspace. This policy explains what data is collected, why it is used, and how privacy-sensitive workflows are handled."
+      description="What data we collect and how it's used."
       actions={
         <a
           href={`mailto:${contactEmail}`}

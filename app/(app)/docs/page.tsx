@@ -99,7 +99,6 @@ const operatingNotes = [
 export default function DocsPage() {
   return (
     <PageShell
-      eyebrow="Product docs"
       title="Decode documentation"
       description="A practical operating guide for QR generation, scanning, verification, landing pages, dashboard analytics, and text decode utilities."
       actions={

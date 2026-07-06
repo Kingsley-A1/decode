@@ -47,7 +47,6 @@ export default async function MePage({ searchParams }: MePageProps) {
   if (!session?.user?.id) {
     return (
       <PageShell
-        eyebrow="Me"
         title={
           authIntent === "signup"
             ? "Create your Decode account"
@@ -55,8 +54,8 @@ export default async function MePage({ searchParams }: MePageProps) {
         }
         description={
           authIntent === "signup"
-            ? "Create an account with OAuth to save QR codes, landing pages, and workspace data."
-            : "Log in with your OAuth account to return to your Decode workspace."
+            ? "Sign up to save QR codes and pages."
+            : "Log in to return to your workspace."
         }
       >
         <OAuthSignInPanel
@@ -101,9 +100,8 @@ export default async function MePage({ searchParams }: MePageProps) {
 
   return (
     <PageShell
-      eyebrow="Me"
       title="Your Decode account"
-      description="Review your account identity, default workspace, and page-linked product KPIs."
+      description="Review your identity, workspace, and product usage."
       actions={
         <Link
           href="/generate"

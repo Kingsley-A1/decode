@@ -15,8 +15,8 @@ export default async function DashboardPage() {
 
   return (
     <PageShell
-      eyebrow="Workspace"
       title="Dashboard"
+      description="Manage saved QR codes and scan analytics."
     >
       <DashboardClient />
     </PageShell>

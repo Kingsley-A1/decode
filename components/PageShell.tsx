@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 interface PageShellProps {
   title: string;
   description?: string;
-  eyebrow?: string;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -14,7 +13,6 @@ interface PageShellProps {
 export function PageShell({
   title,
   description,
-  eyebrow,
   actions,
   children,
   className,
@@ -33,14 +31,9 @@ export function PageShell({
         )}
       >
         <div className={cn("max-w-3xl", isWorkspace ? "space-y-1" : "space-y-2")}>
-          {eyebrow && (
-            <p className="text-sm font-semibold uppercase tracking-normal text-sky-700">
-              {eyebrow}
-            </p>
-          )}
           <h1
             className={cn(
-              "font-semibold leading-tight text-slate-950",
+              "font-semibold leading-tight text-sky-700",
               isWorkspace ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl"
             )}
           >
