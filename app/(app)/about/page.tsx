@@ -42,9 +42,8 @@ const roadmap = [
 export default function AboutPage() {
   return (
     <PageShell
-      eyebrow="About Decode"
-      title="Professional QR tools with safety and real workspace data"
-      description="Decode is built for founders, operators, creators, and teams that need QR generation, link verification, landing pages, scanning, and analytics in one clean product."
+      title="About Decode"
+      description="Professional QR tools built for safety and clarity."
       actions={
         <Link
           href="/generate"
@@ -69,7 +68,7 @@ export default function AboutPage() {
               />
             </div>
             <div>
-              <Badge variant="info">King Tech Foundation product</Badge>
+              <Badge variant="info">Bespoke Technologies product</Badge>
               <h2 className="mt-3 text-2xl font-semibold text-slate-950">
                 Decode
               </h2>
@@ -81,7 +80,7 @@ export default function AboutPage() {
             dynamic campaigns, editable pages, asset upload, and analytics.
           </p>
           <div className="mt-5 rounded-lg bg-sky-50 p-4 text-sm leading-6 text-sky-950">
-            Designed and developed by King Tech Foundation. The product direction
+            Designed and developed by Bespoke Technologies. The product direction
             is intentionally practical: fewer gimmicks, stronger workflows, and
             clear separation between demo content and real user data.
           </div>
