@@ -1,3 +1,4 @@
+@Deprecated
 # QR Generation UI — Code Review
 
 **Scope:** `app/(app)/generate/page.tsx`, `components/QRGenerator.tsx` (3,599 lines), `hooks/useQRCode.ts`

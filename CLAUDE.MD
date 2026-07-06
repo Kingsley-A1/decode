@@ -193,6 +193,18 @@ Documentation should be operational, not decorative.
 - Document new scripts in `package.json` or README when added.
 - Prefer checklists and acceptance criteria for implementation plans.
 
+## Branch Strategy
+
+The repository has exactly two long-lived branches. Do not create additional long-lived branches without explicit instruction.
+
+- `main` is production. It only ever receives commits that have already been validated on `master`. Treat `main` as deployable at all times.
+- `master` is the testing/staging branch. Every new commit — features, fixes, refactors, dependency bumps — lands on `master` first, regardless of who or what produced it (agent or human).
+- Nothing is confirmed until it has been exercised on `master` (quality gates pass, and where applicable the user has explicitly confirmed behavior). Only confirmed work is promoted to `main`.
+- Promotion from `master` to `main` is a fast-forward (`git push origin master:main` or equivalent) once work is confirmed — never a separate rewrite of the change. Do not push new work directly to `main` and back-fill `master` afterward.
+- Default working branch for agent tasks is `master`, unless the user explicitly asks to promote confirmed work to `main` or requests a direct production hotfix.
+- Before promoting, confirm `master`'s tip is the exact commit that was validated — do not promote a `master` that has moved on since validation without re-confirming.
+- If a task is ambiguous about whether it targets `master` or `main`, default to `master` and say so; ask before pushing anything to `main`.
+
 ## Git And File Hygiene
 
 - Do not run destructive git commands unless explicitly requested.
@@ -201,6 +213,7 @@ Documentation should be operational, not decorative.
 - Use `apply_patch` for manual edits.
 - Keep generated build artifacts out of commits unless the repo intentionally tracks them.
 - If the worktree is dirty before starting, work around unrelated changes and report only relevant ones.
+- Follow the [Branch Strategy](#branch-strategy) section for where commits and pushes go.
 
 ## Handoff Report
 

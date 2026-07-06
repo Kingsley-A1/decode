@@ -10,14 +10,14 @@ const sharedPreviewImage = {
   url: "/icon-512.jpg",
   width: 512,
   height: 512,
-  alt: "DECODE app icon",
+  alt: "Decode app icon",
   type: "image/jpeg",
 } as const;
 
 export const metadata: Metadata = {
-  title: "Decode | Professional QR Platform",
+  title: "Decode | Professional Utilities Platform",
   description:
-    "Create, scan, verify, decode, and manage QR codes through a professional light workspace.",
+    "Create dynamic QR codes, scan, verify, decode, and manage them through a professional workspace.",
   keywords: [
     "QR Code",
     "Cipher",
@@ -27,11 +27,11 @@ export const metadata: Metadata = {
     "Caesar Cipher",
     "Morse Code",
   ],
-  authors: [{ name: "DECODE Team" }],
+  authors: [{ name: "Decode Team" }],
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-512.jpg", sizes: "any" },
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icon-512.jpg", sizes: "512x512", type: "image/jpeg" },
     ],
@@ -39,18 +39,18 @@ export const metadata: Metadata = {
     apple: [{ url: "/icon-512.jpg", sizes: "512x512", type: "image/jpeg" }],
   },
   openGraph: {
-    title: "Decode | Professional QR Platform",
+    title: "Decode | Professional Utilities Platform",
     description:
       "Create and scan QR codes, verify links, decode content, and manage dynamic QR workflows.",
     url: appUrl,
-    siteName: "DECODE",
+    siteName: "Decode",
     images: [sharedPreviewImage],
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Decode | Professional QR Platform",
+    title: "Decode | Professional Utilities Platform",
     description:
       "Create and scan QR codes, verify links, decode content, and manage dynamic QR workflows.",
     images: [sharedPreviewImage],
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "DECODE",
+    title: "Decode | Professional Utilities Platform",
   },
   formatDetection: {
     telephone: false,

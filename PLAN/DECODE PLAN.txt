@@ -1,0 +1,160 @@
+🔐 DECODE: Execution Master Plan
+
+Objective: Build a serverless, static PWA for QR Generation, text  Encryption and Decription platform.
+Host: GitHub Pages (Zero Cost).
+
+🛠️ PHASE 1: Setup & Configuration (The Skeleton)
+
+[ ] 1.1 Initialize Project (Terminal)
+
+npx create-next-app@latest decode --typescript --tailwind --eslint --no-src-dir --app --import-alias "@/*"
+cd decode
+
+
+[ ] 1.2 Install Core Libraries
+
+# QR Code Engine (Handles Logos & Styling)
+npm install qr-code-styling
+
+# Icons & Animations
+npm install lucide-react framer-motion
+
+# Utilities
+npm install clsx tailwind-merge
+
+
+[ ] 1.3 Configure for GitHub Pages (next.config.js)
+Action: Replace contents of next.config.js with:
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'export',  // <--- Enables Static HTML Export
+  images: {
+    unoptimized: true, // <--- Required for GH Pages
+  },
+  basePath: '/decode', // <--- REPLACE 'decode' with repo name if not at root domain
+};
+module.exports = nextConfig;
+
+
+📅 PHASE 2: Logic Engines (The Brains)
+
+[ ] 2.1 QR Hook (hooks/useQRCode.ts)
+
+Function: Wraps qr-code-styling to prevent "Window not found" errors in Next.js.
+
+Inputs: url, color, logoUrl, shape ('square' | 'dots').
+
+Action: Returns a ref to attach to a div and a download() function.
+
+[ ] 2.2 Crypto Utilities (lib/crypto.ts)
+
+Caesar Cipher:
+
+export const caesarCipher = (str: string, shift: number): string => {
+  return str.replace(/[a-zA-Z]/g, (char) => {
+    const start = char <= 'Z' ? 65 : 97;
+    return String.fromCharCode(((char.charCodeAt(0) - start + shift) % 26) + start);
+  });
+};
+
+
+Base6orm:
+
+export const toBase64 = (str: string) => typeof window !== 'undefined' ? window.btoa(str) : '';
+export const fromBase64 = (str: string) => typeof window !== 'undefined' ? window.atob(str) : '';
+
+
+🎨 PHASE 3: UI Components (Mobile-First)
+
+[ ] 3.1 Global Layout (app/layout.tsx)
+
+Theme: Force Dark Mode (Obsidian: bg-neutral-950 text-white).
+
+Wrapper: Add a max-width container (max-w-md mx-auto min-h-screen border-x border-neutral-800) to simulate a mobile app on desktop screens.
+
+[ ] 3.2 Navigation (components/NavBar.tsx)
+
+Position: Fixed Bottom (fixed bottom-0 w-full max-w-md).
+
+Items:
+
+<QrCode /> (Generator)
+
+<Lock /> (Cipher)
+
+<Settings /> (History/About)
+
+[ ] 3.3 The Generator Card (components/QRGenerator.tsx)
+
+Input: <input type="text"> for URL.
+
+File Input: For Logo Upload.
+
+Preview: A central box showing the live QR Code.
+
+Download Button: Calls qrCode.download({ extension: 'png' }).
+
+PHASE 4: Brand & Community Pages
+[ ] 4.1 About Us (app/about/page.tsx)
+
+Design: High-end "Portfolio" aesthetic. Glassmorphism cards highlighting skills.
+
+Content:
+
+"Who We Are": Professional Web Developers.
+
+"Our Craft": Skilled in Full-Stack (NestJS, Next.js), capable of creating industry-standard solutions for individuals and corporations.
+
+CTA: "Hire Us" button linking to the Contact page.
+
+[ ] 4.2 Contact Hub (app/contact/page.tsx)
+
+Design: A sleek grid of clickable social cards using lucide-react icons.
+
+Links:
+
+Phone / WhatsApp (Direct wa.me link)
+
+X (Twitter), Facebook, LinkedIn, Instagram, TikTok.
+
+Styling: Each card should have the brand color of the respective platform on hover.
+
+[ ] 4.3 Review & Feedback (app/review/page.tsx)
+
+Objective: Collect testimonials and screenshots sent directly to dedcoder@gmail.com.
+
+Tech: Use EmailJS (Client-side email sending, free tier).
+
+Form Fields:
+
+Name & Email (<input>)
+
+Review Message (<textarea>)
+
+Screenshot (<input type="file"> - Note: EmailJS requires converting image to Base64 to attach, or uploading to cloud first. For MVP, stick to text or use a Base64 conversion utility).
+
+Action: emailjs.send(serviceID, templateID, params) on submit.
+
+
+🚀 PHASE 5: Deployment (GitHub Actions)
+
+[ ] 5.1 Create Workflow File
+
+File: .github/workflows/nextjs.yml
+
+Content: Standard Next.js Static Deploy workflow.
+
+Config: Ensure permissions: contents: read and pages: write are set.
+
+[ ] 5.2 Enable Pages
+
+Go to Repo Settings -> Pages -> Source: GitHub Actions.
+
+📚 Resource List (Documentation)
+
+QR Library: qr-code-styling - Documentation for changing dots/corners.
+
+Icons: Lucide React - Search for 'QrCode', 'Shield', 'Download'.
+
+Deployment: Next.js Static Export Guide.

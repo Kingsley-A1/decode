@@ -1,3 +1,4 @@
+@Deprecated
 # Decode Current Focus
 
 Last updated: May 19, 2026

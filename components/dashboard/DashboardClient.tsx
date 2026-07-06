@@ -237,7 +237,7 @@ export function DashboardClient() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+        {/* <div>
           <h2 className="text-lg font-semibold text-slate-950">
             Workspace command center
           </h2>
@@ -245,7 +245,7 @@ export function DashboardClient() {
             Your real dashboard stays empty until saved QR codes, dynamic pages,
             and scan events exist in the workspace.
           </p>
-        </div>
+        </div> */}
         <div className="flex flex-wrap gap-2">
           <Button
             variant="secondary"
