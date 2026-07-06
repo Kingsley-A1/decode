@@ -1,7 +1,6 @@
 "use client";
 
 import { X } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
 import {
   Alert,
   Badge,
@@ -22,7 +21,6 @@ import { useQRGenerator } from "./useQRGenerator";
 import type { QRGeneratorProps } from "./types";
 
 export function QRGenerator({
-  showHeader = true,
   initialMode = "static",
   returnTo = null,
 }: QRGeneratorProps) {
@@ -86,13 +84,6 @@ export function QRGenerator({
 
   return (
     <div className="space-y-4">
-      {showHeader && (
-        <PageHeader
-          title="QR Generator"
-          subtitle="Create static QR codes now, or prepare dynamic QR codes for editable destinations."
-        />
-      )}
-
       <MobilePreviewTray
         title={`${mode === "dynamic" ? "Dynamic" : "Static"} / ${getTypeLabel(type)}`}
         summary={payload?.summary ?? "Complete content to preview the payload."}
@@ -176,7 +167,6 @@ export function QRGenerator({
             <ExportStep
               headingRef={stepHeadingRef}
               mode={mode}
-              type={type}
               form={form}
               payload={payload}
               design={design}

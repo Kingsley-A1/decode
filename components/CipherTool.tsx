@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { cipherOptions, type CipherType } from "@/lib/crypto";
 import { cn } from "@/lib/utils";
-import { PageHeader } from "./PageHeader";
 import {
   Alert,
   Badge,
@@ -24,10 +23,6 @@ import {
   Slider,
   Textarea,
 } from "@/components/ui";
-
-interface CipherToolProps {
-  showHeader?: boolean;
-}
 
 type DecodeDirection = "encode" | "decode";
 
@@ -137,7 +132,7 @@ function getOppositeDirection(direction: DecodeDirection): DecodeDirection {
   return direction === "encode" ? "decode" : "encode";
 }
 
-export function CipherTool({ showHeader = true }: CipherToolProps) {
+export function CipherTool() {
   const [inputText, setInputText] = useState("");
   const [outputText, setOutputText] = useState("");
   const [selectedCipher, setSelectedCipher] = useState<CipherType>("base64");
@@ -262,13 +257,6 @@ export function CipherTool({ showHeader = true }: CipherToolProps) {
 
   return (
     <div className="space-y-5 p-4 sm:p-5 lg:p-6">
-      {showHeader && (
-        <PageHeader
-          title="Decode utility"
-          subtitle="Validate and transform encoded text through the server-backed decode API."
-        />
-      )}
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 space-y-4">
           <SegmentedControl

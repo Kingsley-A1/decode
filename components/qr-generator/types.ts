@@ -54,7 +54,6 @@ export type DesignPreset =
 export type ScanabilityState = "ready" | "needs-attention" | "blocked";
 
 export interface QRGeneratorProps {
-  showHeader?: boolean;
   initialMode?: QRMode;
   returnTo?: string | null;
 }
