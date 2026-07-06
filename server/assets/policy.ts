@@ -54,6 +54,13 @@ const LANDING_PAGE_MEDIA_CONTENT_TYPES = new Set([
   "audio/webm",
 ]);
 
+const QR_FILE_CONTENT_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
+
 export function getAssetUploadPolicy({
   purpose,
   contentType,
@@ -106,6 +113,14 @@ export function buildWorkspaceAssetKey({
     return `workspaces/${workspaceId}/landing-pages/${ownerSegment}/media/${assetId}.${extension}`;
   }
 
+  if (purpose === ASSET_PURPOSE.QR_FILE) {
+    // Uploaded before the QR exists (same ordering as landing-page media);
+    // the create transaction links the asset to its QR code afterwards.
+    const ownerSegment = qrCodeId ?? "unassigned";
+
+    return `workspaces/${workspaceId}/qr/${ownerSegment}/files/${assetId}.${extension}`;
+  }
+
   throw new AssetValidationError("This upload purpose is not user-uploadable.");
 }
 
@@ -121,12 +136,21 @@ function isAllowedContentType(
     return LANDING_PAGE_MEDIA_CONTENT_TYPES.has(contentType);
   }
 
+  if (purpose === ASSET_PURPOSE.QR_FILE) {
+    return QR_FILE_CONTENT_TYPES.has(contentType);
+  }
+
   return false;
 }
 
 function getMaxSizeBytes(purpose: AssetPurpose, contentType: string): number {
   if (purpose === ASSET_PURPOSE.QR_LOGO) return 2 * MEGABYTE;
-  if (purpose !== ASSET_PURPOSE.LANDING_PAGE_MEDIA) return 0;
+  if (
+    purpose !== ASSET_PURPOSE.LANDING_PAGE_MEDIA &&
+    purpose !== ASSET_PURPOSE.QR_FILE
+  ) {
+    return 0;
+  }
   if (contentType === "application/pdf") return 25 * MEGABYTE;
   if (contentType.startsWith("audio/")) return 50 * MEGABYTE;
 

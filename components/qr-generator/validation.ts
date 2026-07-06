@@ -1,3 +1,4 @@
+import { isDynamicCapableType } from "./constants";
 import type { FormState, QRMode, QRType } from "./types";
 
 export function validateContent({
@@ -11,10 +12,9 @@ export function validateContent({
 }): { isValid: boolean; errors: Record<string, string> } {
   const errors: Record<string, string> = {};
 
-  if (mode === "dynamic") {
-    if (type !== "url") {
-      errors.type = "Dynamic QR codes currently require a website URL.";
-    }
+  if (mode === "dynamic" && !isDynamicCapableType(type)) {
+    errors.type =
+      "Dynamic QR codes support website URL, text, and contact card content.";
   }
 
   if (type === "url") {

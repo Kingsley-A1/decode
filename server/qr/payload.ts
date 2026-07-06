@@ -3,7 +3,10 @@ import {
   type QRCodeType,
 } from "@/server/qr/constants";
 import { QRCodePayloadError } from "@/server/qr/errors";
-import type { CreateQRCodeRequest } from "@/server/qr/schemas";
+import type {
+  CreateQRCodeRequest,
+  EditableDynamicContentResult,
+} from "@/server/qr/schemas";
 
 export interface BuiltQRPayload {
   readonly type: QRCodeType;
@@ -30,6 +33,10 @@ export function buildQRPayload(input: CreateQRCodeRequest): BuiltQRPayload {
       return buildWifiPayload(input.content);
     case QR_CODE_TYPE.VCARD:
       return buildVCardPayload(input.content);
+    case QR_CODE_TYPE.FILE:
+      return buildFilePayload(input.content);
+    case QR_CODE_TYPE.LANDING_PAGE:
+      return buildLandingPagePayload();
   }
 }
 
@@ -135,7 +142,50 @@ function buildWifiPayload(content: {
   };
 }
 
-function buildVCardPayload(content: {
+// Dynamic-only: the encoded value is always the /r/<slug> redirect, filled in
+// by the service once the slug is assigned. The content is what gets served.
+function buildFilePayload(content: {
+  readonly assetId: string;
+  readonly fileName: string;
+}): BuiltQRPayload {
+  return {
+    type: QR_CODE_TYPE.FILE,
+    value: "",
+    normalizedContent: {
+      assetId: content.assetId,
+      fileName: content.fileName,
+    },
+  };
+}
+
+function buildLandingPagePayload(): BuiltQRPayload {
+  return {
+    type: QR_CODE_TYPE.LANDING_PAGE,
+    value: "",
+    normalizedContent: {},
+  };
+}
+
+/**
+ * Normalized stored content for an in-place edit of a dynamic text/contact
+ * code. Reuses the same formatters as create so a scan and an edit produce
+ * identical content; the encoded `/r/<slug>` value is unchanged by an edit and
+ * is preserved by the caller.
+ */
+export function buildEditableDynamicContent(
+  input: EditableDynamicContentResult
+): BuiltQRPayload["normalizedContent"] {
+  switch (input.type) {
+    case QR_CODE_TYPE.TEXT:
+      return buildTextPayload(input.content).normalizedContent;
+    case QR_CODE_TYPE.VCARD:
+      return buildVCardPayload(input.content).normalizedContent;
+  }
+}
+
+// Exported for the /r/[slug]/vcf download route, which rebuilds the .vcf from
+// the stored contact content — one formatter for both the QR and the file.
+export function buildVCardPayload(content: {
   readonly firstName?: string;
   readonly lastName?: string;
   readonly organization?: string;

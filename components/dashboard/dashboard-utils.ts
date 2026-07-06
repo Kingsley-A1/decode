@@ -46,6 +46,8 @@ export function getTypeLabel(value: string): string {
     whatsapp: "WhatsApp",
     wifi: "Wi-Fi",
     vcard: "vCard",
+    file: "File",
+    landing_page: "Landing page",
   };
 
   return labels[value] ?? value;
@@ -69,7 +71,18 @@ export function getQRCodeEditHref(qrCode: Pick<DashboardQRCode, "id">): string {
 
 export function getQRCodeDestinationLabel(qrCode: DashboardQRCode): string {
   if (qrCode.mode === "dynamic") {
-    return qrCode.destinationUrl ?? "No destination set";
+    if (qrCode.destinationUrl) return qrCode.destinationUrl;
+
+    // Hosted dynamic types have no external destination — Decode serves the
+    // content behind the redirect.
+    const hostedLabels: Record<string, string> = {
+      text: "Decode-hosted text",
+      vcard: "Decode-hosted contact card",
+      file: "Decode-hosted file download",
+      landing_page: "Decode-hosted landing page",
+    };
+
+    return hostedLabels[qrCode.type] ?? "No destination set";
   }
 
   return qrCode.payloadValue ?? `${getTypeLabel(qrCode.type)} content is encoded in the QR image`;
@@ -108,6 +121,7 @@ export function normalizeQRCode(value: unknown): DashboardQRCode | null {
     destinationUrl: readNullableString(value.destinationUrl),
     redirectUrl: readNullableString(value.redirectUrl),
     payloadValue: readNullableString(value.payloadValue),
+    content: isRecord(value.content) ? value.content : null,
     designConfig: readDesignConfig(value.designConfig),
     scanCount: readNumber(value.scanCount),
     createdAt: readDateString(value.createdAt),

@@ -11,6 +11,8 @@ export interface DashboardQRCode {
   readonly destinationUrl: string | null;
   readonly redirectUrl: string | null;
   readonly payloadValue: string | null;
+  /** Stored hosted content (text/vcard) for in-place dynamic editing. */
+  readonly content?: Record<string, unknown> | null;
   readonly designConfig: DashboardQRDesignConfig | null;
   readonly scanCount: number;
   readonly createdAt: string;

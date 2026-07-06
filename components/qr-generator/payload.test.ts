@@ -129,11 +129,13 @@ describe("buildApiContent", () => {
 describe("getDynamicPublishSignature", () => {
   it("changes when the destination changes", () => {
     const first = getDynamicPublishSignature({
+      type: "url",
       form: formWith({ url: "https://a.com" }),
       design: initialDesignState,
       logoUrl: "",
     });
     const second = getDynamicPublishSignature({
+      type: "url",
       form: formWith({ url: "https://b.com" }),
       design: initialDesignState,
       logoUrl: "",
@@ -144,6 +146,7 @@ describe("getDynamicPublishSignature", () => {
 
   it("uses a presence marker for the logo so large data URLs do not bloat it", () => {
     const withLogo = getDynamicPublishSignature({
+      type: "url",
       form: formWith({ url: "https://a.com" }),
       design: initialDesignState,
       logoUrl: "data:image/png;base64," + "A".repeat(5000),
@@ -156,11 +159,42 @@ describe("getDynamicPublishSignature", () => {
   it("returns null for an invalid URL", () => {
     expect(
       getDynamicPublishSignature({
+        type: "url",
         form: formWith({ url: "" }),
         design: initialDesignState,
         logoUrl: "",
       })
     ).toBeNull();
+  });
+
+  it("changes when the type changes even with the same design", () => {
+    const asText = getDynamicPublishSignature({
+      type: "text",
+      form: formWith({ text: "hello" }),
+      design: initialDesignState,
+      logoUrl: "",
+    });
+    const asVcard = getDynamicPublishSignature({
+      type: "vcard",
+      form: formWith({ firstName: "hello" }),
+      design: initialDesignState,
+      logoUrl: "",
+    });
+
+    expect(asText).not.toBeNull();
+    expect(asVcard).not.toBeNull();
+    expect(asText).not.toBe(asVcard);
+  });
+
+  it("builds a non-null signature for a hosted text dynamic without a URL", () => {
+    expect(
+      getDynamicPublishSignature({
+        type: "text",
+        form: formWith({ text: "menu of the day", url: "" }),
+        design: initialDesignState,
+        logoUrl: "",
+      })
+    ).not.toBeNull();
   });
 });
 

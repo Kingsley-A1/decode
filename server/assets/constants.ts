@@ -1,6 +1,7 @@
 export const ASSET_PURPOSE = {
   QR_EXPORT: "qr.export",
   QR_LOGO: "qr.logo",
+  QR_FILE: "qr.file",
   LANDING_PAGE_MEDIA: "landing_page.media",
 } as const;
 

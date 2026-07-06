@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  DYNAMIC_ONLY_QR_CODE_TYPES,
+  DYNAMIC_QR_CODE_TYPES,
   QR_CODE_MODE,
   QR_CODE_TYPE,
   QR_CORNER_STYLE,
@@ -146,6 +148,14 @@ const vCardContentSchema = z.object({
   address: z.string().trim().max(240).optional(),
 });
 
+const fileContentSchema = z.object({
+  /** A ready `qr.file` asset in the caller's workspace. */
+  assetId: z.string().trim().min(1).max(128),
+  fileName: z.string().trim().min(1).max(200),
+});
+
+const landingPageContentSchema = z.object({});
+
 const createQRCodeRequestBaseSchema = z.discriminatedUnion("type", [
   baseCreateQRCodeSchema.extend({
     type: z.literal(QR_CODE_TYPE.URL),
@@ -179,7 +189,18 @@ const createQRCodeRequestBaseSchema = z.discriminatedUnion("type", [
     type: z.literal(QR_CODE_TYPE.VCARD),
     content: vCardContentSchema,
   }),
+  baseCreateQRCodeSchema.extend({
+    type: z.literal(QR_CODE_TYPE.FILE),
+    content: fileContentSchema,
+  }),
+  baseCreateQRCodeSchema.extend({
+    type: z.literal(QR_CODE_TYPE.LANDING_PAGE),
+    content: landingPageContentSchema,
+  }),
 ]);
+
+const DYNAMIC_TYPE_SET = new Set<string>(DYNAMIC_QR_CODE_TYPES);
+const DYNAMIC_ONLY_TYPE_SET = new Set<string>(DYNAMIC_ONLY_QR_CODE_TYPES);
 
 export const createQRCodeRequestSchema = createQRCodeRequestBaseSchema.superRefine(
   (value, context) => {
@@ -191,13 +212,25 @@ export const createQRCodeRequestSchema = createQRCodeRequestBaseSchema.superRefi
       });
     }
 
-    if (value.mode !== QR_CODE_MODE.DYNAMIC) return;
+    if (value.mode !== QR_CODE_MODE.DYNAMIC) {
+      if (DYNAMIC_ONLY_TYPE_SET.has(value.type)) {
+        context.addIssue({
+          code: "custom",
+          path: ["type"],
+          message:
+            "File and landing-page QR codes are dynamic-only: their content lives behind a Decode redirect.",
+        });
+      }
 
-    if (value.type !== QR_CODE_TYPE.URL) {
+      return;
+    }
+
+    if (!DYNAMIC_TYPE_SET.has(value.type)) {
       context.addIssue({
         code: "custom",
         path: ["type"],
-        message: "Dynamic QR redirects currently require a website URL.",
+        message:
+          "Dynamic QR codes support URL, text, contact card, file, and landing-page content.",
       });
     }
 
@@ -247,12 +280,61 @@ export const updateQRCodeRequestSchema = z
     workspaceId: z.string().trim().min(1).optional(),
     title: z.string().trim().min(1).max(120).optional(),
     destinationUrl: z.string().trim().min(1).max(2048).optional(),
+    // Editable hosted content for text/contact dynamic codes. Its shape is
+    // validated against the stored QR type inside the service transaction (see
+    // `parseEditableDynamicContent`), because the type is only known then.
+    content: z.record(z.string(), z.unknown()).optional(),
   })
   .refine(
     (value) =>
-      value.title !== undefined || value.destinationUrl !== undefined,
-    { message: "Provide a title or destination to update." }
+      value.title !== undefined ||
+      value.destinationUrl !== undefined ||
+      value.content !== undefined,
+    { message: "Provide a title, destination, or content to update." }
   );
+
+/**
+ * Dynamic types whose hosted content can be edited in place after publishing.
+ * URL edits go through `destinationUrl`; file and landing-page content is
+ * managed through their own flows (asset re-upload, landing-page builder).
+ */
+export const EDITABLE_DYNAMIC_QR_CODE_TYPES = [
+  QR_CODE_TYPE.TEXT,
+  QR_CODE_TYPE.VCARD,
+] as const;
+
+export type EditableDynamicContentResult =
+  | {
+      readonly type: typeof QR_CODE_TYPE.TEXT;
+      readonly content: z.infer<typeof textContentSchema>;
+    }
+  | {
+      readonly type: typeof QR_CODE_TYPE.VCARD;
+      readonly content: z.infer<typeof vCardContentSchema>;
+    };
+
+/**
+ * Validates raw edit content against the stored QR type. Returns a
+ * type-discriminated result the payload builder can consume without casts, or
+ * `null` when the type has no in-place content editor. Throws `ZodError` on
+ * invalid content so the route surfaces a structured 400.
+ */
+export function parseEditableDynamicContent(
+  type: string,
+  content: unknown
+): EditableDynamicContentResult | null {
+  switch (type) {
+    case QR_CODE_TYPE.TEXT:
+      return { type: QR_CODE_TYPE.TEXT, content: textContentSchema.parse(content) };
+    case QR_CODE_TYPE.VCARD:
+      return {
+        type: QR_CODE_TYPE.VCARD,
+        content: vCardContentSchema.parse(content),
+      };
+    default:
+      return null;
+  }
+}
 
 export const archiveQRCodeRequestSchema = z.object({
   workspaceId: z.string().trim().min(1).optional(),

@@ -24,6 +24,7 @@ import {
   QRCodeStateError,
 } from "@/server/qr/errors";
 import {
+  buildEditableDynamicContent,
   buildQRPayload,
   normalizeHttpUrl,
   type BuiltQRPayload,
@@ -31,6 +32,7 @@ import {
 import { renderQRCode } from "@/server/qr/render";
 import {
   createQRCodeRequestSchema,
+  parseEditableDynamicContent,
   qrDesignSchema,
   type ArchiveQRCodeRequest,
   type CreateQRCodeRequest,
@@ -101,6 +103,11 @@ export interface UpdateQRCodeInWorkspaceInput {
   readonly userId: string;
   readonly title?: string;
   readonly destinationUrl?: string;
+  /**
+   * Raw hosted content for a text/contact dynamic code, validated against the
+   * stored QR type inside the transaction.
+   */
+  readonly content?: Record<string, unknown>;
 }
 
 export interface DuplicateQRCodeInput {
@@ -316,6 +323,7 @@ export async function updateQRCode({
     userId,
     title: request.title,
     destinationUrl,
+    content: request.content,
   });
 }
 
@@ -504,6 +512,38 @@ export async function updateQRCodeInWorkspace(
       });
     }
 
+    let previousContent: Record<string, Prisma.JsonValue> | undefined;
+    let nextContent: Record<string, string | boolean | undefined> | undefined;
+    if (input.content !== undefined) {
+      if (qrCode.mode !== QR_CODE_MODE.DYNAMIC) {
+        throw new QRCodeStateError(
+          "Only dynamic QR codes can change hosted content."
+        );
+      }
+      if (qrCode.status === QR_CODE_STATUS.ARCHIVED) {
+        throw new QRCodeStateError(
+          "Archived dynamic QR codes cannot be changed."
+        );
+      }
+
+      const parsed = parseEditableDynamicContent(qrCode.type, input.content);
+      if (!parsed) {
+        throw new QRCodeStateError(
+          "This QR code type does not support editing its content."
+        );
+      }
+
+      previousContent = getStoredPayloadContent(
+        getStoredPayloadObject(qrCode.payload).content
+      );
+      nextContent = buildEditableDynamicContent(parsed);
+      // Keep the encoded /r/<slug> value; only the hosted content changes.
+      data.payload = updateStoredDynamicPayloadContent({
+        payload: qrCode.payload,
+        content: nextContent,
+      });
+    }
+
     const updatedQRCode = await transaction.qRCode.update({
       where: { id: qrCode.id },
       data,
@@ -521,6 +561,26 @@ export async function updateQRCodeInWorkspace(
           metadata: {
             previousUrl: previousDestinationUrl,
             nextUrl: input.destinationUrl,
+            slug: qrCode.slug,
+          },
+        },
+      });
+    }
+
+    if (nextContent !== undefined) {
+      await transaction.auditLog.create({
+        data: {
+          workspaceId: input.workspaceId,
+          actorUserId: input.userId,
+          action: AUDIT_ACTION.CONTENT_CHANGE,
+          entityType: AUDIT_ENTITY_TYPE.QR_CODE,
+          entityId: qrCode.id,
+          metadata: {
+            previousContent: (previousContent ??
+              {}) as Prisma.InputJsonValue,
+            nextContent: removeUndefinedValues(
+              nextContent
+            ) as Prisma.InputJsonValue,
             slug: qrCode.slug,
           },
         },
@@ -647,6 +707,17 @@ async function createQRCodeRecord({
         await assertDynamicSlugAvailable(slug, transaction);
       }
 
+      // File QR codes must point at a ready workspace-owned file asset; the
+      // check lives inside the transaction so the link and the QR land
+      // together.
+      if (request.type === QR_CODE_TYPE.FILE) {
+        await assertQRFileAssetUsable({
+          assetId: request.content.assetId,
+          workspaceId,
+          transaction,
+        });
+      }
+
       const createdQRCode = await transaction.qRCode.create({
         data: {
           workspaceId,
@@ -663,6 +734,14 @@ async function createQRCodeRecord({
         },
         select: qrCodeDashboardSelect,
       });
+
+      if (request.type === QR_CODE_TYPE.FILE) {
+        await transaction.qRCodeAsset.update({
+          where: { id: request.content.assetId },
+          data: { qrCodeId: createdQRCode.id },
+          select: { id: true },
+        });
+      }
 
       await transaction.auditLog.create({
         data: {
@@ -836,7 +915,9 @@ function getPreparedPayload(
     throw new QRCodeStateError("Dynamic QR codes require an assigned redirect slug.");
   }
 
-  if (!payload.destinationUrl) {
+  // Only URL-type dynamic codes redirect to an external destination; hosted
+  // types (text, vcard, file, landing page) are served by /r/[slug] itself.
+  if (request.type === QR_CODE_TYPE.URL && !payload.destinationUrl) {
     throw new QRCodeStateError("Dynamic QR codes require a destination URL.");
   }
 
@@ -844,10 +925,9 @@ function getPreparedPayload(
     ...payload,
     value: getDynamicQRCodeRedirectUrl(slug),
     destinationUrl: payload.destinationUrl,
-    normalizedContent: {
-      ...payload.normalizedContent,
-      url: payload.destinationUrl,
-    },
+    normalizedContent: payload.destinationUrl
+      ? { ...payload.normalizedContent, url: payload.destinationUrl }
+      : payload.normalizedContent,
   };
 }
 
@@ -873,6 +953,39 @@ function getAssignedDynamicQRCodeSlug(
   return getRequestedDynamicQRCodeSlug(request) ?? dynamicSlug ?? null;
 }
 
+async function assertQRFileAssetUsable({
+  assetId,
+  workspaceId,
+  transaction,
+}: {
+  readonly assetId: string;
+  readonly workspaceId: string;
+  readonly transaction: Prisma.TransactionClient;
+}): Promise<void> {
+  const asset = await transaction.qRCodeAsset.findFirst({
+    where: {
+      id: assetId,
+      workspaceId,
+      purpose: ASSET_PURPOSE.QR_FILE,
+      status: ASSET_STATUS.READY,
+      deletedAt: null,
+    },
+    select: { id: true, qrCodeId: true },
+  });
+
+  if (!asset) {
+    throw new QRCodeStateError(
+      "The uploaded file was not found in this workspace or is not ready."
+    );
+  }
+
+  if (asset.qrCodeId) {
+    throw new QRCodeStateError(
+      "This file is already attached to another QR code."
+    );
+  }
+}
+
 async function assertDynamicSlugAvailable(
   slug: string,
   client: DynamicSlugLookupClient
@@ -889,6 +1002,17 @@ async function assertDynamicSlugAvailable(
 
 function getDefaultQRCodeTitle(payload: BuiltQRPayload): string {
   if (payload.destinationUrl) return payload.destinationUrl;
+
+  if (payload.type === QR_CODE_TYPE.FILE) {
+    const fileName = payload.normalizedContent.fileName;
+    if (typeof fileName === "string" && fileName) return fileName;
+
+    return "File QR Code";
+  }
+
+  if (payload.type === QR_CODE_TYPE.LANDING_PAGE) {
+    return "Landing page QR Code";
+  }
 
   return `${payload.type.toUpperCase()} QR Code`;
 }
@@ -937,6 +1061,30 @@ function updateStoredDynamicPayloadDestination({
       ...getStoredPayloadContent(record.content),
       url: destinationUrl,
     },
+  };
+}
+
+function updateStoredDynamicPayloadContent({
+  payload,
+  content,
+}: {
+  readonly payload: Prisma.JsonValue;
+  readonly content: Record<string, string | boolean | undefined>;
+}): Prisma.InputJsonValue {
+  const record = getStoredPayloadObject(payload);
+  const value = record.value;
+  const type = record.type;
+
+  if (typeof value !== "string" || typeof type !== "string") {
+    throw new QRCodeStateError("Saved dynamic QR payload is invalid.");
+  }
+
+  // The encoded value is the /r/<slug> redirect and never changes on a content
+  // edit — only the hosted content behind it does.
+  return {
+    type,
+    value,
+    content: removeUndefinedValues(content),
   };
 }
 

@@ -28,7 +28,25 @@ import {
   EmptyState,
   Input,
   Skeleton,
+  Textarea,
 } from "@/components/ui";
+
+// The contact-card fields editable in place. Labels mirror the generator's
+// vCard form; the keys are the stored content keys the API expects.
+const VCARD_FIELDS: readonly {
+  readonly key: string;
+  readonly label: string;
+  readonly type?: string;
+}[] = [
+  { key: "firstName", label: "First name" },
+  { key: "lastName", label: "Last name" },
+  { key: "organization", label: "Organization" },
+  { key: "title", label: "Title" },
+  { key: "phone", label: "Phone", type: "tel" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "website", label: "Website" },
+  { key: "address", label: "Address" },
+];
 
 interface ApiResponse<TData> {
   readonly ok: boolean;
@@ -43,6 +61,11 @@ interface QRCodeEditClientProps {
 export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
   const [qrCode, setQRCode] = useState<DashboardQRCode | null>(null);
   const [destinationUrl, setDestinationUrl] = useState("");
+  const [contentText, setContentText] = useState("");
+  const [vcardFields, setVcardFields] = useState<Record<string, string>>({});
+  const [isSavingContent, setIsSavingContent] = useState(false);
+  const [contentStatus, setContentStatus] = useState<string | null>(null);
+  const [contentError, setContentError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [titleStatus, setTitleStatus] = useState<string | null>(null);
@@ -74,10 +97,22 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
       setQRCode(normalized);
       setDestinationUrl(normalized.destinationUrl ?? "");
       setTitle(normalized.title);
+      const content = normalized.content ?? {};
+      setContentText(readContentString(content, "text"));
+      setVcardFields(
+        Object.fromEntries(
+          VCARD_FIELDS.map((field) => [
+            field.key,
+            readContentString(content, field.key),
+          ])
+        )
+      );
     } catch (error) {
       setQRCode(null);
       setDestinationUrl("");
       setTitle("");
+      setContentText("");
+      setVcardFields({});
       setNotice(
         error instanceof Error
           ? error.message
@@ -139,6 +174,53 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSaveContent = async () => {
+    if (!qrCode || qrCode.mode !== "dynamic") return;
+
+    const content = buildContentPayload(qrCode.type, contentText, vcardFields);
+    if (!content) {
+      setContentError(
+        qrCode.type === "text"
+          ? "Enter the text to encode."
+          : "Enter a name or organization for the contact card."
+      );
+      return;
+    }
+
+    setIsSavingContent(true);
+    setContentStatus(null);
+    setContentError(null);
+
+    try {
+      const response = await fetchJson<ApiResponse<{ qrCode?: unknown }>>(
+        `/api/qr-codes/${encodeURIComponent(qrCode.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(response.error?.message ?? "Could not update content.");
+      }
+
+      const normalized = normalizeQRCode(response.data?.qrCode);
+      if (normalized) setQRCode(normalized);
+      setContentStatus("Hosted content updated. The printed QR is unchanged.");
+    } catch (error) {
+      setContentError(
+        error instanceof Error ? error.message : "Could not update content."
+      );
+    } finally {
+      setIsSavingContent(false);
+    }
+  };
+
+  const handleVcardFieldChange = (key: string, value: string) => {
+    setVcardFields((current) => ({ ...current, [key]: value }));
   };
 
   const handleSaveTitle = async () => {
@@ -325,7 +407,7 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
         )}
       </section>
 
-      {qrCode.mode === "dynamic" ? (
+      {qrCode.mode === "dynamic" && qrCode.type === "url" && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-5">
             <h2 className="text-lg font-semibold text-slate-950">
@@ -398,7 +480,99 @@ export function QRCodeEditClient({ qrCodeId }: QRCodeEditClientProps) {
           {saveStatus && <Alert className="mt-4" variant="success">{saveStatus}</Alert>}
           {saveError && <Alert className="mt-4" variant="danger">{saveError}</Alert>}
         </section>
-      ) : (
+      )}
+
+      {qrCode.mode === "dynamic" && qrCode.type === "text" && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-950">
+              Edit hosted text
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              The printed QR keeps the same slug while the text it shows changes
+              behind it.
+            </p>
+          </div>
+          <Textarea
+            label="Text"
+            value={contentText}
+            onChange={(event) => setContentText(event.target.value)}
+            placeholder="Text to encode"
+          />
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600" aria-live="polite">
+              {contentStatus || contentError || "Ready to update the hosted text."}
+            </p>
+            <Button
+              variant="primary"
+              onClick={handleSaveContent}
+              isLoading={isSavingContent}
+              disabled={!contentText.trim()}
+              leftIcon={<Save className="h-4 w-4" aria-hidden="true" />}
+            >
+              Save text
+            </Button>
+          </div>
+          {contentStatus && <Alert className="mt-4" variant="success">{contentStatus}</Alert>}
+          {contentError && <Alert className="mt-4" variant="danger">{contentError}</Alert>}
+        </section>
+      )}
+
+      {qrCode.mode === "dynamic" && qrCode.type === "vcard" && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-950">
+              Edit contact card
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              The printed QR keeps the same slug while the contact details change
+              behind it.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {VCARD_FIELDS.map((field) => (
+              <Input
+                key={field.key}
+                label={field.label}
+                type={field.type}
+                value={vcardFields[field.key] ?? ""}
+                onChange={(event) =>
+                  handleVcardFieldChange(field.key, event.target.value)
+                }
+                containerClassName={
+                  field.key === "address" ? "md:col-span-2" : undefined
+                }
+              />
+            ))}
+          </div>
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600" aria-live="polite">
+              {contentStatus || contentError || "Ready to update the contact card."}
+            </p>
+            <Button
+              variant="primary"
+              onClick={handleSaveContent}
+              isLoading={isSavingContent}
+              leftIcon={<Save className="h-4 w-4" aria-hidden="true" />}
+            >
+              Save contact
+            </Button>
+          </div>
+          {contentStatus && <Alert className="mt-4" variant="success">{contentStatus}</Alert>}
+          {contentError && <Alert className="mt-4" variant="danger">{contentError}</Alert>}
+        </section>
+      )}
+
+      {qrCode.mode === "dynamic" &&
+        (qrCode.type === "file" || qrCode.type === "landing_page") && (
+          <Alert variant="info" title="Managed outside this editor">
+            {qrCode.type === "file"
+              ? "File QR codes serve their uploaded file behind the redirect. Replace the file from the QR file flow; the slug and printed code stay the same."
+              : "Landing-page QR codes render your published landing page behind the redirect. Edit it in the landing page builder; the slug and printed code stay the same."}
+          </Alert>
+        )}
+
+      {qrCode.mode !== "dynamic" && (
         <Alert variant="warning" title="Static QR content is locked">
           Static QR codes encode their final content directly. The safe workflow
           is to create a new QR code when the URL, Wi-Fi network, or vCard data
@@ -483,4 +657,43 @@ function isValidHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function readContentString(
+  content: Record<string, unknown>,
+  key: string
+): string {
+  const value = content[key];
+
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * Builds the content payload for a PATCH content edit, or null when the input
+ * is empty for that type. Only the type's own fields are sent, and blank
+ * optional fields are dropped so they clear from the stored content.
+ */
+function buildContentPayload(
+  type: string,
+  text: string,
+  vcard: Record<string, string>
+): Record<string, string> | null {
+  if (type === "text") {
+    const trimmed = text.trim();
+
+    return trimmed ? { text: trimmed } : null;
+  }
+
+  if (type === "vcard") {
+    const entries = VCARD_FIELDS.map((field) => [
+      field.key,
+      (vcard[field.key] ?? "").trim(),
+    ]).filter(([, value]) => value);
+    const content = Object.fromEntries(entries);
+    const hasName = content.firstName || content.lastName || content.organization;
+
+    return hasName ? content : null;
+  }
+
+  return null;
 }

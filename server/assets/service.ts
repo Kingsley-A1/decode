@@ -255,6 +255,26 @@ async function assertAssetAttachmentAccess({
     return;
   }
 
+  if (purpose === ASSET_PURPOSE.QR_FILE) {
+    if (landingPageId) {
+      throw new AssetValidationError(
+        "QR file uploads cannot be attached to a landing page."
+      );
+    }
+
+    // Like landing-page media, the file is usually uploaded before the QR
+    // code exists; when a QR id is provided, it must belong to the workspace.
+    if (!qrCodeId) return;
+
+    const qrCode = await prisma.qRCode.findFirst({
+      where: { id: qrCodeId, workspaceId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!qrCode) throw new AssetNotFoundError("QR code was not found.");
+
+    return;
+  }
+
   throw new AssetValidationError("This upload purpose is not supported.");
 }
 
@@ -294,6 +314,7 @@ async function resolveWritableWorkspaceId({
 
 function getUploadableAssetPurpose(value: string): AssetPurpose {
   if (value === ASSET_PURPOSE.QR_LOGO) return ASSET_PURPOSE.QR_LOGO;
+  if (value === ASSET_PURPOSE.QR_FILE) return ASSET_PURPOSE.QR_FILE;
   if (value === ASSET_PURPOSE.LANDING_PAGE_MEDIA) {
     return ASSET_PURPOSE.LANDING_PAGE_MEDIA;
   }

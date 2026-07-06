@@ -21,6 +21,7 @@ import {
   designPresets,
   initialDesignState,
   initialFormState,
+  isDynamicCapableType,
   qrGeneratorAuthDraftStorageKey,
   workflowStepOrder,
 } from "./constants";
@@ -136,8 +137,9 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
     [design, ecSource, autoErrorCorrectionLevel]
   );
   const dynamicPublishSignature = useMemo(
-    () => getDynamicPublishSignature({ form, design: resolvedDesign, logoUrl }),
-    [form, resolvedDesign, logoUrl]
+    () =>
+      getDynamicPublishSignature({ type, form, design: resolvedDesign, logoUrl }),
+    [type, form, resolvedDesign, logoUrl]
   );
   const payload = useMemo(
     () =>
@@ -356,7 +358,9 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
 
   const handleModeChange = (nextMode: QRMode) => {
     setMode(nextMode);
-    if (nextMode === "dynamic") {
+    // Dynamic mode supports a subset of types (url, text, vcard). Keep the
+    // current type when it is dynamic-capable; otherwise fall back to url.
+    if (nextMode === "dynamic" && !isDynamicCapableType(type)) {
       setType("url");
     }
   };
@@ -632,7 +636,9 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
   };
 
   const handlePublishDynamic = async () => {
-    if (mode !== "dynamic" || type !== "url" || !validation.isValid) return;
+    if (mode !== "dynamic" || !isDynamicCapableType(type) || !validation.isValid) {
+      return;
+    }
 
     if (scanability.blocksPublish) {
       setPublishError("Resolve blocked scanability issues before publishing.");
@@ -650,10 +656,10 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "dynamic",
-          type: "url",
+          type,
           title: form.title || "Dynamic QR Code",
           save: true,
-          content: { url: form.url },
+          content: buildApiContent(type, form),
           design: getApiDesign(resolvedDesign, logoUrl),
         }),
       });
@@ -685,9 +691,10 @@ export function useQRGenerator({ initialMode, returnTo }: UseQRGeneratorOptions)
 
       const qrCodeId = result.data?.qrCode.id;
       const payloadValue = result.data?.payload.value;
-      const destinationUrl = result.data?.payload.destinationUrl;
+      // Only url dynamics carry an external destination; text/vcard are hosted.
+      const destinationUrl = result.data?.payload.destinationUrl ?? "";
 
-      if (!qrCodeId || !payloadValue || !destinationUrl || !dynamicPublishSignature) {
+      if (!qrCodeId || !payloadValue || !dynamicPublishSignature) {
         throw new Error("Published QR response did not include a public payload.");
       }
 

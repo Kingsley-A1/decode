@@ -5,7 +5,11 @@ export const createPresignedUploadRequestSchema = z.object({
   workspaceId: z.string().trim().min(1).optional(),
   qrCodeId: z.string().trim().min(1).optional(),
   landingPageId: z.string().trim().min(1).optional(),
-  purpose: z.enum([ASSET_PURPOSE.QR_LOGO, ASSET_PURPOSE.LANDING_PAGE_MEDIA]),
+  purpose: z.enum([
+    ASSET_PURPOSE.QR_LOGO,
+    ASSET_PURPOSE.QR_FILE,
+    ASSET_PURPOSE.LANDING_PAGE_MEDIA,
+  ]),
   contentType: z.string().trim().min(1).max(120),
   fileSizeBytes: z.number().int().positive(),
   checksum: z.string().trim().max(128).optional(),

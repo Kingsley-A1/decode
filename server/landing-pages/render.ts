@@ -906,7 +906,7 @@ function getAllowedMediaSource(value: Prisma.JsonValue | undefined): string | un
   return undefined;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -919,7 +919,7 @@ function escapeAttribute(value: string): string {
   return escapeHtml(value).replace(/`/g, "&#96;");
 }
 
-function getLandingPageCss(): string {
+export function getLandingPageCss(): string {
   return `
     :root {
       color-scheme: light;

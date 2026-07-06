@@ -257,6 +257,141 @@ describe("dynamic QR service", () => {
     });
   });
 
+  it("edits hosted contact content without changing the redirect value and writes a content-change audit log", async () => {
+    const createdAt = new Date("2026-05-18T00:00:00.000Z");
+    const payload = {
+      type: QR_CODE_TYPE.VCARD,
+      value: "https://decode.example/r/contact-card",
+      content: { firstName: "Ada", lastName: "Old", organization: "ACME" },
+    };
+    const record = {
+      id: "qr_contact",
+      workspaceId: "workspace_123",
+      ownerId: "user_123",
+      title: "Contact card",
+      type: QR_CODE_TYPE.VCARD,
+      mode: QR_CODE_MODE.DYNAMIC,
+      status: QR_CODE_STATUS.PUBLISHED,
+      slug: "contact-card",
+      destinationUrl: null,
+      scanCount: 4,
+      publishedAt: createdAt,
+      archivedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+      payload,
+      landingPage: null,
+    };
+    const findFirst = vi.fn(async () => record);
+    const update = vi.fn(async (args: Prisma.QRCodeUpdateArgs) => ({
+      ...record,
+      ...(args.data as Prisma.QRCodeUncheckedUpdateInput),
+    }));
+    const create = vi.fn(async (args: Prisma.AuditLogCreateArgs) => args);
+    const client: DynamicDestinationClient = {
+      $transaction: async (callback) =>
+        callback({
+          qRCode: { findFirst, update },
+          auditLog: { create },
+        } as DynamicDestinationTransactionClient),
+    };
+
+    await updateQRCodeInWorkspace(
+      {
+        qrCodeId: "qr_contact",
+        workspaceId: "workspace_123",
+        userId: "user_123",
+        content: { firstName: "Ada", lastName: "Lovelace" },
+      },
+      client
+    );
+
+    const updateData = update.mock.calls[0]?.[0].data as
+      | Prisma.QRCodeUncheckedUpdateInput
+      | undefined;
+    const updatedPayload = updateData?.payload as
+      | Record<string, unknown>
+      | undefined;
+    const updatedContent = updatedPayload?.content as
+      | Record<string, unknown>
+      | undefined;
+
+    // The encoded /r/<slug> value is untouched; only the hosted content changes.
+    expect(updatedPayload?.value).toBe(
+      "https://decode.example/r/contact-card"
+    );
+    expect(updatedContent).toEqual({ firstName: "Ada", lastName: "Lovelace" });
+    // A dropped field (organization) must not linger in the stored content.
+    expect(updatedContent).not.toHaveProperty("organization");
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        workspaceId: "workspace_123",
+        actorUserId: "user_123",
+        action: AUDIT_ACTION.CONTENT_CHANGE,
+        entityType: AUDIT_ENTITY_TYPE.QR_CODE,
+        entityId: "qr_contact",
+        metadata: {
+          previousContent: {
+            firstName: "Ada",
+            lastName: "Old",
+            organization: "ACME",
+          },
+          nextContent: { firstName: "Ada", lastName: "Lovelace" },
+          slug: "contact-card",
+        },
+      },
+    });
+  });
+
+  it("rejects content edits for a type without an in-place editor", async () => {
+    const createdAt = new Date("2026-05-18T00:00:00.000Z");
+    const record = {
+      id: "qr_url",
+      workspaceId: "workspace_123",
+      ownerId: "user_123",
+      title: "Link",
+      type: QR_CODE_TYPE.URL,
+      mode: QR_CODE_MODE.DYNAMIC,
+      status: QR_CODE_STATUS.PUBLISHED,
+      slug: "link",
+      destinationUrl: "https://old.example/",
+      scanCount: 0,
+      publishedAt: createdAt,
+      archivedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+      payload: {
+        type: QR_CODE_TYPE.URL,
+        value: "https://decode.example/r/link",
+        content: { url: "https://old.example/" },
+      },
+      landingPage: null,
+    };
+    const findFirst = vi.fn(async () => record);
+    const update = vi.fn();
+    const create = vi.fn();
+    const client: DynamicDestinationClient = {
+      $transaction: async (callback) =>
+        callback({
+          qRCode: { findFirst, update },
+          auditLog: { create },
+        } as DynamicDestinationTransactionClient),
+    };
+
+    await expect(
+      updateQRCodeInWorkspace(
+        {
+          qrCodeId: "qr_url",
+          workspaceId: "workspace_123",
+          userId: "user_123",
+          content: { url: "https://new.example/" },
+        },
+        client
+      )
+    ).rejects.toThrow(/does not support editing its content/);
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it("archives QR codes and writes an audit log", async () => {
     const createdAt = new Date("2026-05-18T00:00:00.000Z");
     const archivedAt = new Date("2026-05-18T01:00:00.000Z");

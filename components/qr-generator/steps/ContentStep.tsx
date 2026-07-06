@@ -9,7 +9,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
-import { modeOptions, typeOptions } from "../constants";
+import { isDynamicCapableType, modeOptions, typeOptions } from "../constants";
 import { validateContent } from "../validation";
 import type { FormState, QRMode, QRType } from "../types";
 
@@ -37,7 +37,7 @@ export function ContentStep({
   const isDynamic = mode === "dynamic";
   const visibleTypeOptions = typeOptions.map((option) => ({
     ...option,
-    disabled: isDynamic && option.value !== "url",
+    disabled: isDynamic && !isDynamicCapableType(option.value),
   }));
   const validation = validateContent({ type, mode, form });
 
@@ -66,8 +66,10 @@ export function ContentStep({
       />
 
       {isDynamic && (
-        <Alert variant="info" title="Dynamic v1 supports URL redirects">
-          Dynamic QR codes require a website URL. Decode assigns the stable public link when you publish.
+        <Alert variant="info" title="Dynamic codes are editable after printing">
+          Dynamic QR codes support a website URL, plain text, or a contact card.
+          Decode assigns a stable public link when you publish, and you can edit
+          the content later without reprinting.
         </Alert>
       )}
 
@@ -88,13 +90,17 @@ export function ContentStep({
             (item) => item.value === option.value
           );
 
+          const isTypeDynamicCapable = isDynamicCapableType(option.value);
+
           return (
             <>
               <span className="font-medium text-slate-800">
                 {typeOption?.label ?? option.label}:
               </span>{" "}
               {typeOption?.description}
-              {isDynamic ? " Dynamic v1 supports URL codes only." : ""}
+              {isDynamic && !isTypeDynamicCapable
+                ? " Available for static codes only."
+                : ""}
             </>
           );
         }}

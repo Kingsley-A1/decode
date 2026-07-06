@@ -20,6 +20,7 @@ export function toQRCodeDetail(record: QRCodeDetailRecord) {
   return {
     ...toQRCodeListItem(record),
     payloadValue: getQRCodePayloadValue(record.payload),
+    content: getQRCodePayloadContent(record.payload),
     designConfig: getQRCodeDesignConfig(record.designConfig),
   };
 }
@@ -40,6 +41,23 @@ function getQRCodePayloadValue(payload: Prisma.JsonValue): string | null {
   const value = (payload as Record<string, Prisma.JsonValue>).value;
 
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+// The stored, normalized content object (e.g. { text } or the vCard fields) so
+// the dashboard can prefill in-place editors for hosted dynamic types.
+function getQRCodePayloadContent(
+  payload: Prisma.JsonValue
+): Record<string, Prisma.JsonValue> | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const content = (payload as Record<string, Prisma.JsonValue>).content;
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    return null;
+  }
+
+  return content as Record<string, Prisma.JsonValue>;
 }
 
 function getQRCodeDesignConfig(designConfig: Prisma.JsonValue) {

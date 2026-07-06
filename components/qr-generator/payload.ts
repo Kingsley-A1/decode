@@ -24,7 +24,10 @@ export function buildPayload({
 }): PayloadResult | null {
   try {
     if (mode === "dynamic") {
-      const destinationUrl = normalizeHttpUrl(form.url);
+      // Only URL dynamic codes redirect to an external destination; text and
+      // contact-card dynamics are hosted by Decode behind the same /r/<slug>.
+      const destinationUrl = type === "url" ? normalizeHttpUrl(form.url) : undefined;
+      const target = destinationUrl ?? "Decode-hosted content";
       const hasCurrentPublishedPayload =
         publishedDynamicPayload &&
         dynamicPublishSignature &&
@@ -34,7 +37,7 @@ export function buildPayload({
         return {
           value: publishedDynamicPayload.payloadValue,
           destinationUrl,
-          summary: `${publishedDynamicPayload.payloadValue} -> ${destinationUrl}`,
+          summary: `${publishedDynamicPayload.payloadValue} -> ${target}`,
         };
       }
 
@@ -42,8 +45,8 @@ export function buildPayload({
         value: "",
         destinationUrl,
         summary: publishedDynamicPayload
-          ? `Publish again to update public link -> ${destinationUrl}`
-          : `Publish to assign public link -> ${destinationUrl}`,
+          ? `Publish again to update public link -> ${target}`
+          : `Publish to assign public link -> ${target}`,
         requiresPublish: true,
         isStale: Boolean(publishedDynamicPayload),
       };
@@ -174,17 +177,25 @@ export function buildApiContent(
 }
 
 export function getDynamicPublishSignature({
+  type,
   form,
   design,
   logoUrl,
 }: {
+  readonly type: QRType;
   readonly form: FormState;
   readonly design: DesignState;
   readonly logoUrl: string;
 }): string | null {
   try {
+    // The signature changes whenever the type, content, or design changes, so a
+    // published dynamic QR is flagged as stale until it is republished.
     return JSON.stringify({
-      destinationUrl: normalizeHttpUrl(form.url),
+      type,
+      content:
+        type === "url"
+          ? { url: normalizeHttpUrl(form.url) }
+          : buildApiContent(type, form),
       // Use a presence marker rather than the full data URL so the memoized
       // signature stays small even with a large uploaded logo.
       design: getApiDesign(design, logoUrl ? "x" : ""),

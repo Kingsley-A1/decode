@@ -92,6 +92,16 @@ export const modeOptions = [
   },
 ] as const;
 
+// Types that can be published as a dynamic (editable, trackable) QR from the
+// generator. Each resolves through /r/<slug>: url redirects, text and vcard are
+// hosted by Decode. File and landing-page dynamic types exist server-side but
+// are created through their own flows, not this rail.
+export const dynamicCapableTypes: readonly QRType[] = ["url", "text", "vcard"];
+
+export function isDynamicCapableType(type: QRType): boolean {
+  return dynamicCapableTypes.includes(type);
+}
+
 export const dotStyleOptions: { value: DotStyle; label: string }[] = [
   { value: "square", label: "Square" },
   { value: "rounded", label: "Rounded" },

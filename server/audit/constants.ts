@@ -8,6 +8,7 @@ export const AUDIT_ACTION = {
   RESTORE: "restore",
   ASSET_UPLOAD: "asset.upload",
   DESTINATION_CHANGE: "destination.change",
+  CONTENT_CHANGE: "content.change",
 } as const;
 
 export const AUDIT_ENTITY_TYPE = {

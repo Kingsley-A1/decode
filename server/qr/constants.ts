@@ -18,7 +18,26 @@ export const QR_CODE_TYPE = {
   WHATSAPP: "whatsapp",
   WIFI: "wifi",
   VCARD: "vcard",
+  // Dynamic-only types: the QR encodes a /r/<slug> redirect and the content
+  // is hosted or served by Decode, so it stays editable after printing.
+  FILE: "file",
+  LANDING_PAGE: "landing_page",
 } as const;
+
+/** Content types a dynamic QR can resolve to. */
+export const DYNAMIC_QR_CODE_TYPES = [
+  QR_CODE_TYPE.URL,
+  QR_CODE_TYPE.TEXT,
+  QR_CODE_TYPE.VCARD,
+  QR_CODE_TYPE.FILE,
+  QR_CODE_TYPE.LANDING_PAGE,
+] as const;
+
+/** Types that only exist as dynamic codes (no static payload equivalent). */
+export const DYNAMIC_ONLY_QR_CODE_TYPES = [
+  QR_CODE_TYPE.FILE,
+  QR_CODE_TYPE.LANDING_PAGE,
+] as const;
 
 export const QR_DOT_STYLE = {
   SQUARE: "square",

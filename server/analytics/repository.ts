@@ -31,6 +31,9 @@ export function getDynamicQRCodeRedirectTarget({
     select: {
       id: true,
       workspaceId: true,
+      type: true,
+      title: true,
+      payload: true,
       destinationUrl: true,
       landingPage: {
         select: publicLandingPageSelect,
