@@ -254,7 +254,7 @@ export function SuspiciousLinkChecker() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
       <section className="space-y-4">
         <form
           onSubmit={handleSubmit}
@@ -268,39 +268,45 @@ export function SuspiciousLinkChecker() {
             leftIcon={<LinkIcon className="h-4 w-4" aria-hidden="true" />}
             hint="Decode normalizes the URL, runs heuristics, probes the destination, and checks threat intelligence before you open it."
           />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Button
               type="submit"
               variant="primary"
               disabled={isBusy || !input.trim()}
               isLoading={isBusy}
               leftIcon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}
+              className="w-full sm:w-auto"
             >
               Check link
             </Button>
-            <Button
-              variant="secondary"
-              onClick={handleClear}
-              leftIcon={<X className="h-4 w-4" aria-hidden="true" />}
-            >
-              Clear
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleCopy}
-              disabled={!input.trim() && !normalizedUrl}
-              leftIcon={<Copy className="h-4 w-4" aria-hidden="true" />}
-            >
-              {copied ? "Copied URL" : "Copy URL"}
-            </Button>
-            <Button
-              variant={shouldConfirmOpen ? "danger" : "secondary"}
-              onClick={handleOpenRequest}
-              disabled={!normalizedUrl || !result}
-              leftIcon={<ExternalLink className="h-4 w-4" aria-hidden="true" />}
-            >
-              {shouldConfirmOpen ? "Open with caution" : "Open verified link"}
-            </Button>
+            <div className="grid grid-cols-3 gap-2 sm:contents">
+              <Button
+                variant="secondary"
+                onClick={handleClear}
+                leftIcon={<X className="h-4 w-4" aria-hidden="true" />}
+                className="w-full sm:w-auto"
+              >
+                Clear
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleCopy}
+                disabled={!input.trim() && !normalizedUrl}
+                leftIcon={<Copy className="h-4 w-4" aria-hidden="true" />}
+                className="w-full sm:w-auto"
+              >
+                {copied ? "Copied URL" : "Copy URL"}
+              </Button>
+              <Button
+                variant={shouldConfirmOpen ? "danger" : "secondary"}
+                onClick={handleOpenRequest}
+                disabled={!normalizedUrl || !result}
+                leftIcon={<ExternalLink className="h-4 w-4" aria-hidden="true" />}
+                className="w-full sm:w-auto"
+              >
+                {shouldConfirmOpen ? "Open with caution" : "Open verified link"}
+              </Button>
+            </div>
           </div>
         </form>
 
@@ -349,20 +355,22 @@ export function SuspiciousLinkChecker() {
             </div>
           )}
         </section>
-
-        <HistoryPanel
-          title="Verification history"
-          entries={verifyHistory.entries}
-          source={verifyHistory.source}
-          description="Links checked on this device. Select one to verify it again."
-          onClear={verifyHistory.clear}
-          onSelect={(entry) => {
-            void runCheck(entry.meta?.url ?? entry.title);
-          }}
-        />
       </section>
 
-      <OpenPolicyAside />
+      <div className="xl:row-span-2">
+        <OpenPolicyAside />
+      </div>
+
+      <HistoryPanel
+        title="Verification history"
+        entries={verifyHistory.entries}
+        source={verifyHistory.source}
+        description="Links checked on this device. Select one to verify it again."
+        onClear={verifyHistory.clear}
+        onSelect={(entry) => {
+          void runCheck(entry.meta?.url ?? entry.title);
+        }}
+      />
 
       <Dialog
         open={isOpenDialogVisible}
