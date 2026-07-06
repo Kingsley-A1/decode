@@ -18,21 +18,19 @@ import { HistoryPanel } from "@/components/history/HistoryPanel";
 import type { ToolHistorySource } from "@/components/history/useToolHistory";
 import type { ToolHistoryEntry } from "@/lib/history/types";
 import { exportFormatOptions } from "../constants";
-import { getFrameExportLabel, getTypeLabel } from "../labels";
+import { getFrameExportLabel } from "../labels";
 import type {
   DesignState,
   ExportFormat,
   FormState,
   PayloadResult,
   QRMode,
-  QRType,
   ScanabilityResult,
 } from "../types";
 
 export function ExportStep({
   headingRef,
   mode,
-  type,
   form,
   payload,
   design,
@@ -58,7 +56,6 @@ export function ExportStep({
 }: {
   readonly headingRef: React.RefObject<HTMLHeadingElement | null>;
   readonly mode: QRMode;
-  readonly type: QRType;
   readonly form: FormState;
   readonly payload: PayloadResult | null;
   readonly design: DesignState;
@@ -112,7 +109,7 @@ export function ExportStep({
           tabIndex={-1}
           className="scroll-mt-28 text-lg font-semibold text-slate-950 focus:outline-none"
         >
-          3. Export and publish
+          Export and publish
         </h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
           Download the QR or publish a dynamic redirect when signed in.
@@ -140,10 +137,6 @@ export function ExportStep({
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={mode === "dynamic" ? "info" : "neutral"}>
-            {mode === "dynamic" ? "Dynamic" : "Static"}
-          </Badge>
-          <Badge variant="neutral">{getTypeLabel(type)}</Badge>
           <Badge variant="info">{design.errorCorrectionLevel} correction</Badge>
           <Badge variant="neutral">{getFrameExportLabel(design.frameStyle)}</Badge>
         </div>

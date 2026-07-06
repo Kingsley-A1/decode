@@ -292,7 +292,7 @@ export function DesignStep({
             tabIndex={-1}
             className="scroll-mt-28 text-lg font-semibold text-slate-950 focus:outline-none"
           >
-            2. Design and guardrails
+            Design and guardrails
           </h2>
           <p className="mt-1 text-sm leading-6 text-slate-600">
             Start with a safe preset, then refine only what matters.

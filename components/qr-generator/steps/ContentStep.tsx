@@ -50,7 +50,7 @@ export function ContentStep({
           tabIndex={-1}
           className="scroll-mt-28 text-lg font-semibold text-slate-950 focus:outline-none"
         >
-          1. Choose content
+          Choose content
         </h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
           Pick the QR behavior, then enter the minimum content needed.
