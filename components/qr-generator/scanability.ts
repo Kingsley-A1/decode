@@ -50,11 +50,13 @@ export function getScanability({
     }
   }
 
-  if (design.margin < 2) {
+  // A 2-module quiet zone is the sharp, tight default and scans reliably. Only
+  // flag values below it: a lone module is risky, and none at all blocks.
+  if (design.margin < 1) {
     isBlocked = true;
-    reasons.push("Increase the quiet zone (margin) before publishing.");
-  } else if (design.margin < 4) {
-    reasons.push("Quiet zone is small. Increase the margin for safer scanning.");
+    reasons.push("Add a quiet zone (margin) before publishing.");
+  } else if (design.margin < 2) {
+    reasons.push("Quiet zone is very tight. Increase the margin for safer scanning.");
   }
 
   if (hasLogo && design.logoSizeRatio > 0.3) {

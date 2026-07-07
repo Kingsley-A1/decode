@@ -23,14 +23,14 @@ describe("renderUnsavedQRCodeRequestSchema", () => {
     expect(parsed.design.frameStyle).toBe("none");
   });
 
-  it("defaults the quiet-zone margin to the 4-module spec value", () => {
+  it("defaults the quiet-zone margin to a tight 2-module border", () => {
     const parsed = renderUnsavedQRCodeRequestSchema.parse({
       value: "https://decode.example.com",
       format: QR_EXPORT_FORMAT.PNG,
       design: {},
     });
 
-    expect(parsed.design.margin).toBe(4);
+    expect(parsed.design.margin).toBe(2);
   });
 
   it("leaves an omitted error-correction level undefined for adaptive resolution", () => {

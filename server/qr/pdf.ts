@@ -13,14 +13,6 @@ import type {
 // exports while every shape stays a true vector.
 const PX_TO_PT = 0.75;
 
-// Approximates SVG `dominant-baseline="central"` for the uppercase frame
-// captions: Helvetica-Bold's cap height is ~0.718em, so the visual center of
-// a caps-only line sits ~0.359em above the baseline, and pdfkit places text
-// by the top of the ascender (~0.718em above the baseline).
-const CAPTION_CENTER_TO_TOP_EM = 0.359;
-const CAPTION_LETTER_SPACING = 0.5;
-const CAPTION_FONT = "Helvetica-Bold";
-
 /**
  * Renders a QR render plan as a print-ready vector PDF: the page is sized to
  * the artwork itself (QR plus quiet zone, plus the frame when one is chosen).
@@ -118,22 +110,12 @@ function drawFilledShape(
         );
       }
       return;
-    case "caption": {
-      document.font(CAPTION_FONT).fontSize(shape.fontSize);
-      const textWidth =
-        document.widthOfString(shape.text) +
-        CAPTION_LETTER_SPACING * Math.max(shape.text.length - 1, 0);
-
-      document
-        .fillColor(shape.fill)
-        .text(
-          shape.text,
-          shape.x - textWidth / 2,
-          shape.y - shape.fontSize * CAPTION_CENTER_TO_TOP_EM,
-          { characterSpacing: CAPTION_LETTER_SPACING, lineBreak: false }
-        );
+    case "caption":
+      // The caption arrives as vector path data (see server/qr/font.ts), so the
+      // PDF draws the exact same glyph outlines as the SVG and raster exports —
+      // no font embedding, and pixel-identical positioning across formats.
+      if (shape.d) document.path(shape.d).fill(shape.fill);
       return;
-    }
     case "logo-image": {
       const image = logoImages.get(shape.dataUrl);
       // An undecodable logo is skipped rather than failing the export; the

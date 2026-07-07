@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Footer } from "@/components/Footer";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { NavBar } from "@/components/NavBar";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +43,7 @@ export function AppShell({ children, chrome = "default" }: AppShellProps) {
 
   return (
     <div
-      className="min-h-screen bg-[var(--background)] text-[var(--foreground)]"
+      className="min-h-screen bg-[var(--background)] pb-[calc(3.5rem+env(safe-area-inset-bottom))] text-[var(--foreground)] md:pb-0"
       data-app-shell-chrome={activeChrome}
     >
       <a
@@ -65,6 +66,7 @@ export function AppShell({ children, chrome = "default" }: AppShellProps) {
         </main>
       </div>
       {isWorkspace ? <Footer variant="compact" /> : <Footer />}
+      <MobileBottomNav />
     </div>
   );
 }

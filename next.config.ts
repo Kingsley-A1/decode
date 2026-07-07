@@ -4,6 +4,12 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // The QR exporter reads a bundled font at runtime to rasterise captions as
+  // vectors (server/qr/font.ts). Trace it into every serverless function so
+  // the file is present on the host, not just in the repo.
+  outputFileTracingIncludes: {
+    "/api/qr-codes/**": ["./server/qr/assets/LiberationSans-Bold.ttf"],
+  },
   async headers() {
     return [
       {

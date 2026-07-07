@@ -160,6 +160,15 @@ export const appNavSections: readonly NavigationSection[] = [
 
 export const allNavItems = appNavSections.flatMap((section) => section.items);
 
+// The four destinations surfaced in the mobile bottom navigation, in tap order:
+// safety check, page builder, the primary create action, then the scanner.
+export const bottomNavItems: readonly NavigationItem[] = [
+  primaryNavItems[4], // Links
+  primaryNavItems[3], // Pages
+  primaryNavItems[1], // Generate
+  primaryNavItems[2], // Scan
+] as const;
+
 export const menuNavItems: readonly NavigationItem[] = [
   primaryNavItems[0],
   primaryNavItems[1],

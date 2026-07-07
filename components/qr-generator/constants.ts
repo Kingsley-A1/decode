@@ -127,9 +127,11 @@ export const errorCorrectionOptions: {
 ];
 
 // Quiet-zone (margin) bounds mirror the server schema (`server/qr/schemas.ts`),
-// which accepts an integer margin between 0 and 16.
+// which accepts an integer margin between 0 and 16. The default is a tight
+// 2-module quiet zone: sharp, compact borders that still scan reliably.
 export const minMargin = 0;
 export const maxMargin = 16;
+export const defaultMargin = 2;
 
 // Logo size bounds mirror the server schema's `logoSizeRatio` (0 - 0.35). The
 // scanability meter warns above `defaultLogoSizeRatio` and blocks above 0.3.
@@ -245,7 +247,7 @@ export const designPresets: Record<
     frameColor: "#2563EB",
     dotStyle: "square",
     cornerStyle: "square",
-    margin: 4,
+    margin: defaultMargin,
     frameStyle: "none",
   },
   corporate: {
@@ -254,7 +256,7 @@ export const designPresets: Record<
     frameColor: "#2563EB",
     dotStyle: "square",
     cornerStyle: "square",
-    margin: 4,
+    margin: defaultMargin,
     frameStyle: "classic",
   },
   event: {
@@ -263,7 +265,7 @@ export const designPresets: Record<
     frameColor: "#2B16D0",
     dotStyle: "dots",
     cornerStyle: "dot",
-    margin: 4,
+    margin: defaultMargin,
     frameStyle: "ticket",
   },
   menu: {
@@ -272,7 +274,7 @@ export const designPresets: Record<
     frameColor: "#047857",
     dotStyle: "rounded",
     cornerStyle: "rounded",
-    margin: 4,
+    margin: defaultMargin,
     frameStyle: "minimal",
   },
   social: {
@@ -281,7 +283,7 @@ export const designPresets: Record<
     frameColor: "#0891B2",
     dotStyle: "classy",
     cornerStyle: "dot",
-    margin: 4,
+    margin: defaultMargin,
     frameStyle: "scan-me",
   },
   coupon: {
@@ -290,7 +292,7 @@ export const designPresets: Record<
     frameColor: "#D01616",
     dotStyle: "extra-rounded",
     cornerStyle: "rounded",
-    margin: 4,
+    margin: defaultMargin,
     frameStyle: "badge",
   },
 };
@@ -377,7 +379,7 @@ export const initialDesignState: DesignState = {
   frameColor: "#2563EB",
   dotStyle: "square",
   cornerStyle: "square",
-  margin: 4,
+  margin: defaultMargin,
   logoSizeRatio: 0,
   errorCorrectionLevel: "Q",
   size: 1024,

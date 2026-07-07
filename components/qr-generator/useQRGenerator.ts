@@ -926,9 +926,14 @@ function triggerBase64Download({
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
-  link.rel = "noopener noreferrer";
+  link.rel = "noopener";
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+
+  // Revoke on a later tick, not synchronously. The download starts
+  // asynchronously, and revoking the object URL right after `click()` cancels
+  // it on many browsers (notably iOS/Android), where the file then opens
+  // inline as a one-time view instead of saving to the device.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

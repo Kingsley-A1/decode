@@ -64,8 +64,13 @@ describe("renderQRCode", () => {
       design: { ...design, frameStyle: "scan-me" },
       format: QR_EXPORT_FORMAT.SVG,
     });
+    const svg = rendered.body as string;
 
-    expect(rendered.body as string).toContain("SCAN ME");
+    // The caption is drawn as vector outlines (font-independent), with the
+    // source text preserved as the path's accessible name.
+    expect(svg).toContain('aria-label="SCAN ME"');
+    expect(svg).toMatch(/<path d="M[^"]+" fill="#FFFFFF" role="img"/);
+    expect(svg).not.toContain("<text");
   });
 
   it.each(["scan-me", "classic", "ticket", "badge", "minimal"] as const)(
@@ -123,7 +128,7 @@ describe("renderQRCode", () => {
     expect(imageCount).toBeLessThanOrEqual(2);
   });
 
-  it("sizes a framed PDF to the frame footprint and includes the caption font", async () => {
+  it("sizes a framed PDF to the frame footprint and draws the caption as vectors", async () => {
     const rendered = await renderQRCode({
       value: "https://decode.example.com",
       design: { ...design, frameStyle: "scan-me", size: 512 },
@@ -134,7 +139,8 @@ describe("renderQRCode", () => {
     // 512px QR: border=11, pad=23, gap=34, captionHeight=77 →
     // 580x657px artwork → 435x492.75pt page.
     expect(pdf).toContain("/MediaBox [0 0 435 492.75]");
-    expect(pdf).toContain("Helvetica-Bold");
+    // The caption ships as vector glyph outlines, so no text font is embedded.
+    expect(pdf).not.toContain("Helvetica-Bold");
   });
 });
 

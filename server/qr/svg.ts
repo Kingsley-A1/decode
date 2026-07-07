@@ -76,11 +76,13 @@ function filledShapeToSvg(shape: QRFilledShape): string {
       );
     }
     case "caption":
+      // Emitted as vector outlines (not `<text>`) so the caption renders
+      // identically in every viewer and rasteriser without a system font.
+      if (!shape.d) return "";
+
       return (
-        `<text x="${n2(shape.x)}" y="${n2(shape.y)}" fill="${shape.fill}" ` +
-        `font-family="Arial, Helvetica, sans-serif" font-size="${shape.fontSize}" ` +
-        `font-weight="700" letter-spacing="0.5" text-anchor="middle" ` +
-        `dominant-baseline="central">${escapeXml(shape.text)}</text>`
+        `<path d="${shape.d}" fill="${shape.fill}" ` +
+        `role="img" aria-label="${escapeXml(shape.label)}"/>`
       );
     case "logo-image":
       return (

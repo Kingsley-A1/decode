@@ -1,6 +1,7 @@
 import "server-only";
 
 import QRCode from "qrcode";
+import { captionToPathData } from "@/server/qr/font";
 import type { QRDesignConfig } from "@/server/qr/schemas";
 
 export interface StyledQRLogo {
@@ -56,11 +57,11 @@ export type QRFilledShape =
     }
   | {
       readonly kind: "caption";
-      readonly x: number;
-      readonly y: number;
-      readonly text: string;
-      readonly fontSize: number;
+      /** Glyph outlines as SVG path data, so captions need no runtime font. */
+      readonly d: string;
       readonly fill: string;
+      /** Source text, preserved for the accessible name of the rendered path. */
+      readonly label: string;
     }
   | {
       readonly kind: "logo-image";
@@ -483,14 +484,29 @@ function strokedRect(
   };
 }
 
+// Matches the tracking the previous `<text>` caption applied via
+// `letter-spacing`, now baked into the glyph layout.
+const CAPTION_LETTER_SPACING = 0.5;
+
 function captionShape(
-  x: number,
-  y: number,
+  centerX: number,
+  centerY: number,
   text: string,
   fontSize: number,
   fill: string
 ): QRFilledShape {
-  return { kind: "caption", x, y, text, fontSize, fill };
+  return {
+    kind: "caption",
+    d: captionToPathData({
+      text,
+      centerX,
+      centerY,
+      fontSize,
+      letterSpacing: CAPTION_LETTER_SPACING,
+    }),
+    fill,
+    label: text,
+  };
 }
 
 function getFrameCaption(

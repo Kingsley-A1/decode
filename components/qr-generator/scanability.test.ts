@@ -47,16 +47,16 @@ describe("getScanability", () => {
 
   it("blocks when the quiet zone is removed", () => {
     const result = getScanability({
-      design: designWith({ margin: 1 }),
+      design: designWith({ margin: 0 }),
       hasLogo: false,
     });
 
     expect(result.state).toBe("blocked");
   });
 
-  it("warns when the quiet zone is small", () => {
+  it("warns when the quiet zone is very tight", () => {
     const result = getScanability({
-      design: designWith({ margin: 3 }),
+      design: designWith({ margin: 1 }),
       hasLogo: false,
     });
 
